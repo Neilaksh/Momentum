@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RoutineRouteImport } from './routes/routine'
 
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GoalsRoute = GoalsRouteImport.update({
+  id: '/goals',
+  path: '/goals',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -38,12 +44,14 @@ const RoutineRoute = RoutineRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/goals': typeof GoalsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/routine': typeof RoutineRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/goals': typeof GoalsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/routine': typeof RoutineRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/goals': typeof GoalsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/routine': typeof RoutineRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/reset-password' | '/routine'
+  fullPaths: '/' | '/auth' | '/goals' | '/reset-password' | '/routine'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/reset-password' | '/routine'
-  id: '__root__' | '/' | '/auth' | '/reset-password' | '/routine'
+  to: '/' | '/auth' | '/goals' | '/reset-password' | '/routine'
+  id: '__root__' | '/' | '/auth' | '/goals' | '/reset-password' | '/routine'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  GoalsRoute: typeof GoalsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   RoutineRoute: typeof RoutineRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/goals': {
+      id: '/goals'
+      path: '/goals'
+      fullPath: '/goals'
+      preLoaderRoute: typeof GoalsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  GoalsRoute: GoalsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   RoutineRoute: RoutineRoute,
 }
