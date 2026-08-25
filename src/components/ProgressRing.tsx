@@ -13,7 +13,7 @@ export function ProgressRing({ value, size = 88, stroke = 8, label, className }:
   const offset = circumference - (clamped / 100) * circumference;
 
   return (
-    <div className={`relative inline-flex items-center justify-center ${className ?? ""}`}>
+    <div className={`relative inline-flex shrink-0 items-center justify-center ${className ?? ""}`}>
       <svg width={size} height={size} className="-rotate-90">
         <circle
           cx={size / 2}
@@ -36,7 +36,7 @@ export function ProgressRing({ value, size = 88, stroke = 8, label, className }:
         />
       </svg>
       <span className="num absolute text-sm font-semibold text-foreground">
-        {label ?? `${clamped}%`}
+        {label ?? `${Math.round(clamped)}%`}
       </span>
     </div>
   );

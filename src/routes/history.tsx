@@ -120,7 +120,7 @@ function HistoryPage() {
               className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5"
             >
               <ProgressRing value={w.total ? (w.done / w.total) * 100 : 0} size={72} stroke={8} />
-              <div>
+              <div className="min-w-0">
                 <p className="num text-sm font-semibold">Week of {formatDayDate(w.weekStart)}</p>
                 <p className="num text-xs text-muted-foreground">
                   {w.done} / {w.total} tasks
