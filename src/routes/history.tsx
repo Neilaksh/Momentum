@@ -77,7 +77,7 @@ function HistoryPage() {
         <StatCard
           icon={<Trophy className="h-4 w-4" />}
           label="Longest streak"
-          value={`${profile?.longest_streak ?? 0}`}
+          value={`${profile?.best_streak ?? 0}`}
           sub="personal best"
         />
       </div>
