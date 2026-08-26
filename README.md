@@ -1,18 +1,6 @@
-# My Life Sync
+# Momentum
 
-I wanna make a life tracker just like this in dark mode and i want it to sync between different devices
-
-This project was built with [Lovable](https://lovable.dev).
-
-**Live app**: https://life-syncable.lovable.app
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/6b396091-3a91-484d-b211-56d6d3fd5f05).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+The Life tracker every student needs.
 
 ## Development
 
