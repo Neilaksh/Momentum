@@ -555,11 +555,7 @@ function UnifiedTasksPage() {
                     {t.title}
                   </span>
 
-                  {t.source === "routine" && (
-                    <span className="rounded-md bg-secondary px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase text-muted-foreground">
-                      Routine
-                    </span>
-                  )}
+
 
                   <button
                     onClick={() => removeTask.mutate({ id: t.id })}

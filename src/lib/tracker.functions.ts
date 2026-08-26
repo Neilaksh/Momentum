@@ -7,6 +7,7 @@ import {
   loadDay,
   loadWeek,
   recomputeStats,
+  rolloverIncompleteGoalTasks,
 } from "./tracker.server";
 
 export const getWeek = createServerFn({ method: "POST" })
@@ -117,6 +118,10 @@ export const getGoals = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const supabase = context.supabase as any;
+
+    // Automatically rollover uncompleted goal tasks to today
+    await rolloverIncompleteGoalTasks(supabase, context.userId);
+
     const { data: goals } = await supabase
       .from("goals")
       .select("*")
@@ -126,16 +131,22 @@ export const getGoals = createServerFn({ method: "POST" })
     // Per-goal day_task completion stats
     const { data: linked } = await supabase
       .from("day_tasks")
-      .select("goal_id, completed_at")
+      .select("id, goal_id, completed_at, task_date, title, source, routine_task_id, sort_order")
       .eq("user_id", context.userId)
-      .not("goal_id", "is", null);
+      .not("goal_id", "is", null)
+      .order("task_date", { ascending: false });
 
     const stats: Record<string, { total: number; done: number }> = {};
+    const tasksByGoal: Record<string, any[]> = {};
+
     for (const row of (linked ?? []) as any[]) {
       const e = stats[row.goal_id] ?? { total: 0, done: 0 };
       e.total += 1;
       if (row.completed_at) e.done += 1;
       stats[row.goal_id] = e;
+
+      if (!tasksByGoal[row.goal_id]) tasksByGoal[row.goal_id] = [];
+      tasksByGoal[row.goal_id]!.push(row);
     }
 
     // Fetch linked routine tasks for each goal
@@ -154,7 +165,7 @@ export const getGoals = createServerFn({ method: "POST" })
 
     // NOTE: overdue detection is intentionally done in the UI from target_date.
     // We do NOT auto-mutate goal status on read — only explicit user actions should write.
-    return { goals: goals ?? [], stats, routinesByGoal };
+    return { goals: goals ?? [], stats, routinesByGoal, tasksByGoal };
   });
 
 export const saveGoal = createServerFn({ method: "POST" })

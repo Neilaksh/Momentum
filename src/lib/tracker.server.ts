@@ -24,8 +24,82 @@ export async function ensureProfile(supabase: DB, userId: string): Promise<Profi
   return (created as Profile) ?? null;
 }
 
+/** Automatically rollover uncompleted goal tasks from past dates to today until completed. */
+export async function rolloverIncompleteGoalTasks(supabase: DB, userId: string): Promise<number> {
+  const todayISO = toISODate(new Date());
+
+  // Find all uncompleted day_tasks associated with a goal from past dates
+  const { data: pastUncompleted } = await supabase
+    .from("day_tasks")
+    .select("id, task_date, routine_task_id, goal_id, title")
+    .eq("user_id", userId)
+    .not("goal_id", "is", null)
+    .is("completed_at", null)
+    .lt("task_date", todayISO);
+
+  if (!pastUncompleted || pastUncompleted.length === 0) return 0;
+
+  // Filter only for active (non-completed) goals
+  const { data: activeGoals } = await supabase
+    .from("goals")
+    .select("id, status")
+    .eq("user_id", userId)
+    .neq("status", "completed");
+
+  const activeGoalIds = new Set((activeGoals ?? []).map((g: any) => g.id));
+  const tasksToShift = (pastUncompleted as any[]).filter((t) => activeGoalIds.has(t.goal_id));
+
+  if (tasksToShift.length === 0) return 0;
+
+  // Check today's existing routine tasks to avoid duplicate routine task slots
+  const { data: todayTasks } = await supabase
+    .from("day_tasks")
+    .select("id, routine_task_id")
+    .eq("user_id", userId)
+    .eq("task_date", todayISO);
+
+  const todayRoutineIds = new Set(
+    (todayTasks ?? [])
+      .filter((t: any) => t.routine_task_id)
+      .map((t: any) => t.routine_task_id),
+  );
+
+  const idsToUpdate: string[] = [];
+  const idsToDeleteIfDup: string[] = [];
+
+  for (const t of tasksToShift) {
+    if (t.routine_task_id && todayRoutineIds.has(t.routine_task_id)) {
+      idsToDeleteIfDup.push(t.id);
+    } else {
+      idsToUpdate.push(t.id);
+      if (t.routine_task_id) {
+        todayRoutineIds.add(t.routine_task_id);
+      }
+    }
+  }
+
+  if (idsToUpdate.length > 0) {
+    await supabase
+      .from("day_tasks")
+      .update({ task_date: todayISO, updated_at: new Date().toISOString() })
+      .in("id", idsToUpdate)
+      .eq("user_id", userId);
+  }
+
+  if (idsToDeleteIfDup.length > 0) {
+    await supabase
+      .from("day_tasks")
+      .delete()
+      .in("id", idsToDeleteIfDup)
+      .eq("user_id", userId);
+  }
+
+  return idsToUpdate.length;
+}
+
 /** Materialize routine template tasks into day_tasks for the given week (idempotent). */
 export async function materializeWeek(supabase: DB, userId: string, weekStart: string) {
+  await rolloverIncompleteGoalTasks(supabase, userId);
   const dates = weekDates(weekStart);
   const { data: routine } = await supabase
     .from("routine_tasks")
@@ -67,6 +141,7 @@ export async function materializeWeek(supabase: DB, userId: string, weekStart: s
 }
 
 export async function loadWeek(supabase: DB, userId: string, weekStart: string): Promise<WeekData> {
+  await rolloverIncompleteGoalTasks(supabase, userId);
   await materializeWeek(supabase, userId, weekStart);
   const dates = weekDates(weekStart);
   const { data } = await supabase
