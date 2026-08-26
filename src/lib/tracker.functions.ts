@@ -122,6 +122,8 @@ export const getGoals = createServerFn({ method: "POST" })
       .select("*")
       .eq("user_id", context.userId)
       .order("created_at", { ascending: true });
+
+    // Per-goal day_task completion stats
     const { data: linked } = await supabase
       .from("day_tasks")
       .select("goal_id, completed_at")
@@ -135,7 +137,24 @@ export const getGoals = createServerFn({ method: "POST" })
       if (row.completed_at) e.done += 1;
       stats[row.goal_id] = e;
     }
-    return { goals: goals ?? [], stats };
+
+    // Fetch linked routine tasks for each goal
+    const { data: routines } = await supabase
+      .from("routine_tasks")
+      .select("*")
+      .eq("user_id", context.userId)
+      .not("goal_id", "is", null)
+      .eq("is_active", true);
+
+    const routinesByGoal: Record<string, any[]> = {};
+    for (const rt of (routines ?? []) as any[]) {
+      if (!routinesByGoal[rt.goal_id]) routinesByGoal[rt.goal_id] = [];
+      routinesByGoal[rt.goal_id]!.push(rt);
+    }
+
+    // NOTE: overdue detection is intentionally done in the UI from target_date.
+    // We do NOT auto-mutate goal status on read — only explicit user actions should write.
+    return { goals: goals ?? [], stats, routinesByGoal };
   });
 
 export const saveGoal = createServerFn({ method: "POST" })
@@ -170,17 +189,122 @@ export const saveGoal = createServerFn({ method: "POST" })
       await supabase.from("goals").update(payload).eq("id", data.id);
       return { ok: true };
     }
-    await supabase.from("goals").insert({ ...payload, user_id: context.userId });
-    return { ok: true };
+    const { data: newGoal } = await supabase
+      .from("goals")
+      .insert({ ...payload, user_id: context.userId })
+      .select("id")
+      .maybeSingle();
+    return { ok: true, goalId: newGoal?.id ?? null };
   });
 
 export const deleteGoal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
-    await (context.supabase as any).from("goals").delete().eq("id", data.id);
+    const supabase = context.supabase as any;
+    // Deactivate all linked routine tasks so they stop repeating
+    await supabase
+      .from("routine_tasks")
+      .update({ is_active: false })
+      .eq("goal_id", data.id)
+      .eq("user_id", context.userId);
+    await supabase.from("goals").delete().eq("id", data.id);
     return { ok: true };
   });
+
+/** Attach a repeating routine task to a goal (all 7 weekdays by default, customizable). */
+export const addGoalRoutineTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { goalId: string; title: string; weekdays: number[] }) =>
+      z
+        .object({
+          goalId: z.string(),
+          title: z.string().min(1).max(200),
+          weekdays: z.array(z.number().int().min(0).max(6)).min(1),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as any;
+    const rows = data.weekdays.map((wd) => ({
+      user_id: context.userId,
+      weekday: wd,
+      title: data.title.trim(),
+      goal_id: data.goalId,
+      is_active: true,
+    }));
+    await supabase.from("routine_tasks").insert(rows);
+    return { ok: true };
+  });
+
+/** Remove a specific routine task linked to a goal. */
+export const removeGoalRoutineTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
+  .handler(async ({ data, context }) => {
+    await (context.supabase as any)
+      .from("routine_tasks")
+      .delete()
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
+    return { ok: true };
+  });
+
+/** Remove a batch of routine tasks linked to a goal (atomic, avoids partial-failure from N parallel calls). */
+export const removeGoalRoutineTasksBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { ids: string[] }) =>
+    z.object({ ids: z.array(z.string()).min(1) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await (context.supabase as any)
+      .from("routine_tasks")
+      .delete()
+      .in("id", data.ids)
+      .eq("user_id", context.userId);
+    return { ok: true };
+  });
+
+/** Update goal status: complete | active | overdue. Optionally extend target date. */
+export const updateGoalStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { id: string; status: string; newTargetDate?: string | null }) =>
+      z
+        .object({
+          id: z.string(),
+          status: z.enum(["active", "completed", "overdue"]),
+          newTargetDate: z.string().nullable().optional(),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as any;
+    const patch: Record<string, unknown> = { status: data.status };
+    if (data.newTargetDate !== undefined) patch["target_date"] = data.newTargetDate;
+
+    // When marking complete, deactivate linked routine tasks so they stop appearing
+    if (data.status === "completed") {
+      await supabase
+        .from("routine_tasks")
+        .update({ is_active: false })
+        .eq("goal_id", data.id)
+        .eq("user_id", context.userId);
+    }
+    // When re-activating, re-enable linked routine tasks
+    if (data.status === "active") {
+      await supabase
+        .from("routine_tasks")
+        .update({ is_active: true })
+        .eq("goal_id", data.id)
+        .eq("user_id", context.userId);
+    }
+
+    await supabase.from("goals").update(patch).eq("id", data.id).eq("user_id", context.userId);
+    return { ok: true };
+  });
+
 
 export const getHistory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -196,4 +320,36 @@ export const getDay = createServerFn({ method: "POST" })
   .inputValidator((input: { date: string }) => z.object({ date: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     return loadDay(context.supabase as any, context.userId, data.date);
+  });
+
+export const resetTrackerData = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const supabase = context.supabase as any;
+    const userId = context.userId;
+
+    // Delete all user day tasks
+    await supabase.from("day_tasks").delete().eq("user_id", userId);
+    // Delete all user habit logs
+    await supabase.from("habit_logs").delete().eq("user_id", userId);
+    // Delete all user habits
+    await supabase.from("habits").delete().eq("user_id", userId);
+    // Delete all user goals
+    await supabase.from("goals").delete().eq("user_id", userId);
+    // Delete all user routine tasks
+    await supabase.from("routine_tasks").delete().eq("user_id", userId);
+
+    // Reset profile stats
+    await supabase
+      .from("profiles")
+      .update({
+        total_xp: 0,
+        level: 1,
+        current_streak: 0,
+        best_streak: 0,
+        last_active_day: null,
+      })
+      .eq("id", userId);
+
+    return { ok: true };
   });

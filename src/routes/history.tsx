@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Flame, Trophy, Zap } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Flame, RefreshCw, Trash2, Trophy, Zap } from "lucide-react";
+import { toast } from "sonner";
 import {
   CartesianGrid,
   Line,
@@ -14,7 +16,8 @@ import {
 import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
 import { ProgressRing } from "@/components/ProgressRing";
-import { getHistory } from "@/lib/tracker.functions";
+import { Button } from "@/components/ui/button";
+import { getHistory, resetTrackerData } from "@/lib/tracker.functions";
 import { formatDayDate, levelProgress, type Profile } from "@/lib/tracker-shared";
 
 export const Route = createFileRoute("/history")({
@@ -24,7 +27,7 @@ export const Route = createFileRoute("/history")({
       {
         name: "description",
         content:
-          "Review past weeks, completion rates over time, your longest streak and the XP level you've reached.",
+          "Review past weeks, completion rates over time, your longest streak, XP levels, and data management.",
       },
       { property: "og:title", content: "History & Stats — Momentum" },
       {
@@ -46,10 +49,24 @@ type HistoryResponse = {
 };
 
 function HistoryPage() {
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
+  const qc = useQueryClient();
   const fetchHistory = useServerFn(getHistory);
+  const resetFn = useServerFn(resetTrackerData);
+
   const { data, isLoading } = useQuery({
     queryKey: ["history"],
     queryFn: () => fetchHistory({ data: undefined }) as Promise<HistoryResponse>,
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: () => resetFn({ data: undefined }),
+    onSuccess: () => {
+      void qc.invalidateQueries();
+      setShowConfirmReset(false);
+      toast.success("All tracker data has been completely deleted.");
+    },
+    onError: () => toast.error("Failed to delete tracker data. Please try again."),
   });
 
   const weeks = data?.weeks ?? [];
@@ -63,8 +80,8 @@ function HistoryPage() {
 
   return (
     <AppShell profile={profile}>
-      <h1 className="text-3xl font-semibold tracking-tight">History</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Every week you've tracked so far.</p>
+      <h1 className="text-3xl font-semibold tracking-tight">History & Analytics</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Every week you've tracked so far and tracker settings.</p>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <StatCard icon={<Zap className="h-4 w-4" />} label="Level" value={`${lp.level}`} sub={`${profile?.total_xp ?? 0} XP total`} />
@@ -82,7 +99,7 @@ function HistoryPage() {
         />
       </div>
 
-      {chart.length > 1 && (
+      {chart.length > 1 ? (
         <section className="mt-6 h-56 rounded-2xl border border-border bg-card p-5">
           <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">Completion rate</p>
           <div className="mt-3 h-40">
@@ -104,13 +121,17 @@ function HistoryPage() {
             </ResponsiveContainer>
           </div>
         </section>
-      )}
+      ) : chart.length === 1 ? (
+        <div className="mt-6 rounded-2xl border border-border/80 bg-card p-4 text-xs text-muted-foreground flex items-center justify-between">
+          <span>📊 <strong>Multi-week trend chart:</strong> Keep tracking tasks! The week-over-week completion rate graph will appear once you have at least 2 weeks of activity.</span>
+        </div>
+      ) : null}
 
       {isLoading ? (
         <p className="mt-8 text-sm text-muted-foreground">Loading…</p>
       ) : weeks.length === 0 ? (
         <div className="mt-6 rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-          Nothing tracked yet — start ticking tasks on the week board.
+          Nothing tracked yet — start ticking tasks on the daily board or habit tracker.
         </div>
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -130,6 +151,55 @@ function HistoryPage() {
           ))}
         </div>
       )}
+
+      {/* Danger Zone: Reset Tracker Data */}
+      <section className="mt-10 rounded-2xl border border-destructive/30 bg-destructive/5 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              <h2 className="text-base font-semibold">Danger Zone: Delete All Tracker Data</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground max-w-xl">
+              Permanently delete all your daily tasks, habits, check-in history, goals, and reset your XP, level, and streaks back to zero.
+            </p>
+          </div>
+
+          {!showConfirmReset ? (
+            <Button
+              variant="destructive"
+              onClick={() => setShowConfirmReset(true)}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Delete All Tracker Data</span>
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirmReset(false)}
+                disabled={resetMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => resetMutation.mutate()}
+                disabled={resetMutation.isPending}
+                className="gap-2"
+              >
+                {resetMutation.isPending ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                <span>Yes, Delete Everything</span>
+              </Button>
+            </div>
+          )}
+        </div>
+      </section>
     </AppShell>
   );
 }
