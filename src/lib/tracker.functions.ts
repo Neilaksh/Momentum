@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   ensureProfile,
   loadHistory,
+  loadDay,
   loadWeek,
   recomputeStats,
 } from "./tracker.server";
@@ -188,4 +189,11 @@ export const getHistory = createServerFn({ method: "POST" })
     const profile = await ensureProfile(supabase, context.userId);
     const history = await loadHistory(supabase, context.userId, 12);
     return { profile, ...history };
+  });
+
+export const getDay = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { date: string }) => z.object({ date: z.string() }).parse(input))
+  .handler(async ({ data, context }) => {
+    return loadDay(context.supabase as any, context.userId, data.date);
   });
