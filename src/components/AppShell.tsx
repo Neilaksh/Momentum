@@ -8,7 +8,6 @@ const NAV = [
   { to: "/today", label: "Daily" },
   { to: "/habits", label: "Habits" },
   { to: "/", label: "Week" },
-  { to: "/routine", label: "Routine" },
   { to: "/goals", label: "Goals" },
   { to: "/history", label: "History" },
 ] as const;
