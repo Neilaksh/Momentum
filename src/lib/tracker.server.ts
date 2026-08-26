@@ -181,3 +181,31 @@ export async function loadHistory(supabase: DB, userId: string, weeks: number) {
   const totalDone = rows.filter((r) => r.completed_at).length;
   return { weeks: list, totalDone, totalTasks: rows.length };
 }
+
+/** Load a single day's tasks (materializing that day's week first) plus the profile. */
+export async function loadDay(supabase: DB, userId: string, date: string) {
+  const d = parseISODate(date);
+  const offset = (d.getDay() + 6) % 7;
+  const weekStart = toISODate(new Date(d.getFullYear(), d.getMonth(), d.getDate() - offset));
+  await materializeWeek(supabase, userId, weekStart);
+
+  const { data } = await supabase
+    .from("day_tasks")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("task_date", date)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  const tasks = (data ?? []) as DayTask[];
+  const profile = await ensureProfile(supabase, userId);
+  const done = tasks.filter((t) => t.completed_at).length;
+  return {
+    date,
+    tasks,
+    profile,
+    done,
+    total: tasks.length,
+    pct: tasks.length ? Math.round((done / tasks.length) * 100) : 0,
+  };
+}
