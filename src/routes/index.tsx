@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
@@ -183,6 +183,49 @@ function WeekBoard() {
           </ResponsiveContainer>
         </div>
       </section>
+
+      {/* Quick Access Highlights */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Link
+          to="/today"
+          className="group flex items-center justify-between rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/60 hover:bg-secondary/40"
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <Plus className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold tracking-tight group-hover:text-primary transition-colors">
+                Daily Tasks View
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Dedicated day view with completion pie chart & XP breakdown
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+        </Link>
+
+        <Link
+          to="/habits"
+          className="group flex items-center justify-between rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/60 hover:bg-secondary/40"
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <ChevronRight className="h-5 w-5 rotate-45" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold tracking-tight group-hover:text-primary transition-colors">
+                Repeating Habit Tracker
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Weekly & yearly progress pie charts with streaks
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+        </Link>
+      </div>
 
       {isLoading ? (
         <p className="mt-10 text-sm text-muted-foreground">Loading your week…</p>

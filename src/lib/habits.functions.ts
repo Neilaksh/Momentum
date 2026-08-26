@@ -36,6 +36,28 @@ export const deleteHabit = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const updateHabit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { id: string; title?: string; targetPerWeek?: number }) =>
+      z
+        .object({
+          id: z.string(),
+          title: z.string().min(1).max(120).optional(),
+          targetPerWeek: z.number().int().min(1).max(7).optional(),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, unknown> = {};
+    if (data.title !== undefined) patch["title"] = data.title.trim();
+    if (data.targetPerWeek !== undefined) patch["target_per_week"] = data.targetPerWeek;
+    if (Object.keys(patch).length > 0) {
+      await (context.supabase as any).from("habits").update(patch).eq("id", data.id);
+    }
+    return { ok: true };
+  });
+
 export const toggleHabitDay = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { habitId: string; date: string; done: boolean }) =>

@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { levelProgress, type Profile } from "@/lib/tracker-shared";
 
 const NAV = [
+  { to: "/today", label: "Daily" },
+  { to: "/habits", label: "Habits" },
   { to: "/", label: "Week" },
   { to: "/routine", label: "Routine" },
   { to: "/goals", label: "Goals" },
