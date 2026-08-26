@@ -9,12 +9,14 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Flame,
   LinkIcon,
   Plus,
   RefreshCw,
   Repeat,
   Target,
   Trash2,
+  Unlink,
   X,
   Zap,
 } from "lucide-react";
@@ -35,9 +37,12 @@ import {
   toggleDayTask,
   updateGoalStatus,
 } from "@/lib/tracker.functions";
+import { getHabits, linkHabitToGoal, unlinkHabitFromGoal } from "@/lib/habits.functions";
+import { parseHabitTitle, type HabitsData } from "@/lib/habits-shared";
 import { getWeek } from "@/lib/tracker.functions";
 import {
   formatDayDate,
+  parseRoutineTitle,
   startOfWeek,
   toISODate,
   WEEKDAY_NAMES,
@@ -89,6 +94,7 @@ function computeStatus(goal: Goal): "active" | "completed" | "overdue" {
 function GoalsPage() {
   const fetchGoals = useServerFn(getGoals);
   const fetchWeek = useServerFn(getWeek);
+  const fetchHabits = useServerFn(getHabits);
   const saveFn = useServerFn(saveGoal);
   const delFn = useServerFn(deleteGoal);
   const addRoutineFn = useServerFn(addGoalRoutineTask);
@@ -96,6 +102,8 @@ function GoalsPage() {
   const updateStatusFn = useServerFn(updateGoalStatus);
   const toggleTaskFn = useServerFn(toggleDayTask);
   const addTaskFn = useServerFn(addDayTask);
+  const linkHabitFn = useServerFn(linkHabitToGoal);
+  const unlinkHabitFn = useServerFn(unlinkHabitFromGoal);
   const qc = useQueryClient();
 
   const [title, setTitle] = useState("");
@@ -115,9 +123,15 @@ function GoalsPage() {
     queryFn: () => fetchWeek({ data: { weekStart } }) as Promise<WeekData>,
   });
 
+  const { data: habitsData } = useQuery({
+    queryKey: ["habits", weekStart],
+    queryFn: () => fetchHabits({ data: { weekStart } }) as Promise<HabitsData>,
+  });
+
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["goals"] });
     void qc.invalidateQueries({ queryKey: ["week"] });
+    void qc.invalidateQueries({ queryKey: ["habits"] });
   };
 
   const create = useMutation({
@@ -191,10 +205,23 @@ function GoalsPage() {
     onError: () => toast.error("Couldn't add task."),
   });
 
+  const linkHabit = useMutation({
+    mutationFn: (v: { habitId: string; goalId: string }) => linkHabitFn({ data: v }),
+    onSuccess: () => { invalidate(); toast.success("Habit linked to goal!"); },
+    onError: () => toast.error("Couldn't link habit."),
+  });
+
+  const unlinkHabit = useMutation({
+    mutationFn: (v: { habitId: string }) => unlinkHabitFn({ data: v }),
+    onSuccess: () => { invalidate(); toast.success("Habit unlinked."); },
+    onError: () => toast.error("Couldn't unlink habit."),
+  });
+
   const goals = data?.goals ?? [];
   const stats = data?.stats ?? {};
   const routinesByGoal = data?.routinesByGoal ?? {};
   const tasksByGoal = data?.tasksByGoal ?? {};
+  const allHabitStats = habitsData?.stats ?? [];
 
   // Compute effective status client-side — no DB mutation on read
   const { activeGoals, overdueGoals, completedGoals } = useMemo(() => {
@@ -319,21 +346,16 @@ function GoalsPage() {
                     stat={stats[g.id] ?? { total: 0, done: 0 }}
                     routines={routinesByGoal[g.id] ?? []}
                     tasks={tasksByGoal[g.id] ?? []}
+                    allHabitStats={allHabitStats}
                     onDelete={() => remove.mutate({ id: g.id })}
-                    onMarkComplete={() =>
-                      markStatus.mutate({ id: g.id, status: "completed" })
-                    }
-                    onExtendDate={(d) =>
-                      markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })
-                    }
-                    onAddRoutine={(t, weekdays) =>
-                      addRoutine.mutate({ goalId: g.id, title: t, weekdays })
-                    }
+                    onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
+                    onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
+                    onAddRoutine={(t, weekdays) => addRoutine.mutate({ goalId: g.id, title: t, weekdays })}
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
-                    onAddDirectTask={(t) =>
-                      addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })
-                    }
+                    onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
+                    onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
+                    onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
                   />
                 ))}
               </div>
@@ -360,21 +382,16 @@ function GoalsPage() {
                     stat={stats[g.id] ?? { total: 0, done: 0 }}
                     routines={routinesByGoal[g.id] ?? []}
                     tasks={tasksByGoal[g.id] ?? []}
+                    allHabitStats={allHabitStats}
                     onDelete={() => remove.mutate({ id: g.id })}
-                    onMarkComplete={() =>
-                      markStatus.mutate({ id: g.id, status: "completed" })
-                    }
-                    onExtendDate={(d) =>
-                      markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })
-                    }
-                    onAddRoutine={(t, weekdays) =>
-                      addRoutine.mutate({ goalId: g.id, title: t, weekdays })
-                    }
+                    onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
+                    onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
+                    onAddRoutine={(t, weekdays) => addRoutine.mutate({ goalId: g.id, title: t, weekdays })}
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
-                    onAddDirectTask={(t) =>
-                      addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })
-                    }
+                    onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
+                    onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
+                    onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
                   />
                 ))}
               </div>
@@ -399,6 +416,7 @@ function GoalsPage() {
                     stat={stats[g.id] ?? { total: 0, done: 0 }}
                     routines={[]}
                     tasks={tasksByGoal[g.id] ?? []}
+                    allHabitStats={[]}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onReopen={() => markStatus.mutate({ id: g.id, status: "active" })}
                     onMarkComplete={() => {}}
@@ -407,6 +425,8 @@ function GoalsPage() {
                     onRemoveRoutineGroup={() => {}}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={() => {}}
+                    onLinkHabit={() => {}}
+                    onUnlinkHabit={() => {}}
                   />
                 ))}
               </div>
@@ -424,6 +444,7 @@ function GoalCard({
   stat,
   routines,
   tasks,
+  allHabitStats,
   onDelete,
   onMarkComplete,
   onReopen,
@@ -432,12 +453,15 @@ function GoalCard({
   onRemoveRoutineGroup,
   onToggleTask,
   onAddDirectTask,
+  onLinkHabit,
+  onUnlinkHabit,
 }: {
   goal: Goal;
   effectiveStatus: "active" | "completed" | "overdue";
   stat: { total: number; done: number };
   routines: { id: string; title: string; weekday: number }[];
   tasks: DayTask[];
+  allHabitStats: HabitsData["stats"];
   onDelete: () => void;
   onMarkComplete: () => void;
   onReopen?: () => void;
@@ -446,7 +470,10 @@ function GoalCard({
   onRemoveRoutineGroup: (ids: string[]) => void;
   onToggleTask: (id: string, completed: boolean) => void;
   onAddDirectTask: (title: string) => void;
+  onLinkHabit: (habitId: string) => void;
+  onUnlinkHabit: (habitId: string) => void;
 }) {
+  const [showLinkHabitDropdown, setShowLinkHabitDropdown] = useState(false);
   const [showLinkPanel, setShowLinkPanel] = useState(false);
   const [showExtendPanel, setShowExtendPanel] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -479,10 +506,11 @@ function GoalCard({
     setShowLinkPanel(false);
   }
 
-  // Group routines by title for display
+  // Group routines by parsed display title for clean rendering
   const routineGroups = Array.from(
     routines.reduce((map, rt) => {
-      const key = rt.title;
+      const parsed = parseRoutineTitle(rt.title);
+      const key = parsed.displayTitle || rt.title;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(rt);
       return map;
@@ -708,6 +736,120 @@ function GoalCard({
           </ul>
         </div>
       )}
+
+      {/* ── Linked Habits Section ── */}
+      {(() => {
+        const linkedHabits = allHabitStats.filter((s) => {
+          const parsed = parseHabitTitle(s.habit.title);
+          return parsed.goalId === goal.id;
+        });
+        const unlinkedHabits = allHabitStats.filter((s) => {
+          const parsed = parseHabitTitle(s.habit.title);
+          return !parsed.goalId;
+        });
+
+        return (
+          <div className="mt-4 rounded-xl bg-secondary/30 p-3.5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <Repeat className="h-3.5 w-3.5 text-amber-400" />
+                Linked Habits
+                {linkedHabits.length > 0 && (
+                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-400 font-bold text-[10px]">
+                    {linkedHabits.length}
+                  </span>
+                )}
+              </div>
+              {!isCompleted && unlinkedHabits.length > 0 && (
+                <button
+                  onClick={() => setShowLinkHabitDropdown((v) => !v)}
+                  className="flex items-center gap-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1 text-[10px] font-semibold text-amber-400 hover:bg-amber-500/20 transition-colors"
+                >
+                  <LinkIcon className="h-3 w-3" />
+                  {showLinkHabitDropdown ? "Cancel" : "Link Habit"}
+                </button>
+              )}
+            </div>
+
+            {/* Dropdown to pick an existing habit to link */}
+            {showLinkHabitDropdown && (
+              <div className="mb-3 rounded-lg border border-amber-500/20 bg-card p-2 space-y-1 max-h-40 overflow-y-auto">
+                {unlinkedHabits.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground px-1">All habits already linked.</p>
+                ) : (
+                  unlinkedHabits.map((s) => (
+                    <button
+                      key={s.habit.id}
+                      onClick={() => {
+                        onLinkHabit(s.habit.id);
+                        setShowLinkHabitDropdown(false);
+                      }}
+                      className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-left hover:bg-secondary transition-colors"
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: `hsl(var(--primary))` }} />
+                      <span className="font-medium truncate">{parseHabitTitle(s.habit.title).displayTitle}</span>
+                      <span className="ml-auto text-muted-foreground text-[10px]">{s.habit.target_per_week}×/wk</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Linked habits list */}
+            {linkedHabits.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground">
+                No habits linked yet.{" "}
+                {!isCompleted && unlinkedHabits.length > 0 && "Click 'Link Habit' to attach an existing habit to this goal."}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {linkedHabits.map((s) => {
+                  const displayTitle = parseHabitTitle(s.habit.title).displayTitle;
+                  const pctWeek = s.habit.target_per_week > 0
+                    ? Math.min(100, Math.round((s.weekDone / s.habit.target_per_week) * 100))
+                    : 0;
+                  const weekDone = s.weekDone;
+                  const weekTarget = s.habit.target_per_week;
+                  return (
+                    <div key={s.habit.id} className="flex items-center gap-2 rounded-lg bg-amber-500/5 border border-amber-500/10 px-2.5 py-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-xs font-semibold text-foreground truncate">{displayTitle}</span>
+                          {s.streak > 0 && (
+                            <span className="flex items-center gap-0.5 text-[10px] font-semibold text-orange-400">
+                              <Flame className="h-3 w-3" />{s.streak}d
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-amber-400 transition-all"
+                              style={{ width: `${pctWeek}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] num text-muted-foreground shrink-0">
+                            {weekDone}/{weekTarget} this wk
+                          </span>
+                        </div>
+                      </div>
+                      {!isCompleted && (
+                        <button
+                          onClick={() => onUnlinkHabit(s.habit.id)}
+                          title="Unlink habit from goal"
+                          className="shrink-0 p-1 text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <Unlink className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Linked Repeating Tasks */}
       {routines.length > 0 && (

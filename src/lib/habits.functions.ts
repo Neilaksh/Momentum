@@ -49,11 +49,26 @@ export const updateHabit = createServerFn({ method: "POST" })
         .parse(input),
   )
   .handler(async ({ data, context }) => {
+    const supabase = context.supabase as any;
     const patch: Record<string, unknown> = {};
-    if (data.title !== undefined) patch["title"] = data.title.trim();
+    if (data.title !== undefined) {
+      const { data: existing } = await supabase
+        .from("habits")
+        .select("title")
+        .eq("id", data.id)
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if (existing) {
+        const goalMatch = (existing.title as string).match(/^\[goal:[^\]]+\]/);
+        const clean = data.title.trim().replace(/^\[goal:[^\]]+\]\s*/, "");
+        patch["title"] = goalMatch ? `${goalMatch[0]} ${clean}` : clean;
+      } else {
+        patch["title"] = data.title.trim();
+      }
+    }
     if (data.targetPerWeek !== undefined) patch["target_per_week"] = data.targetPerWeek;
     if (Object.keys(patch).length > 0) {
-      await (context.supabase as any).from("habits").update(patch).eq("id", data.id);
+      await supabase.from("habits").update(patch).eq("id", data.id).eq("user_id", context.userId);
     }
     return { ok: true };
   });
@@ -81,3 +96,56 @@ export const toggleHabitDay = createServerFn({ method: "POST" })
     }
     return { ok: true };
   });
+
+export const linkHabitToGoal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { habitId: string; goalId: string }) =>
+      z.object({ habitId: z.string(), goalId: z.string() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as any;
+    const { data: habit } = await supabase
+      .from("habits")
+      .select("title")
+      .eq("id", data.habitId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+
+    if (habit) {
+      const rawTitle = habit.title as string;
+      const cleanTitle = rawTitle.replace(/^\[goal:[^\]]+\]\s*/, "");
+      const newTitle = `[goal:${data.goalId}] ${cleanTitle}`;
+      await supabase
+        .from("habits")
+        .update({ title: newTitle })
+        .eq("id", data.habitId)
+        .eq("user_id", context.userId);
+    }
+    return { ok: true };
+  });
+
+export const unlinkHabitFromGoal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { habitId: string }) => z.object({ habitId: z.string() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as any;
+    const { data: habit } = await supabase
+      .from("habits")
+      .select("title")
+      .eq("id", data.habitId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+
+    if (habit) {
+      const rawTitle = habit.title as string;
+      const cleanTitle = rawTitle.replace(/^\[goal:[^\]]+\]\s*/, "");
+      await supabase
+        .from("habits")
+        .update({ title: cleanTitle })
+        .eq("id", data.habitId)
+        .eq("user_id", context.userId);
+    }
+    return { ok: true };
+  });
+

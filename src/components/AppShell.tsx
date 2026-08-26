@@ -6,6 +6,7 @@ import { levelProgress, type Profile } from "@/lib/tracker-shared";
 
 const NAV = [
   { to: "/", label: "Tasks" },
+  { to: "/routines", label: "Routines" },
   { to: "/habits", label: "Habits" },
   { to: "/goals", label: "Goals" },
   { to: "/history", label: "History" },

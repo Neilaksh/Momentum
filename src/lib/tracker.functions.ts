@@ -6,9 +6,11 @@ import {
   loadHistory,
   loadDay,
   loadWeek,
+  materializeWeek,
   recomputeStats,
   rolloverIncompleteGoalTasks,
 } from "./tracker.server";
+import { startOfWeek, toISODate } from "./tracker-shared";
 
 export const getWeek = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -69,6 +71,21 @@ export const deleteDayTask = createServerFn({ method: "POST" })
     return { profile };
   });
 
+export const updateDayTaskDate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { id: string; date: string }) =>
+      z.object({ id: z.string(), date: z.string() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await (context.supabase as any)
+      .from("day_tasks")
+      .update({ task_date: data.date })
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
+    return { ok: true };
+  });
+
 export const getRoutine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -113,6 +130,127 @@ export const deleteRoutineTask = createServerFn({ method: "POST" })
     await (context.supabase as any).from("routine_tasks").delete().eq("id", data.id);
     return { ok: true };
   });
+
+export const updateRoutineTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      id: string;
+      title?: string;
+      weekday?: number;
+      isActive?: boolean;
+      goalId?: string | null;
+      sortOrder?: number;
+    }) =>
+      z
+        .object({
+          id: z.string(),
+          title: z.string().min(1).max(300).optional(),
+          weekday: z.number().int().min(0).max(6).optional(),
+          isActive: z.boolean().optional(),
+          goalId: z.string().nullable().optional(),
+          sortOrder: z.number().optional(),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, unknown> = {};
+    if (data.title !== undefined) patch["title"] = data.title.trim();
+    if (data.weekday !== undefined) patch["weekday"] = data.weekday;
+    if (data.isActive !== undefined) patch["is_active"] = data.isActive;
+    if (data.goalId !== undefined) patch["goal_id"] = data.goalId;
+    if (data.sortOrder !== undefined) patch["sort_order"] = data.sortOrder;
+
+    const { data: updated } = await (context.supabase as any)
+      .from("routine_tasks")
+      .update(patch)
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .select("*")
+      .maybeSingle();
+
+    return { task: updated };
+  });
+
+export const toggleRoutineTaskActive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; isActive: boolean }) =>
+    z.object({ id: z.string(), isActive: z.boolean() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await (context.supabase as any)
+      .from("routine_tasks")
+      .update({ is_active: data.isActive })
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
+    return { ok: true };
+  });
+
+export const batchAddRoutineTasks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      items: Array<{
+        weekday: number;
+        title: string;
+        goalId?: string | null;
+        sortOrder?: number;
+        isActive?: boolean;
+      }>;
+    }) =>
+      z
+        .object({
+          items: z
+            .array(
+              z.object({
+                weekday: z.number().int().min(0).max(6),
+                title: z.string().min(1).max(300),
+                goalId: z.string().nullable().optional(),
+                sortOrder: z.number().optional(),
+                isActive: z.boolean().optional(),
+              }),
+            )
+            .min(1),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const rows = data.items.map((item) => ({
+      user_id: context.userId,
+      weekday: item.weekday,
+      title: item.title.trim(),
+      goal_id: item.goalId ?? null,
+      sort_order: item.sortOrder ?? 0,
+      is_active: item.isActive ?? true,
+    }));
+    await (context.supabase as any).from("routine_tasks").insert(rows);
+    return { ok: true };
+  });
+
+export const batchDeleteRoutineTasks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { ids: string[] }) =>
+    z.object({ ids: z.array(z.string()).min(1) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await (context.supabase as any)
+      .from("routine_tasks")
+      .delete()
+      .in("id", data.ids)
+      .eq("user_id", context.userId);
+    return { ok: true };
+  });
+
+export const clearAllRoutineTasks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await (context.supabase as any)
+      .from("routine_tasks")
+      .delete()
+      .eq("user_id", context.userId);
+    return { ok: true };
+  });
+
 
 export const getGoals = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -246,6 +384,11 @@ export const addGoalRoutineTask = createServerFn({ method: "POST" })
       is_active: true,
     }));
     await supabase.from("routine_tasks").insert(rows);
+
+    // Auto-materialize into current week's day_tasks immediately
+    const weekStart = toISODate(startOfWeek(new Date()));
+    await materializeWeek(supabase, context.userId, weekStart);
+
     return { ok: true };
   });
 
@@ -254,11 +397,18 @@ export const removeGoalRoutineTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
-    await (context.supabase as any)
+    const supabase = context.supabase as any;
+    await supabase
       .from("routine_tasks")
       .delete()
       .eq("id", data.id)
       .eq("user_id", context.userId);
+    await supabase
+      .from("day_tasks")
+      .delete()
+      .eq("routine_task_id", data.id)
+      .eq("user_id", context.userId)
+      .is("completed_at", null);
     return { ok: true };
   });
 
@@ -269,11 +419,18 @@ export const removeGoalRoutineTasksBatch = createServerFn({ method: "POST" })
     z.object({ ids: z.array(z.string()).min(1) }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    await (context.supabase as any)
+    const supabase = context.supabase as any;
+    await supabase
       .from("routine_tasks")
       .delete()
       .in("id", data.ids)
       .eq("user_id", context.userId);
+    await supabase
+      .from("day_tasks")
+      .delete()
+      .in("routine_task_id", data.ids)
+      .eq("user_id", context.userId)
+      .is("completed_at", null);
     return { ok: true };
   });
 

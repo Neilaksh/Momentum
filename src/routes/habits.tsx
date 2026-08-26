@@ -33,7 +33,7 @@ import {
   toggleHabitDay,
   updateHabit,
 } from "@/lib/habits.functions";
-import type { HabitsData, HabitStat } from "@/lib/habits-shared";
+import { parseHabitTitle, type HabitsData, type HabitStat } from "@/lib/habits-shared";
 import {
   WEEKDAY_NAMES,
   addDays,
@@ -221,7 +221,7 @@ function HabitsPage() {
 
   function startEditing(s: HabitStat) {
     setEditingHabitId(s.habit.id);
-    setEditTitle(s.habit.title);
+    setEditTitle(parseHabitTitle(s.habit.title).cleanTitle);
     setEditTarget(s.habit.target_per_week);
   }
 
@@ -601,7 +601,7 @@ function HabitsPage() {
                       ) : (
                         <>
                           <h2 className="truncate text-base font-semibold tracking-tight">
-                            {s.habit.title}
+                            {parseHabitTitle(s.habit.title).displayTitle}
                           </h2>
 
                           <span className="num rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">

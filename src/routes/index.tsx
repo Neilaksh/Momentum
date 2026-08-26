@@ -11,6 +11,7 @@ import {
   Circle,
   Plus,
   Sparkles,
+  Target,
   Trash2,
   Zap,
 } from "lucide-react";
@@ -30,7 +31,7 @@ import { ProgressRing } from "@/components/ProgressRing";
 import { PieStat } from "@/components/PieStat";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { addDayTask, deleteDayTask, getWeek, toggleDayTask } from "@/lib/tracker.functions";
+import { addDayTask, deleteDayTask, getGoals, getWeek, toggleDayTask } from "@/lib/tracker.functions";
 import {
   WEEKDAY_NAMES,
   XP_PER_TASK,
@@ -38,6 +39,7 @@ import {
   addDays,
   formatDayDate,
   parseISODate,
+  parseRoutineTitle,
   pctComplete,
   startOfWeek,
   toISODate,
@@ -138,23 +140,41 @@ function UnifiedTasksPage() {
     onError: () => toast.error("Couldn't delete task — try again."),
   });
 
+  const fetchGoals = useServerFn(getGoals);
+  const { data: goalsData } = useQuery({
+    queryKey: ["goals"],
+    queryFn: () => fetchGoals({ data: undefined }),
+  });
+
+  const goalsMap = useMemo(() => {
+    const map = new Map<string, { id: string; title: string }>();
+    for (const g of (goalsData?.goals ?? []) as any[]) {
+      map.set(g.id, g);
+    }
+    return map;
+  }, [goalsData]);
+
   const days = data?.days ?? [];
-  const allTasks = days.flatMap((d) => d.tasks);
+  // Include direct tasks AND goal-linked repeating tasks (only unlinked routine schedule blocks stay in Routines tab)
+  const days$ = days.map((d) => ({
+    ...d,
+    tasks: d.tasks.filter((t) => (t as any).source !== "routine" || (t as any).goal_id !== null),
+  }));
+  const allTasks = days$.flatMap((d) => d.tasks);
   const doneCount = allTasks.filter((t) => t.completed_at).length;
   const weekPct = pctComplete(allTasks);
 
   // Selected Day resolution
   const activeDay = useMemo(() => {
-    const found = days.find((d) => d.date === selectedDate);
-    return found ?? days[0] ?? { date: selectedDate, weekday: 0, tasks: [] };
-  }, [days, selectedDate]);
+    const found = days$.find((d) => d.date === selectedDate);
+    return found ?? days$[0] ?? { date: selectedDate, weekday: 0, tasks: [] };
+  }, [days$, selectedDate]);
 
   // Keep selected date inside active week when shifting weeks
   useEffect(() => {
     if (days.length > 0) {
       const datesInWeek = days.map((d) => d.date);
       if (!datesInWeek.includes(selectedDate)) {
-        // If today is in the new week, pick today, otherwise pick the first day of that week
         if (datesInWeek.includes(todayISO)) {
           setSelectedDate(todayISO);
         } else if (datesInWeek[0]) {
@@ -167,8 +187,8 @@ function UnifiedTasksPage() {
   const activeTasks = activeDay.tasks;
   const doneActive = activeTasks.filter((t) => t.completed_at).length;
   const remainingActive = activeTasks.length - doneActive;
-  const routineActiveCount = activeTasks.filter((t) => t.source === "routine").length;
-  const oneOffActiveCount = activeTasks.length - routineActiveCount;
+  const routineActiveCount = days.find((d) => d.date === selectedDate)?.tasks.filter((t) => (t as any).source === "routine").length ?? 0;
+  const oneOffActiveCount = activeTasks.length;
   const isPerfectActive = activeTasks.length > 0 && doneActive === activeTasks.length;
   const activeDayXpEarned = doneActive * XP_PER_TASK + (isPerfectActive ? XP_PERFECT_DAY : 0);
 
@@ -184,13 +204,13 @@ function UnifiedTasksPage() {
 
   const chartData = useMemo(
     () =>
-      days.map((d, i) => ({
+      days$.map((d, i) => ({
         day: WEEKDAY_NAMES[i]!.slice(0, 3),
         done: d.tasks.filter((t) => t.completed_at).length,
         total: d.tasks.length,
         date: d.date,
       })),
-    [days],
+    [days$],
   );
 
   function shiftWeek(delta: number) {
@@ -285,14 +305,6 @@ function UnifiedTasksPage() {
                 <span className="text-muted-foreground">Remaining</span>
                 <span className="num font-semibold text-foreground">{remainingActive}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">From Routine</span>
-                <span className="num font-semibold text-foreground">{routineActiveCount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">One-off</span>
-                <span className="num font-semibold text-foreground">{oneOffActiveCount}</span>
-              </div>
               <div className="border-t border-border/60 pt-2 flex justify-between font-medium">
                 <span className="text-primary flex items-center gap-1">
                   <Zap className="h-3.5 w-3.5" /> Day XP Gained
@@ -303,18 +315,16 @@ function UnifiedTasksPage() {
           </div>
 
           {isPerfectActive && (
-            <div className="mt-3 flex items-center gap-2 rounded-xl bg-primary/10 p-2.5 text-xs text-primary border border-primary/20">
-              <Award className="h-4 w-4 shrink-0" />
-              <span>All {activeTasks.length} tasks completed! (+{XP_PERFECT_DAY} XP bonus)</span>
+            <div className="mt-4 rounded-xl border border-primary/40 bg-primary/10 p-3 text-center text-xs font-semibold text-primary animate-pulse">
+              🌟 Perfect Day! All {activeTasks.length} tasks completed (+{XP_PERFECT_DAY} Bonus XP)
             </div>
           )}
         </section>
 
-        {/* Right: Week Completion Progress & 7-Day Bar Chart */}
+        {/* Right: Week Overview Visual Chart */}
         <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <ProgressRing value={weekPct} size={88} stroke={9} />
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-4">
               <div>
                 <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">
                   Week Overall Progress
@@ -395,7 +405,7 @@ function UnifiedTasksPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-          {days.map((d, i) => {
+          {days$.map((d, i) => {
             const isSelected = d.date === selectedDate;
             const isDayToday = d.date === todayISO;
             const dayDone = d.tasks.filter((t) => t.completed_at).length;
@@ -552,8 +562,15 @@ function UnifiedTasksPage() {
                       t.completed_at ? "text-muted-foreground line-through" : "text-foreground"
                     }`}
                   >
-                    {t.title}
+                    {parseRoutineTitle(t.title).displayTitle}
                   </span>
+
+                  {(t as any).goal_id && goalsMap.get((t as any).goal_id) && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                      <Target className="h-2.5 w-2.5" />
+                      <span className="max-w-[120px] truncate">{goalsMap.get((t as any).goal_id)?.title}</span>
+                    </span>
+                  )}
 
 
 
@@ -610,7 +627,7 @@ function UnifiedTasksPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {days.map((day, i) => {
+          {days$.map((day, i) => {
             const isSelected = day.date === selectedDate;
             const isDayToday = day.date === todayISO;
 
@@ -722,7 +739,7 @@ function DayCard({
                   t.completed_at ? "text-muted-foreground line-through" : "text-foreground"
                 }`}
               >
-                {t.title}
+                {parseRoutineTitle(t.title).displayTitle}
               </span>
             </li>
           ))}

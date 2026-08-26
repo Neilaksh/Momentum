@@ -4,6 +4,7 @@ import {
   XP_PERFECT_DAY,
   levelFromXp,
   parseISODate,
+  parseRoutineTitle,
   toISODate,
   weekDates,
   type DayTask,
@@ -97,15 +98,29 @@ export async function rolloverIncompleteGoalTasks(supabase: DB, userId: string):
   return idsToUpdate.length;
 }
 
-/** Materialize routine template tasks into day_tasks for the given week (idempotent). */
+/** Materialize goal-linked repeating routine tasks into day_tasks for the given week (idempotent).
+ * General routine schedule blocks (without a goal_id) are kept in the Routines tab and not placed into day_tasks.
+ */
 export async function materializeWeek(supabase: DB, userId: string, weekStart: string) {
   await rolloverIncompleteGoalTasks(supabase, userId);
+
+  // Clean up any legacy unlinked routine schedule tasks from day_tasks
+  await supabase
+    .from("day_tasks")
+    .delete()
+    .eq("user_id", userId)
+    .eq("source", "routine")
+    .is("goal_id", null);
+
   const dates = weekDates(weekStart);
-  const { data: routine } = await supabase
+
+  // Fetch all active repeating routine tasks that are linked to goals
+  const { data: goalRoutines } = await supabase
     .from("routine_tasks")
     .select("*")
     .eq("user_id", userId)
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .not("goal_id", "is", null);
 
   const { data: existing } = await supabase
     .from("day_tasks")
@@ -121,20 +136,24 @@ export async function materializeWeek(supabase: DB, userId: string, weekStart: s
   );
 
   const rows: Record<string, unknown>[] = [];
-  for (const rt of (routine ?? []) as any[]) {
+  for (const rt of (goalRoutines ?? []) as any[]) {
     const date = dates[rt.weekday];
     if (!date) continue;
     if (have.has(`${date}|${rt.id}`)) continue;
+    const parsed = parseRoutineTitle(rt.title);
+    // Habits linked to goals are tracked in the Habits/Goals tabs and must not create task items in the Tasks section
+    if (parsed.habitId && parsed.habitId !== "none") continue;
     rows.push({
       user_id: userId,
       task_date: date,
-      title: rt.title,
-      sort_order: rt.sort_order,
+      title: parsed.displayTitle || rt.title,
+      sort_order: rt.sort_order ?? 0,
       source: "routine",
       routine_task_id: rt.id,
       goal_id: rt.goal_id,
     });
   }
+
   if (rows.length > 0) {
     await supabase.from("day_tasks").insert(rows);
   }
