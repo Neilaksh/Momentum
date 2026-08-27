@@ -29,7 +29,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   addDayTask,
-  addGoalRoutineTask,
   deleteGoal,
   getGoals,
   removeGoalRoutineTasksBatch,
@@ -100,7 +99,6 @@ function GoalsPage() {
   const fetchHabits = useServerFn(getHabits);
   const saveFn = useServerFn(saveGoal);
   const delFn = useServerFn(deleteGoal);
-  const addRoutineFn = useServerFn(addGoalRoutineTask);
   const removeRoutineBatchFn = useServerFn(removeGoalRoutineTasksBatch);
   const updateStatusFn = useServerFn(updateGoalStatus);
   const toggleTaskFn = useServerFn(toggleDayTask);
@@ -158,16 +156,6 @@ function GoalsPage() {
       toast.info("Goal deleted");
     },
     onError: () => toast.error("Couldn't delete goal."),
-  });
-
-  const addRoutine = useMutation({
-    mutationFn: (v: { goalId: string; title: string; weekdays: number[] }) =>
-      addRoutineFn({ data: v }),
-    onSuccess: () => {
-      invalidate();
-      toast.success("Repeating task linked to goal!");
-    },
-    onError: () => toast.error("Couldn't link task."),
   });
 
   const removeRoutineBatch = useMutation({
@@ -265,7 +253,8 @@ function GoalsPage() {
         </span>
       </div>
       <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-        Create goals, link repeating daily tasks, and track progress week by week until completion.
+        Create goals, schedule tasks on any day (optionally repeating for several days), and track
+        progress until completion.
       </p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
