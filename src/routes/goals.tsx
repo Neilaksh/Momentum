@@ -34,6 +34,7 @@ import {
   getGoals,
   removeGoalRoutineTasksBatch,
   saveGoal,
+  scheduleGoalTasks,
   toggleDayTask,
   updateGoalStatus,
 } from "@/lib/tracker.functions";
@@ -102,6 +103,7 @@ function GoalsPage() {
   const updateStatusFn = useServerFn(updateGoalStatus);
   const toggleTaskFn = useServerFn(toggleDayTask);
   const addTaskFn = useServerFn(addDayTask);
+  const scheduleFn = useServerFn(scheduleGoalTasks);
   const linkHabitFn = useServerFn(linkHabitToGoal);
   const unlinkHabitFn = useServerFn(unlinkHabitFromGoal);
   const qc = useQueryClient();
@@ -203,6 +205,21 @@ function GoalsPage() {
       toast.success("Task added to goal for today");
     },
     onError: () => toast.error("Couldn't add task."),
+  });
+
+  const scheduleTasks = useMutation({
+    mutationFn: (v: { goalId: string; title: string; startDate: string; repeatDays: number }) =>
+      scheduleFn({ data: v }),
+    onSuccess: (_d, v) =>
+      {
+        invalidate();
+        toast.success(
+          v.repeatDays > 1
+            ? `Scheduled "${v.title}" for ${v.repeatDays} days`
+            : `Scheduled "${v.title}"`,
+        );
+      },
+    onError: () => toast.error("Couldn't schedule that task."),
   });
 
   const linkHabit = useMutation({
