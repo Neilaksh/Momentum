@@ -495,17 +495,20 @@ function GoalCard({
   onUnlinkHabit: (habitId: string) => void;
 }) {
   const [showLinkHabitDropdown, setShowLinkHabitDropdown] = useState(false);
-  const [showLinkPanel, setShowLinkPanel] = useState(false);
+  const [showSchedulePanel, setShowSchedulePanel] = useState(false);
   const [showExtendPanel, setShowExtendPanel] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [inlineTask, setInlineTask] = useState("");
-  const [selectedDays, setSelectedDays] = useState<number[]>([0, 1, 2, 3, 4]);
+  const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [repeatDays, setRepeatDays] = useState(1);
   const [extendDate, setExtendDate] = useState(goal.target_date ?? "");
 
   const pct = stat.total ? Math.round((stat.done / stat.total) * 100) : 0;
+  const allTasksDone = stat.total > 0 && stat.done === stat.total;
   const isOverdue = effectiveStatus === "overdue";
   const isCompleted = effectiveStatus === "completed";
+  const barPct = isCompleted || allTasksDone ? 100 : pct;
 
   const today = new Date().toISOString().slice(0, 10);
   const daysUntilDue = goal.target_date
@@ -514,18 +517,14 @@ function GoalCard({
       )
     : null;
 
-  function toggleDay(d: number) {
-    setSelectedDays((prev) =>
-      prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d],
-    );
+  function submitSchedule() {
+    if (!taskTitle.trim() || !scheduleDate) return;
+    onScheduleTasks(taskTitle.trim(), scheduleDate, Math.max(1, repeatDays));
+    setTaskTitle("");
+    setRepeatDays(1);
+    setShowSchedulePanel(false);
   }
 
-  function submitRoutine() {
-    if (!taskTitle.trim() || selectedDays.length === 0) return;
-    onAddRoutine(taskTitle.trim(), selectedDays);
-    setTaskTitle("");
-    setShowLinkPanel(false);
-  }
 
   // Group routines by parsed display title for clean rendering
   const routineGroups = Array.from(
