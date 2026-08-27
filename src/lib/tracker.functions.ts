@@ -521,3 +521,31 @@ export const resetTrackerData = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
+
+/** Schedule a goal task on a start date, optionally repeating it for N consecutive days. */
+export const scheduleGoalTasks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { goalId: string; title: string; startDate: string; repeatDays: number }) =>
+      z
+        .object({
+          goalId: z.string(),
+          title: z.string().min(1).max(200),
+          startDate: z.string(),
+          repeatDays: z.number().int().min(1).max(365),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const start = parseISODate(data.startDate);
+    const rows = Array.from({ length: data.repeatDays }, (_, i) => ({
+      user_id: context.userId,
+      task_date: toISODate(addDays(start, i)),
+      title: data.title.trim(),
+      source: "oneoff",
+      goal_id: data.goalId,
+      sort_order: 1000,
+    }));
+    await (context.supabase as any).from("day_tasks").insert(rows);
+    return { ok: true, created: rows.length };
+  });
