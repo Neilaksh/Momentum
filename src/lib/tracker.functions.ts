@@ -10,7 +10,7 @@ import {
   recomputeStats,
   rolloverIncompleteGoalTasks,
 } from "./tracker.server";
-import { startOfWeek, toISODate } from "./tracker-shared";
+import { addDays, parseISODate, startOfWeek, toISODate } from "./tracker-shared";
 
 export const getWeek = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
