@@ -367,10 +367,12 @@ function GoalsPage() {
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
-                    onAddRoutine={(t, weekdays) => addRoutine.mutate({ goalId: g.id, title: t, weekdays })}
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
+                    onScheduleTasks={(t, startDate, repeatDays) =>
+                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays })
+                    }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
                   />
@@ -403,10 +405,12 @@ function GoalsPage() {
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
-                    onAddRoutine={(t, weekdays) => addRoutine.mutate({ goalId: g.id, title: t, weekdays })}
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
+                    onScheduleTasks={(t, startDate, repeatDays) =>
+                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays })
+                    }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
                   />
@@ -438,10 +442,10 @@ function GoalsPage() {
                     onReopen={() => markStatus.mutate({ id: g.id, status: "active" })}
                     onMarkComplete={() => {}}
                     onExtendDate={() => {}}
-                    onAddRoutine={() => {}}
                     onRemoveRoutineGroup={() => {}}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={() => {}}
+                    onScheduleTasks={() => {}}
                     onLinkHabit={() => {}}
                     onUnlinkHabit={() => {}}
                   />
@@ -466,10 +470,10 @@ function GoalCard({
   onMarkComplete,
   onReopen,
   onExtendDate,
-  onAddRoutine,
   onRemoveRoutineGroup,
   onToggleTask,
   onAddDirectTask,
+  onScheduleTasks,
   onLinkHabit,
   onUnlinkHabit,
 }: {
@@ -483,10 +487,10 @@ function GoalCard({
   onMarkComplete: () => void;
   onReopen?: () => void;
   onExtendDate: (d: string) => void;
-  onAddRoutine: (title: string, weekdays: number[]) => void;
   onRemoveRoutineGroup: (ids: string[]) => void;
   onToggleTask: (id: string, completed: boolean) => void;
   onAddDirectTask: (title: string) => void;
+  onScheduleTasks: (title: string, startDate: string, repeatDays: number) => void;
   onLinkHabit: (habitId: string) => void;
   onUnlinkHabit: (habitId: string) => void;
 }) {
