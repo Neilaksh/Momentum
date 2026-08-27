@@ -29,11 +29,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   addDayTask,
-  addGoalRoutineTask,
   deleteGoal,
   getGoals,
   removeGoalRoutineTasksBatch,
   saveGoal,
+  scheduleGoalTasks,
   toggleDayTask,
   updateGoalStatus,
 } from "@/lib/tracker.functions";
@@ -41,7 +41,9 @@ import { getHabits, linkHabitToGoal, unlinkHabitFromGoal } from "@/lib/habits.fu
 import { parseHabitTitle, type HabitsData } from "@/lib/habits-shared";
 import { getWeek } from "@/lib/tracker.functions";
 import {
+  addDays,
   formatDayDate,
+  parseISODate,
   parseRoutineTitle,
   startOfWeek,
   toISODate,
@@ -97,11 +99,11 @@ function GoalsPage() {
   const fetchHabits = useServerFn(getHabits);
   const saveFn = useServerFn(saveGoal);
   const delFn = useServerFn(deleteGoal);
-  const addRoutineFn = useServerFn(addGoalRoutineTask);
   const removeRoutineBatchFn = useServerFn(removeGoalRoutineTasksBatch);
   const updateStatusFn = useServerFn(updateGoalStatus);
   const toggleTaskFn = useServerFn(toggleDayTask);
   const addTaskFn = useServerFn(addDayTask);
+  const scheduleFn = useServerFn(scheduleGoalTasks);
   const linkHabitFn = useServerFn(linkHabitToGoal);
   const unlinkHabitFn = useServerFn(unlinkHabitFromGoal);
   const qc = useQueryClient();
@@ -156,16 +158,6 @@ function GoalsPage() {
     onError: () => toast.error("Couldn't delete goal."),
   });
 
-  const addRoutine = useMutation({
-    mutationFn: (v: { goalId: string; title: string; weekdays: number[] }) =>
-      addRoutineFn({ data: v }),
-    onSuccess: () => {
-      invalidate();
-      toast.success("Repeating task linked to goal!");
-    },
-    onError: () => toast.error("Couldn't link task."),
-  });
-
   const removeRoutineBatch = useMutation({
     mutationFn: (v: { ids: string[] }) => removeRoutineBatchFn({ data: v }),
     onSuccess: () => invalidate(),
@@ -203,6 +195,21 @@ function GoalsPage() {
       toast.success("Task added to goal for today");
     },
     onError: () => toast.error("Couldn't add task."),
+  });
+
+  const scheduleTasks = useMutation({
+    mutationFn: (v: { goalId: string; title: string; startDate: string; repeatDays: number }) =>
+      scheduleFn({ data: v }),
+    onSuccess: (_d, v) =>
+      {
+        invalidate();
+        toast.success(
+          v.repeatDays > 1
+            ? `Scheduled "${v.title}" for ${v.repeatDays} days`
+            : `Scheduled "${v.title}"`,
+        );
+      },
+    onError: () => toast.error("Couldn't schedule that task."),
   });
 
   const linkHabit = useMutation({
@@ -246,7 +253,8 @@ function GoalsPage() {
         </span>
       </div>
       <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-        Create goals, link repeating daily tasks, and track progress week by week until completion.
+        Create goals, schedule tasks on any day (optionally repeating for several days), and track
+        progress until completion.
       </p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
@@ -350,10 +358,12 @@ function GoalsPage() {
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
-                    onAddRoutine={(t, weekdays) => addRoutine.mutate({ goalId: g.id, title: t, weekdays })}
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
+                    onScheduleTasks={(t, startDate, repeatDays) =>
+                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays })
+                    }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
                   />
@@ -386,10 +396,12 @@ function GoalsPage() {
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
-                    onAddRoutine={(t, weekdays) => addRoutine.mutate({ goalId: g.id, title: t, weekdays })}
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
+                    onScheduleTasks={(t, startDate, repeatDays) =>
+                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays })
+                    }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
                   />
@@ -421,10 +433,10 @@ function GoalsPage() {
                     onReopen={() => markStatus.mutate({ id: g.id, status: "active" })}
                     onMarkComplete={() => {}}
                     onExtendDate={() => {}}
-                    onAddRoutine={() => {}}
                     onRemoveRoutineGroup={() => {}}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={() => {}}
+                    onScheduleTasks={() => {}}
                     onLinkHabit={() => {}}
                     onUnlinkHabit={() => {}}
                   />
@@ -449,10 +461,10 @@ function GoalCard({
   onMarkComplete,
   onReopen,
   onExtendDate,
-  onAddRoutine,
   onRemoveRoutineGroup,
   onToggleTask,
   onAddDirectTask,
+  onScheduleTasks,
   onLinkHabit,
   onUnlinkHabit,
 }: {
@@ -466,25 +478,28 @@ function GoalCard({
   onMarkComplete: () => void;
   onReopen?: () => void;
   onExtendDate: (d: string) => void;
-  onAddRoutine: (title: string, weekdays: number[]) => void;
   onRemoveRoutineGroup: (ids: string[]) => void;
   onToggleTask: (id: string, completed: boolean) => void;
   onAddDirectTask: (title: string) => void;
+  onScheduleTasks: (title: string, startDate: string, repeatDays: number) => void;
   onLinkHabit: (habitId: string) => void;
   onUnlinkHabit: (habitId: string) => void;
 }) {
   const [showLinkHabitDropdown, setShowLinkHabitDropdown] = useState(false);
-  const [showLinkPanel, setShowLinkPanel] = useState(false);
+  const [showSchedulePanel, setShowSchedulePanel] = useState(false);
   const [showExtendPanel, setShowExtendPanel] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [inlineTask, setInlineTask] = useState("");
-  const [selectedDays, setSelectedDays] = useState<number[]>([0, 1, 2, 3, 4]);
+  const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [repeatDays, setRepeatDays] = useState(1);
   const [extendDate, setExtendDate] = useState(goal.target_date ?? "");
 
   const pct = stat.total ? Math.round((stat.done / stat.total) * 100) : 0;
+  const allTasksDone = stat.total > 0 && stat.done === stat.total;
   const isOverdue = effectiveStatus === "overdue";
   const isCompleted = effectiveStatus === "completed";
+  const barPct = isCompleted || allTasksDone ? 100 : pct;
 
   const today = new Date().toISOString().slice(0, 10);
   const daysUntilDue = goal.target_date
@@ -493,18 +508,14 @@ function GoalCard({
       )
     : null;
 
-  function toggleDay(d: number) {
-    setSelectedDays((prev) =>
-      prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d],
-    );
+  function submitSchedule() {
+    if (!taskTitle.trim() || !scheduleDate) return;
+    onScheduleTasks(taskTitle.trim(), scheduleDate, Math.max(1, repeatDays));
+    setTaskTitle("");
+    setRepeatDays(1);
+    setShowSchedulePanel(false);
   }
 
-  function submitRoutine() {
-    if (!taskTitle.trim() || selectedDays.length === 0) return;
-    onAddRoutine(taskTitle.trim(), selectedDays);
-    setTaskTitle("");
-    setShowLinkPanel(false);
-  }
 
   // Group routines by parsed display title for clean rendering
   const routineGroups = Array.from(
@@ -560,7 +571,7 @@ function GoalCard({
                   isCompleted ? "text-primary" : isOverdue ? "text-destructive" : "text-primary"
                 }`}
               >
-                {pct}%
+                {barPct}%
               </span>
 
               {/* Delete with confirm */}
@@ -652,11 +663,14 @@ function GoalCard({
             className={`h-full rounded-full transition-all duration-500 ${
               isOverdue ? "bg-destructive/70" : "bg-primary"
             }`}
-            style={{ width: `${pct}%` }}
+            style={{ width: `${barPct}%` }}
           />
         </div>
         <p className="num mt-1.5 text-xs text-muted-foreground">
-          {stat.done} / {stat.total} linked day-tasks completed
+          {stat.done} / {stat.total} scheduled tasks completed
+          {allTasksDone && !isCompleted && (
+            <span className="ml-1 font-semibold text-primary">— all tasks done! 🎉</span>
+          )}
           {stat.total === 0 && routines.length > 0 && (
             <span className="ml-1 text-muted-foreground/70">
               (tasks appear once a linked week is loaded on the Tasks tab)
@@ -912,21 +926,21 @@ function GoalCard({
       {/* Action Buttons */}
       {!isCompleted && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {/* Link repeating task */}
+          {/* Schedule a task */}
           <button
             onClick={() => {
-              setShowLinkPanel((v) => !v);
+              setShowSchedulePanel((v) => !v);
               setShowExtendPanel(false);
             }}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-              showLinkPanel
+              showSchedulePanel
                 ? "bg-primary/20 text-primary"
                 : "bg-secondary/50 text-muted-foreground hover:text-foreground"
             }`}
           >
-            <LinkIcon className="h-3.5 w-3.5" />
-            {showLinkPanel ? "Hide schedule panel" : "Link Repeating Schedule"}
-            {showLinkPanel ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            <Calendar className="h-3.5 w-3.5" />
+            {showSchedulePanel ? "Hide schedule panel" : "Schedule Task"}
+            {showSchedulePanel ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
 
           {/* Mark Complete */}
@@ -942,7 +956,7 @@ function GoalCard({
           <button
             onClick={() => {
               setShowExtendPanel((v) => !v);
-              setShowLinkPanel(false);
+              setShowSchedulePanel(false);
             }}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               showExtendPanel
@@ -969,16 +983,16 @@ function GoalCard({
         </div>
       )}
 
-      {/* Link Repeating Task Panel */}
-      {showLinkPanel && (
+      {/* Schedule Task Panel */}
+      {showSchedulePanel && (
         <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-primary mb-3 flex items-center gap-1.5">
-            <Repeat className="h-3.5 w-3.5" />
-            Link a Repeating Daily Task
+            <Calendar className="h-3.5 w-3.5" />
+            Schedule a Task
           </h4>
           <p className="text-xs text-muted-foreground mb-3">
-            This task will auto-appear every week on the selected days and count toward this
-            goal's progress until it's completed.
+            Pick the day this task starts, and how many days in a row it should repeat. Each day
+            gets its own tick-box and counts toward this goal's progress.
           </p>
 
           <div className="space-y-3">
@@ -992,49 +1006,68 @@ function GoalCard({
               />
             </div>
 
-            <div>
-              <Label className="text-xs mb-1.5 block">Repeat on Days</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {WEEKDAY_SHORT.map((day, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => toggleDay(i)}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
-                      selectedDays.includes(i)
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {day}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedDays(selectedDays.length === 7 ? [] : [0, 1, 2, 3, 4, 5, 6])
-                  }
-                  className="rounded-lg bg-secondary/70 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-                >
-                  {selectedDays.length === 7 ? "Clear all" : "Every day"}
-                </button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label className="text-xs">Start Date</Label>
+                <Input
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  className="mt-1 h-9 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Repeat for (days)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={repeatDays}
+                  onChange={(e) => setRepeatDays(Math.max(1, Number(e.target.value) || 1))}
+                  className="mt-1 h-9 text-sm"
+                />
               </div>
             </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {[1, 3, 7, 14, 30].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setRepeatDays(n)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+                    repeatDays === n
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {n === 1 ? "Just once" : `${n} days`}
+                </button>
+              ))}
+            </div>
+
+            <p className="num text-[11px] text-muted-foreground">
+              {repeatDays > 1
+                ? `Creates ${repeatDays} tasks: ${formatDayDate(scheduleDate)} → ${formatDayDate(
+                    toISODate(addDays(parseISODate(scheduleDate), repeatDays - 1)),
+                  )}`
+                : `Creates 1 task on ${formatDayDate(scheduleDate)}`}
+            </p>
 
             <div className="flex gap-2 pt-1">
               <Button
                 size="sm"
-                onClick={submitRoutine}
-                disabled={!taskTitle.trim() || selectedDays.length === 0}
+                onClick={submitSchedule}
+                disabled={!taskTitle.trim() || !scheduleDate}
                 className="gap-1.5 h-8 px-3 text-xs"
               >
-                <LinkIcon className="h-3.5 w-3.5" />
-                Link Task
+                <Calendar className="h-3.5 w-3.5" />
+                Schedule
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setShowLinkPanel(false)}
+                onClick={() => setShowSchedulePanel(false)}
                 className="h-8 px-3 text-xs"
               >
                 Cancel
@@ -1043,6 +1076,7 @@ function GoalCard({
           </div>
         </div>
       )}
+
 
       {/* Change Deadline Panel */}
       {showExtendPanel && (
