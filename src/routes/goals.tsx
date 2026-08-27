@@ -932,21 +932,21 @@ function GoalCard({
       {/* Action Buttons */}
       {!isCompleted && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {/* Link repeating task */}
+          {/* Schedule a task */}
           <button
             onClick={() => {
-              setShowLinkPanel((v) => !v);
+              setShowSchedulePanel((v) => !v);
               setShowExtendPanel(false);
             }}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-              showLinkPanel
+              showSchedulePanel
                 ? "bg-primary/20 text-primary"
                 : "bg-secondary/50 text-muted-foreground hover:text-foreground"
             }`}
           >
-            <LinkIcon className="h-3.5 w-3.5" />
-            {showLinkPanel ? "Hide schedule panel" : "Link Repeating Schedule"}
-            {showLinkPanel ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            <Calendar className="h-3.5 w-3.5" />
+            {showSchedulePanel ? "Hide schedule panel" : "Schedule Task"}
+            {showSchedulePanel ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
 
           {/* Mark Complete */}
@@ -962,7 +962,7 @@ function GoalCard({
           <button
             onClick={() => {
               setShowExtendPanel((v) => !v);
-              setShowLinkPanel(false);
+              setShowSchedulePanel(false);
             }}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               showExtendPanel
@@ -989,16 +989,16 @@ function GoalCard({
         </div>
       )}
 
-      {/* Link Repeating Task Panel */}
-      {showLinkPanel && (
+      {/* Schedule Task Panel */}
+      {showSchedulePanel && (
         <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-primary mb-3 flex items-center gap-1.5">
-            <Repeat className="h-3.5 w-3.5" />
-            Link a Repeating Daily Task
+            <Calendar className="h-3.5 w-3.5" />
+            Schedule a Task
           </h4>
           <p className="text-xs text-muted-foreground mb-3">
-            This task will auto-appear every week on the selected days and count toward this
-            goal's progress until it's completed.
+            Pick the day this task starts, and how many days in a row it should repeat. Each day
+            gets its own tick-box and counts toward this goal's progress.
           </p>
 
           <div className="space-y-3">
@@ -1012,49 +1012,68 @@ function GoalCard({
               />
             </div>
 
-            <div>
-              <Label className="text-xs mb-1.5 block">Repeat on Days</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {WEEKDAY_SHORT.map((day, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => toggleDay(i)}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
-                      selectedDays.includes(i)
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {day}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedDays(selectedDays.length === 7 ? [] : [0, 1, 2, 3, 4, 5, 6])
-                  }
-                  className="rounded-lg bg-secondary/70 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-                >
-                  {selectedDays.length === 7 ? "Clear all" : "Every day"}
-                </button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label className="text-xs">Start Date</Label>
+                <Input
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  className="mt-1 h-9 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Repeat for (days)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={repeatDays}
+                  onChange={(e) => setRepeatDays(Math.max(1, Number(e.target.value) || 1))}
+                  className="mt-1 h-9 text-sm"
+                />
               </div>
             </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {[1, 3, 7, 14, 30].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setRepeatDays(n)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+                    repeatDays === n
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {n === 1 ? "Just once" : `${n} days`}
+                </button>
+              ))}
+            </div>
+
+            <p className="num text-[11px] text-muted-foreground">
+              {repeatDays > 1
+                ? `Creates ${repeatDays} tasks: ${formatDayDate(scheduleDate)} → ${formatDayDate(
+                    toISODate(addDays(parseISODate(scheduleDate), repeatDays - 1)),
+                  )}`
+                : `Creates 1 task on ${formatDayDate(scheduleDate)}`}
+            </p>
 
             <div className="flex gap-2 pt-1">
               <Button
                 size="sm"
-                onClick={submitRoutine}
-                disabled={!taskTitle.trim() || selectedDays.length === 0}
+                onClick={submitSchedule}
+                disabled={!taskTitle.trim() || !scheduleDate}
                 className="gap-1.5 h-8 px-3 text-xs"
               >
-                <LinkIcon className="h-3.5 w-3.5" />
-                Link Task
+                <Calendar className="h-3.5 w-3.5" />
+                Schedule
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setShowLinkPanel(false)}
+                onClick={() => setShowSchedulePanel(false)}
                 className="h-8 px-3 text-xs"
               >
                 Cancel
@@ -1063,6 +1082,7 @@ function GoalCard({
           </div>
         </div>
       )}
+
 
       {/* Change Deadline Panel */}
       {showExtendPanel && (
