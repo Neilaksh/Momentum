@@ -42,7 +42,9 @@ import { getHabits, linkHabitToGoal, unlinkHabitFromGoal } from "@/lib/habits.fu
 import { parseHabitTitle, type HabitsData } from "@/lib/habits-shared";
 import { getWeek } from "@/lib/tracker.functions";
 import {
+  addDays,
   formatDayDate,
+  parseISODate,
   parseRoutineTitle,
   startOfWeek,
   toISODate,
@@ -580,7 +582,7 @@ function GoalCard({
                   isCompleted ? "text-primary" : isOverdue ? "text-destructive" : "text-primary"
                 }`}
               >
-                {pct}%
+                {barPct}%
               </span>
 
               {/* Delete with confirm */}
@@ -672,11 +674,14 @@ function GoalCard({
             className={`h-full rounded-full transition-all duration-500 ${
               isOverdue ? "bg-destructive/70" : "bg-primary"
             }`}
-            style={{ width: `${pct}%` }}
+            style={{ width: `${barPct}%` }}
           />
         </div>
         <p className="num mt-1.5 text-xs text-muted-foreground">
-          {stat.done} / {stat.total} linked day-tasks completed
+          {stat.done} / {stat.total} scheduled tasks completed
+          {allTasksDone && !isCompleted && (
+            <span className="ml-1 font-semibold text-primary">— all tasks done! 🎉</span>
+          )}
           {stat.total === 0 && routines.length > 0 && (
             <span className="ml-1 text-muted-foreground/70">
               (tasks appear once a linked week is loaded on the Tasks tab)
