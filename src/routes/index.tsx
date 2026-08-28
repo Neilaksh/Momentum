@@ -644,6 +644,7 @@ function UnifiedTasksPage() {
                 name={WEEKDAY_NAMES[i]!}
                 date={day.date}
                 isToday={isDayToday}
+                isPast={day.date < todayISO}
                 isSelected={isSelected}
                 tasks={day.tasks}
                 onSelectDay={() => {
@@ -651,6 +652,7 @@ function UnifiedTasksPage() {
                   setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
                 }}
               />
+
             );
           })}
         </div>
