@@ -25,78 +25,84 @@ export async function ensureProfile(supabase: DB, userId: string): Promise<Profi
   return (created as Profile) ?? null;
 }
 
-/** Automatically rollover uncompleted goal tasks from past dates to today until completed. */
-export async function rolloverIncompleteGoalTasks(supabase: DB, userId: string): Promise<number> {
+/** Key identifying "the same task" across days. */
+function taskKey(t: { title?: string | null; goal_id?: string | null; routine_task_id?: string | null }) {
+  return `${(t.title ?? "").trim().toLowerCase()}|${t.goal_id ?? ""}|${t.routine_task_id ?? ""}`;
+}
+
+/**
+ * Incomplete tasks from past days stay where they are (they render as "Due"),
+ * and a copy carrying the same title / goal link / routine link is created for today.
+ * Works for manual dashboard tasks as well as goal-scheduled tasks.
+ */
+export async function carryForwardIncompleteTasks(supabase: DB, userId: string): Promise<number> {
   const todayISO = toISODate(new Date());
 
-  // Find all uncompleted day_tasks associated with a goal from past dates
-  const { data: pastUncompleted } = await supabase
+  const { data } = await supabase
     .from("day_tasks")
-    .select("id, task_date, routine_task_id, goal_id, title")
+    .select("id, task_date, title, source, sort_order, routine_task_id, goal_id, completed_at")
     .eq("user_id", userId)
-    .not("goal_id", "is", null)
-    .is("completed_at", null)
-    .lt("task_date", todayISO);
+    .lte("task_date", todayISO);
 
-  if (!pastUncompleted || pastUncompleted.length === 0) return 0;
+  const rows = (data ?? []) as any[];
+  if (rows.length === 0) return 0;
 
-  // Filter only for active (non-completed) goals
-  const { data: activeGoals } = await supabase
-    .from("goals")
-    .select("id, status")
-    .eq("user_id", userId)
-    .neq("status", "completed");
+  const overdue = rows.filter((r) => !r.completed_at && r.task_date < todayISO);
+  if (overdue.length === 0) return 0;
 
-  const activeGoalIds = new Set((activeGoals ?? []).map((g: any) => g.id));
-  const tasksToShift = (pastUncompleted as any[]).filter((t) => activeGoalIds.has(t.goal_id));
-
-  if (tasksToShift.length === 0) return 0;
-
-  // Check today's existing routine tasks to avoid duplicate routine task slots
-  const { data: todayTasks } = await supabase
-    .from("day_tasks")
-    .select("id, routine_task_id")
-    .eq("user_id", userId)
-    .eq("task_date", todayISO);
-
-  const todayRoutineIds = new Set(
-    (todayTasks ?? [])
-      .filter((t: any) => t.routine_task_id)
-      .map((t: any) => t.routine_task_id),
-  );
-
-  const idsToUpdate: string[] = [];
-  const idsToDeleteIfDup: string[] = [];
-
-  for (const t of tasksToShift) {
-    if (t.routine_task_id && todayRoutineIds.has(t.routine_task_id)) {
-      idsToDeleteIfDup.push(t.id);
-    } else {
-      idsToUpdate.push(t.id);
-      if (t.routine_task_id) {
-        todayRoutineIds.add(t.routine_task_id);
-      }
-    }
+  // Goal tasks only carry forward while their goal is still active.
+  const goalIds = [...new Set(overdue.map((r) => r.goal_id).filter(Boolean))] as string[];
+  let activeGoalIds = new Set<string>();
+  if (goalIds.length > 0) {
+    const { data: goals } = await supabase
+      .from("goals")
+      .select("id, status")
+      .eq("user_id", userId)
+      .neq("status", "completed")
+      .in("id", goalIds);
+    activeGoalIds = new Set((goals ?? []).map((g: any) => g.id));
   }
 
-  if (idsToUpdate.length > 0) {
-    await supabase
-      .from("day_tasks")
-      .update({ task_date: todayISO, updated_at: new Date().toISOString() })
-      .in("id", idsToUpdate)
-      .eq("user_id", userId);
+  // Latest date on which each task key was actually completed.
+  const lastDone = new Map<string, string>();
+  for (const r of rows) {
+    if (!r.completed_at) continue;
+    const k = taskKey(r);
+    const prev = lastDone.get(k);
+    if (!prev || r.task_date > prev) lastDone.set(k, r.task_date);
   }
 
-  if (idsToDeleteIfDup.length > 0) {
-    await supabase
-      .from("day_tasks")
-      .delete()
-      .in("id", idsToDeleteIfDup)
-      .eq("user_id", userId);
+  const todayKeys = new Set(rows.filter((r) => r.task_date === todayISO).map(taskKey));
+
+  const toInsert: Record<string, unknown>[] = [];
+  for (const t of overdue) {
+    if (t.goal_id && !activeGoalIds.has(t.goal_id)) continue;
+    const k = taskKey(t);
+    if (todayKeys.has(k)) continue;
+    // Already caught up on a later day — no need to keep dragging it forward.
+    const done = lastDone.get(k);
+    if (done && done > t.task_date) continue;
+    todayKeys.add(k);
+    toInsert.push({
+      user_id: userId,
+      task_date: todayISO,
+      title: t.title,
+      sort_order: t.sort_order ?? 0,
+      source: t.source ?? "oneoff",
+      routine_task_id: t.routine_task_id ?? null,
+      goal_id: t.goal_id ?? null,
+    });
   }
 
-  return idsToUpdate.length;
+  if (toInsert.length > 0) {
+    await supabase.from("day_tasks").insert(toInsert);
+  }
+  return toInsert.length;
 }
+
+/** @deprecated kept for compatibility — now copies forward instead of moving. */
+export const rolloverIncompleteGoalTasks = carryForwardIncompleteTasks;
+
 
 /** Materialize goal-linked repeating routine tasks into day_tasks for the given week (idempotent).
  * General routine schedule blocks (without a goal_id) are kept in the Routines tab and not placed into day_tasks.
