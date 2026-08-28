@@ -753,6 +753,12 @@ function DayCard({
               >
                 {parseRoutineTitle(t.title).displayTitle}
               </span>
+              {isPast && !t.completed_at && (
+                <span className="shrink-0 rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[9px] font-bold uppercase text-destructive">
+                  Due
+                </span>
+              )}
+
             </li>
           ))}
         </ul>
