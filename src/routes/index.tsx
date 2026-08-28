@@ -565,6 +565,13 @@ function UnifiedTasksPage() {
                     {parseRoutineTitle(t.title).displayTitle}
                   </span>
 
+                  {!t.completed_at && activeDay.date < todayISO && (
+                    <span className="rounded-full bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
+                      Due
+                    </span>
+                  )}
+
+
                   {(t as any).goal_id && goalsMap.get((t as any).goal_id) && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
                       <Target className="h-2.5 w-2.5" />
