@@ -198,8 +198,13 @@ function GoalsPage() {
   });
 
   const scheduleTasks = useMutation({
-    mutationFn: (v: { goalId: string; title: string; startDate: string; repeatDays: number }) =>
-      scheduleFn({ data: v }),
+    mutationFn: (v: {
+      goalId: string;
+      title: string;
+      startDate: string;
+      repeatDays: number;
+      weekdays?: number[];
+    }) => scheduleFn({ data: v }),
     onSuccess: (_d, v) =>
       {
         invalidate();
@@ -361,8 +366,8 @@ function GoalsPage() {
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
-                    onScheduleTasks={(t, startDate, repeatDays) =>
-                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays })
+                    onScheduleTasks={(t, startDate, repeatDays, weekdays) =>
+                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays, weekdays })
                     }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
@@ -399,8 +404,8 @@ function GoalsPage() {
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
-                    onScheduleTasks={(t, startDate, repeatDays) =>
-                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays })
+                    onScheduleTasks={(t, startDate, repeatDays, weekdays) =>
+                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays, weekdays })
                     }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
@@ -481,7 +486,12 @@ function GoalCard({
   onRemoveRoutineGroup: (ids: string[]) => void;
   onToggleTask: (id: string, completed: boolean) => void;
   onAddDirectTask: (title: string) => void;
-  onScheduleTasks: (title: string, startDate: string, repeatDays: number) => void;
+  onScheduleTasks: (
+    title: string,
+    startDate: string,
+    repeatDays: number,
+    weekdays: number[],
+  ) => void;
   onLinkHabit: (habitId: string) => void;
   onUnlinkHabit: (habitId: string) => void;
 }) {
@@ -493,6 +503,7 @@ function GoalCard({
   const [inlineTask, setInlineTask] = useState("");
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [repeatDays, setRepeatDays] = useState(1);
+  const [scheduleWeekdays, setScheduleWeekdays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [extendDate, setExtendDate] = useState(goal.target_date ?? "");
 
   const pct = stat.total ? Math.round((stat.done / stat.total) * 100) : 0;
@@ -509,10 +520,11 @@ function GoalCard({
     : null;
 
   function submitSchedule() {
-    if (!taskTitle.trim() || !scheduleDate) return;
-    onScheduleTasks(taskTitle.trim(), scheduleDate, Math.max(1, repeatDays));
+    if (!taskTitle.trim() || !scheduleDate || scheduleWeekdays.length === 0) return;
+    onScheduleTasks(taskTitle.trim(), scheduleDate, Math.max(1, repeatDays), scheduleWeekdays);
     setTaskTitle("");
     setRepeatDays(1);
+    setScheduleWeekdays([0, 1, 2, 3, 4, 5, 6]);
     setShowSchedulePanel(false);
   }
 
@@ -1052,19 +1064,62 @@ function GoalCard({
               ))}
             </div>
 
+            <div>
+              <Label className="text-xs">On days</Label>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {WEEKDAY_NAMES.map((name, i) => {
+                  const active = scheduleWeekdays.includes(i);
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() =>
+                        setScheduleWeekdays((prev) =>
+                          active ? prev.filter((d) => d !== i) : [...prev, i].sort(),
+                        )
+                      }
+                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+                        active
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-secondary text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {name.slice(0, 3)}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setScheduleWeekdays([0, 1, 2, 3, 4, 5, 6])}
+                  className="rounded-lg px-2.5 py-1 text-xs font-semibold bg-secondary text-muted-foreground hover:text-foreground transition-all"
+                >
+                  Every day
+                </button>
+              </div>
+              {scheduleWeekdays.length === 0 && (
+                <p className="mt-1 text-[11px] text-destructive">Pick at least one day.</p>
+              )}
+            </div>
+
             <p className="num text-[11px] text-muted-foreground">
-              {repeatDays > 1
-                ? `Creates ${repeatDays} tasks: ${formatDayDate(scheduleDate)} → ${formatDayDate(
-                    toISODate(addDays(parseISODate(scheduleDate), repeatDays - 1)),
-                  )}`
-                : `Creates 1 task on ${formatDayDate(scheduleDate)}`}
+              {(() => {
+                const start = parseISODate(scheduleDate);
+                const allowed = new Set(scheduleWeekdays);
+                const dates = Array.from({ length: Math.max(1, repeatDays) }, (_, i) =>
+                  addDays(start, i),
+                ).filter((d) => allowed.has((d.getDay() + 6) % 7));
+                if (dates.length === 0)
+                  return `No matching ${repeatDays > 1 ? "days" : "day"} in this range — pick different weekdays.`;
+                if (dates.length === 1) return `Creates 1 task on ${formatDayDate(toISODate(dates[0]!))}`;
+                return `Creates ${dates.length} tasks: ${formatDayDate(toISODate(dates[0]!))} → ${formatDayDate(toISODate(dates[dates.length - 1]!))}`;
+              })()}
             </p>
 
             <div className="flex gap-2 pt-1">
               <Button
                 size="sm"
                 onClick={submitSchedule}
-                disabled={!taskTitle.trim() || !scheduleDate}
+                disabled={!taskTitle.trim() || !scheduleDate || scheduleWeekdays.length === 0}
                 className="gap-1.5 h-8 px-3 text-xs"
               >
                 <Calendar className="h-3.5 w-3.5" />

@@ -526,26 +526,37 @@ export const resetTrackerData = createServerFn({ method: "POST" })
 export const scheduleGoalTasks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: { goalId: string; title: string; startDate: string; repeatDays: number }) =>
+    (input: {
+      goalId: string;
+      title: string;
+      startDate: string;
+      repeatDays: number;
+      weekdays?: number[];
+    }) =>
       z
         .object({
           goalId: z.string(),
           title: z.string().min(1).max(200),
           startDate: z.string(),
           repeatDays: z.number().int().min(1).max(365),
+          weekdays: z.array(z.number().int().min(0).max(6)).optional(),
         })
         .parse(input),
   )
   .handler(async ({ data, context }) => {
     const start = parseISODate(data.startDate);
-    const rows = Array.from({ length: data.repeatDays }, (_, i) => ({
-      user_id: context.userId,
-      task_date: toISODate(addDays(start, i)),
-      title: data.title.trim(),
-      source: "oneoff",
-      goal_id: data.goalId,
-      sort_order: 1000,
-    }));
+    const allowed = data.weekdays && data.weekdays.length > 0 ? new Set(data.weekdays) : null;
+    const rows = Array.from({ length: data.repeatDays }, (_, i) => addDays(start, i))
+      .filter((d) => !allowed || allowed.has((d.getDay() + 6) % 7)) // 0 = Monday
+      .map((d) => ({
+        user_id: context.userId,
+        task_date: toISODate(d),
+        title: data.title.trim(),
+        source: "oneoff",
+        goal_id: data.goalId,
+        sort_order: 1000,
+      }));
+    if (rows.length === 0) return { ok: true, created: 0 };
     await (context.supabase as any).from("day_tasks").insert(rows);
     return { ok: true, created: rows.length };
   });
