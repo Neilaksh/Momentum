@@ -1064,12 +1064,55 @@ function GoalCard({
               ))}
             </div>
 
+            <div>
+              <Label className="text-xs">On days</Label>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {WEEKDAY_NAMES.map((name, i) => {
+                  const active = scheduleWeekdays.includes(i);
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() =>
+                        setScheduleWeekdays((prev) =>
+                          active ? prev.filter((d) => d !== i) : [...prev, i].sort(),
+                        )
+                      }
+                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+                        active
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-secondary text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {name.slice(0, 3)}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setScheduleWeekdays([0, 1, 2, 3, 4, 5, 6])}
+                  className="rounded-lg px-2.5 py-1 text-xs font-semibold bg-secondary text-muted-foreground hover:text-foreground transition-all"
+                >
+                  Every day
+                </button>
+              </div>
+              {scheduleWeekdays.length === 0 && (
+                <p className="mt-1 text-[11px] text-destructive">Pick at least one day.</p>
+              )}
+            </div>
+
             <p className="num text-[11px] text-muted-foreground">
-              {repeatDays > 1
-                ? `Creates ${repeatDays} tasks: ${formatDayDate(scheduleDate)} → ${formatDayDate(
-                    toISODate(addDays(parseISODate(scheduleDate), repeatDays - 1)),
-                  )}`
-                : `Creates 1 task on ${formatDayDate(scheduleDate)}`}
+              {(() => {
+                const start = parseISODate(scheduleDate);
+                const allowed = new Set(scheduleWeekdays);
+                const dates = Array.from({ length: Math.max(1, repeatDays) }, (_, i) =>
+                  addDays(start, i),
+                ).filter((d) => allowed.has((d.getDay() + 6) % 7));
+                if (dates.length === 0)
+                  return `No matching ${repeatDays > 1 ? "days" : "day"} in this range — pick different weekdays.`;
+                if (dates.length === 1) return `Creates 1 task on ${formatDayDate(toISODate(dates[0]!))}`;
+                return `Creates ${dates.length} tasks: ${formatDayDate(toISODate(dates[0]!))} → ${formatDayDate(toISODate(dates[dates.length - 1]!))}`;
+              })()}
             </p>
 
             <div className="flex gap-2 pt-1">
