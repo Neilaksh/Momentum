@@ -198,8 +198,13 @@ function GoalsPage() {
   });
 
   const scheduleTasks = useMutation({
-    mutationFn: (v: { goalId: string; title: string; startDate: string; repeatDays: number }) =>
-      scheduleFn({ data: v }),
+    mutationFn: (v: {
+      goalId: string;
+      title: string;
+      startDate: string;
+      repeatDays: number;
+      weekdays?: number[];
+    }) => scheduleFn({ data: v }),
     onSuccess: (_d, v) =>
       {
         invalidate();
@@ -361,8 +366,8 @@ function GoalsPage() {
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
-                    onScheduleTasks={(t, startDate, repeatDays) =>
-                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays })
+                    onScheduleTasks={(t, startDate, repeatDays, weekdays) =>
+                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays, weekdays })
                     }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
@@ -399,8 +404,8 @@ function GoalsPage() {
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
-                    onScheduleTasks={(t, startDate, repeatDays) =>
-                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays })
+                    onScheduleTasks={(t, startDate, repeatDays, weekdays) =>
+                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays, weekdays })
                     }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
