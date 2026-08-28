@@ -18,6 +18,7 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
 
   return (
     <div className="min-h-screen">
+      <style>{`#lovable-badge { display: none !important; }`}</style>
       <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center gap-2">
@@ -42,28 +43,28 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
 
           <div className="ml-auto flex items-center gap-4">
             {profile && (
-            <div className="flex items-center gap-1.5 text-sm">
-              <Flame className="h-4 w-4 text-primary" />
-              <span className="num font-semibold">{profile?.current_streak ?? 0}</span>
-              <span className="text-muted-foreground">day streak</span>
-            </div>
+              <div className="flex items-center gap-1.5 text-sm">
+                <Flame className="h-4 w-4 text-primary" />
+                <span className="num font-semibold">{profile?.current_streak ?? 0}</span>
+                <span className="text-muted-foreground">day streak</span>
+              </div>
             )}
             {profile && (
-            <div className="hidden items-center gap-2 sm:flex">
-              <Zap className="h-4 w-4 text-primary" />
-              <div className="w-28">
-                <div className="flex justify-between text-[11px] text-muted-foreground">
-                  <span>Lv {lp.level}</span>
-                  <span className="num">{profile?.total_xp ?? 0} XP</span>
-                </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-500"
-                    style={{ width: `${lp.pct}%` }}
-                  />
+              <div className="hidden items-center gap-2 sm:flex">
+                <Zap className="h-4 w-4 text-primary" />
+                <div className="w-28">
+                  <div className="flex justify-between text-[11px] text-muted-foreground">
+                    <span>Lv {lp.level}</span>
+                    <span className="num">{profile?.total_xp ?? 0} XP</span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-500"
+                      style={{ width: `${lp.pct}%` }}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
             )}
             <button
               aria-label="Sign out"
