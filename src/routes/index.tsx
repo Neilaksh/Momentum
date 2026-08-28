@@ -665,6 +665,7 @@ function DayCard({
   name,
   date,
   isToday,
+  isPast,
   isSelected,
   tasks,
   onSelectDay,
@@ -672,10 +673,12 @@ function DayCard({
   name: string;
   date: string;
   isToday: boolean;
+  isPast?: boolean;
   isSelected: boolean;
   tasks: { id: string; title: string; completed_at: string | null; source: string }[];
   onSelectDay: () => void;
 }) {
+
   const pct = pctComplete(tasks);
   const doneCount = tasks.filter((t) => t.completed_at).length;
 
