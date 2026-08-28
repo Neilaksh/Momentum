@@ -565,6 +565,13 @@ function UnifiedTasksPage() {
                     {parseRoutineTitle(t.title).displayTitle}
                   </span>
 
+                  {!t.completed_at && activeDay.date < todayISO && (
+                    <span className="rounded-full bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
+                      Due
+                    </span>
+                  )}
+
+
                   {(t as any).goal_id && goalsMap.get((t as any).goal_id) && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
                       <Target className="h-2.5 w-2.5" />
@@ -637,6 +644,7 @@ function UnifiedTasksPage() {
                 name={WEEKDAY_NAMES[i]!}
                 date={day.date}
                 isToday={isDayToday}
+                isPast={day.date < todayISO}
                 isSelected={isSelected}
                 tasks={day.tasks}
                 onSelectDay={() => {
@@ -644,6 +652,7 @@ function UnifiedTasksPage() {
                   setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
                 }}
               />
+
             );
           })}
         </div>
@@ -656,6 +665,7 @@ function DayCard({
   name,
   date,
   isToday,
+  isPast,
   isSelected,
   tasks,
   onSelectDay,
@@ -663,10 +673,12 @@ function DayCard({
   name: string;
   date: string;
   isToday: boolean;
+  isPast?: boolean;
   isSelected: boolean;
   tasks: { id: string; title: string; completed_at: string | null; source: string }[];
   onSelectDay: () => void;
 }) {
+
   const pct = pctComplete(tasks);
   const doneCount = tasks.filter((t) => t.completed_at).length;
 
@@ -741,6 +753,12 @@ function DayCard({
               >
                 {parseRoutineTitle(t.title).displayTitle}
               </span>
+              {isPast && !t.completed_at && (
+                <span className="shrink-0 rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[9px] font-bold uppercase text-destructive">
+                  Due
+                </span>
+              )}
+
             </li>
           ))}
         </ul>

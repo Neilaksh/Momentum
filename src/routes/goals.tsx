@@ -738,11 +738,17 @@ function GoalCard({
                     <span className="text-[10px] num text-muted-foreground">
                       {formatDayDate(t.task_date)}
                     </span>
+                    {!isDone && t.task_date < today && (
+                      <span className="rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[9px] font-bold uppercase text-destructive">
+                        Due
+                      </span>
+                    )}
                     {isToday && !isDone && (
                       <span className="rounded-full bg-primary/20 px-1.5 py-0.2 text-[9px] font-bold text-primary">
                         Today
                       </span>
                     )}
+
                   </div>
                 </li>
               );
