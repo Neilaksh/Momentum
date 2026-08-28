@@ -481,7 +481,12 @@ function GoalCard({
   onRemoveRoutineGroup: (ids: string[]) => void;
   onToggleTask: (id: string, completed: boolean) => void;
   onAddDirectTask: (title: string) => void;
-  onScheduleTasks: (title: string, startDate: string, repeatDays: number) => void;
+  onScheduleTasks: (
+    title: string,
+    startDate: string,
+    repeatDays: number,
+    weekdays: number[],
+  ) => void;
   onLinkHabit: (habitId: string) => void;
   onUnlinkHabit: (habitId: string) => void;
 }) {
@@ -493,6 +498,7 @@ function GoalCard({
   const [inlineTask, setInlineTask] = useState("");
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [repeatDays, setRepeatDays] = useState(1);
+  const [scheduleWeekdays, setScheduleWeekdays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [extendDate, setExtendDate] = useState(goal.target_date ?? "");
 
   const pct = stat.total ? Math.round((stat.done / stat.total) * 100) : 0;
@@ -509,10 +515,11 @@ function GoalCard({
     : null;
 
   function submitSchedule() {
-    if (!taskTitle.trim() || !scheduleDate) return;
-    onScheduleTasks(taskTitle.trim(), scheduleDate, Math.max(1, repeatDays));
+    if (!taskTitle.trim() || !scheduleDate || scheduleWeekdays.length === 0) return;
+    onScheduleTasks(taskTitle.trim(), scheduleDate, Math.max(1, repeatDays), scheduleWeekdays);
     setTaskTitle("");
     setRepeatDays(1);
+    setScheduleWeekdays([0, 1, 2, 3, 4, 5, 6]);
     setShowSchedulePanel(false);
   }
 
