@@ -1119,7 +1119,7 @@ function GoalCard({
               <Button
                 size="sm"
                 onClick={submitSchedule}
-                disabled={!taskTitle.trim() || !scheduleDate}
+                disabled={!taskTitle.trim() || !scheduleDate || scheduleWeekdays.length === 0}
                 className="gap-1.5 h-8 px-3 text-xs"
               >
                 <Calendar className="h-3.5 w-3.5" />
