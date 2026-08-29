@@ -32,6 +32,8 @@ import { PieStat } from "@/components/PieStat";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { addDayTask, deleteDayTask, getGoals, getWeek, toggleDayTask } from "@/lib/tracker.functions";
+import { getSubjects } from "@/lib/subjects.functions";
+import { subjectColorHex, type Subject } from "@/lib/subjects-shared";
 import {
   WEEKDAY_NAMES,
   XP_PER_TASK,
@@ -77,11 +79,14 @@ function UnifiedTasksPage() {
   const todayISO = toISODate(new Date());
   const [selectedDate, setSelectedDate] = useState(() => todayISO);
   const [draft, setDraft] = useState("");
+  const [draftSubjectId, setDraftSubjectId] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskFilter>("all");
+  const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   const focusPanelRef = useRef<HTMLElement>(null);
   const qc = useQueryClient();
 
   const fetchWeek = useServerFn(getWeek);
+  const fetchSubjectsFn = useServerFn(getSubjects);
   const toggleFn = useServerFn(toggleDayTask);
   const addFn = useServerFn(addDayTask);
   const delFn = useServerFn(deleteDayTask);
@@ -126,7 +131,7 @@ function UnifiedTasksPage() {
   });
 
   const addTask = useMutation({
-    mutationFn: (v: { date: string; title: string }) => addFn({ data: v }),
+    mutationFn: (v: { date: string; title: string; subjectId?: string | null }) => addFn({ data: v }),
     onSuccess: () => {
       invalidate();
       toast.success("Task added");
@@ -153,6 +158,19 @@ function UnifiedTasksPage() {
     }
     return map;
   }, [goalsData]);
+
+  const { data: subjectsData } = useQuery({
+    queryKey: ["subjects"],
+    queryFn: () => fetchSubjectsFn() as Promise<{ subjects: Subject[] }>,
+  });
+  const subjects = subjectsData?.subjects ?? [];
+  const subjectsMap = useMemo(() => {
+    const map = new Map<string, Subject>();
+    for (const s of subjects) map.set(s.id, s);
+    return map;
+  }, [subjects]);
+  // If the filtered subject was deleted, fall back to "All" instead of an empty list.
+  const activeSubjectFilter = subjectFilter && subjectsMap.has(subjectFilter) ? subjectFilter : null;
 
   const days = data?.days ?? [];
   // Include direct tasks AND goal-linked repeating tasks (only unlinked routine schedule blocks stay in Routines tab)
@@ -197,10 +215,12 @@ function UnifiedTasksPage() {
   const isActiveDayToday = activeDay.date === todayISO;
 
   const filteredActiveTasks = useMemo(() => {
-    if (filter === "pending") return activeTasks.filter((t) => !t.completed_at);
-    if (filter === "completed") return activeTasks.filter((t) => !!t.completed_at);
-    return activeTasks;
-  }, [activeTasks, filter]);
+    let list = activeTasks;
+    if (activeSubjectFilter) list = list.filter((t) => (t as any).subject_id === activeSubjectFilter);
+    if (filter === "pending") return list.filter((t) => !t.completed_at);
+    if (filter === "completed") return list.filter((t) => !!t.completed_at);
+    return list;
+  }, [activeTasks, filter, activeSubjectFilter]);
 
   const chartData = useMemo(
     () =>
@@ -508,6 +528,42 @@ function UnifiedTasksPage() {
           </div>
         </div>
 
+        {/* Subject Filter Chips */}
+        {subjects.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => setSubjectFilter(null)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                activeSubjectFilter === null
+                  ? "border-primary/60 bg-primary/15 text-primary"
+                  : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              All
+            </button>
+            {subjects.map((s) => {
+              const selected = activeSubjectFilter === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setSubjectFilter(selected ? null : s.id)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    selected
+                      ? "border-primary/60 bg-primary/15 text-foreground"
+                      : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{ background: subjectColorHex(s.color) }}
+                  />
+                  <span className="max-w-[120px] truncate">{s.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Task List for Active Day */}
         <div className="py-4">
           {isLoading ? (
@@ -572,6 +628,16 @@ function UnifiedTasksPage() {
                   )}
 
 
+                  {(t as any).subject_id && subjectsMap.get((t as any).subject_id) && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      <span
+                        className="h-2 w-2 rounded-full shrink-0"
+                        style={{ background: subjectColorHex(subjectsMap.get((t as any).subject_id)!.color) }}
+                      />
+                      <span className="max-w-[100px] truncate">{subjectsMap.get((t as any).subject_id)!.name}</span>
+                    </span>
+                  )}
+
                   {(t as any).goal_id && goalsMap.get((t as any).goal_id) && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
                       <Target className="h-2.5 w-2.5" />
@@ -596,20 +662,34 @@ function UnifiedTasksPage() {
 
         {/* Add Task Form for Active Day */}
         <form
-          className="mt-2 flex gap-2 border-t border-border/60 pt-4"
+          className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
             if (!draft.trim()) return;
-            addTask.mutate({ date: activeDay.date, title: draft.trim() });
+            addTask.mutate({ date: activeDay.date, title: draft.trim(), subjectId: draftSubjectId });
             setDraft("");
+            setDraftSubjectId(null);
           }}
         >
           <Input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={`Add a task for ${activeWeekdayName}...`}
-            className="h-10 text-sm"
+            className="h-10 min-w-0 flex-1 text-sm"
           />
+          <select
+            value={draftSubjectId ?? ""}
+            onChange={(e) => setDraftSubjectId(e.target.value || null)}
+            aria-label="Subject (optional)"
+            className="h-10 rounded-lg border border-border bg-secondary/50 px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-44"
+          >
+            <option value="">No subject</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
           <Button type="submit" className="h-10 shrink-0 gap-1.5 px-4" aria-label="Add task">
             <Plus className="h-4 w-4" />
             <span>Add Task</span>

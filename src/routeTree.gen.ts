@@ -16,6 +16,7 @@ import { Route as HabitsRouteImport } from './routes/habits'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RoutinesRouteImport } from './routes/routines'
+import { Route as SubjectsRouteImport } from './routes/subjects'
 import { Route as TodayRouteImport } from './routes/today'
 
 const IndexRoute = IndexRouteImport.update({
@@ -53,6 +54,11 @@ const RoutinesRoute = RoutinesRouteImport.update({
   path: '/routines',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SubjectsRoute = SubjectsRouteImport.update({
+  id: '/subjects',
+  path: '/subjects',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TodayRoute = TodayRouteImport.update({
   id: '/today',
   path: '/today',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof HistoryRoute
   '/reset-password': typeof ResetPasswordRoute
   '/routines': typeof RoutinesRoute
+  '/subjects': typeof SubjectsRoute
   '/today': typeof TodayRoute
 }
 export interface FileRoutesByTo {
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/history': typeof HistoryRoute
   '/reset-password': typeof ResetPasswordRoute
   '/routines': typeof RoutinesRoute
+  '/subjects': typeof SubjectsRoute
   '/today': typeof TodayRoute
 }
 export interface FileRoutesById {
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/history': typeof HistoryRoute
   '/reset-password': typeof ResetPasswordRoute
   '/routines': typeof RoutinesRoute
+  '/subjects': typeof SubjectsRoute
   '/today': typeof TodayRoute
 }
 export interface FileRouteTypes {
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/reset-password'
     | '/routines'
+    | '/subjects'
     | '/today'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/reset-password'
     | '/routines'
+    | '/subjects'
     | '/today'
   id:
     | '__root__'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/reset-password'
     | '/routines'
+    | '/subjects'
     | '/today'
   fileRoutesById: FileRoutesById
 }
@@ -131,6 +143,7 @@ export interface RootRouteChildren {
   HistoryRoute: typeof HistoryRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   RoutinesRoute: typeof RoutinesRoute
+  SubjectsRoute: typeof SubjectsRoute
   TodayRoute: typeof TodayRoute
 }
 
@@ -185,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RoutinesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/subjects': {
+      id: '/subjects'
+      path: '/subjects'
+      fullPath: '/subjects'
+      preLoaderRoute: typeof SubjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/today': {
       id: '/today'
       path: '/today'
@@ -203,6 +223,7 @@ const rootRouteChildren: RootRouteChildren = {
   HistoryRoute: HistoryRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   RoutinesRoute: RoutinesRoute,
+  SubjectsRoute: SubjectsRoute,
   TodayRoute: TodayRoute,
 }
 export const routeTree = rootRouteImport

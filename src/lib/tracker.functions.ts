@@ -37,12 +37,13 @@ export const toggleDayTask = createServerFn({ method: "POST" })
 
 export const addDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { date: string; title: string; goalId?: string | null }) =>
+  .inputValidator((input: { date: string; title: string; goalId?: string | null; subjectId?: string | null }) =>
     z
       .object({
         date: z.string(),
         title: z.string().min(1).max(200),
         goalId: z.string().nullable().optional(),
+        subjectId: z.string().nullable().optional(),
       })
       .parse(input),
   )
@@ -55,6 +56,7 @@ export const addDayTask = createServerFn({ method: "POST" })
         title: data.title.trim(),
         source: "oneoff",
         goal_id: data.goalId ?? null,
+        subject_id: data.subjectId ?? null,
         sort_order: 1000,
       })
       .select("*")
@@ -100,12 +102,13 @@ export const getRoutine = createServerFn({ method: "POST" })
 
 export const addRoutineTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { weekday: number; title: string; goalId?: string | null }) =>
+  .inputValidator((input: { weekday: number; title: string; goalId?: string | null; subjectId?: string | null }) =>
     z
       .object({
         weekday: z.number().int().min(0).max(6),
         title: z.string().min(1).max(200),
         goalId: z.string().nullable().optional(),
+        subjectId: z.string().nullable().optional(),
       })
       .parse(input),
   )
@@ -117,6 +120,7 @@ export const addRoutineTask = createServerFn({ method: "POST" })
         weekday: data.weekday,
         title: data.title.trim(),
         goal_id: data.goalId ?? null,
+        subject_id: data.subjectId ?? null,
       })
       .select("*")
       .maybeSingle();
@@ -140,6 +144,7 @@ export const updateRoutineTask = createServerFn({ method: "POST" })
       weekday?: number;
       isActive?: boolean;
       goalId?: string | null;
+      subjectId?: string | null;
       sortOrder?: number;
     }) =>
       z
@@ -149,6 +154,7 @@ export const updateRoutineTask = createServerFn({ method: "POST" })
           weekday: z.number().int().min(0).max(6).optional(),
           isActive: z.boolean().optional(),
           goalId: z.string().nullable().optional(),
+          subjectId: z.string().nullable().optional(),
           sortOrder: z.number().optional(),
         })
         .parse(input),
@@ -159,6 +165,7 @@ export const updateRoutineTask = createServerFn({ method: "POST" })
     if (data.weekday !== undefined) patch["weekday"] = data.weekday;
     if (data.isActive !== undefined) patch["is_active"] = data.isActive;
     if (data.goalId !== undefined) patch["goal_id"] = data.goalId;
+    if (data.subjectId !== undefined) patch["subject_id"] = data.subjectId;
     if (data.sortOrder !== undefined) patch["sort_order"] = data.sortOrder;
 
     const { data: updated } = await (context.supabase as any)
@@ -194,6 +201,7 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
         weekday: number;
         title: string;
         goalId?: string | null;
+        subjectId?: string | null;
         sortOrder?: number;
         isActive?: boolean;
       }>;
@@ -206,6 +214,7 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
                 weekday: z.number().int().min(0).max(6),
                 title: z.string().min(1).max(300),
                 goalId: z.string().nullable().optional(),
+                subjectId: z.string().nullable().optional(),
                 sortOrder: z.number().optional(),
                 isActive: z.boolean().optional(),
               }),
@@ -220,6 +229,7 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
       weekday: item.weekday,
       title: item.title.trim(),
       goal_id: item.goalId ?? null,
+      subject_id: item.subjectId ?? null,
       sort_order: item.sortOrder ?? 0,
       is_active: item.isActive ?? true,
     }));

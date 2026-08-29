@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
-import { AlertTriangle, Flame, RefreshCw, Trash2, Trophy, Zap } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, BookOpen, Flame, RefreshCw, Trash2, Trophy, Zap } from "lucide-react";
 import { toast } from "sonner";
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -18,7 +21,9 @@ import { AppShell } from "@/components/AppShell";
 import { ProgressRing } from "@/components/ProgressRing";
 import { Button } from "@/components/ui/button";
 import { getHistory, resetTrackerData } from "@/lib/tracker.functions";
-import { formatDayDate, levelProgress, type Profile } from "@/lib/tracker-shared";
+import { getSubjectBreakdown } from "@/lib/subjects.functions";
+import { subjectColorHex, type SubjectBreakdownEntry } from "@/lib/subjects-shared";
+import { formatDayDate, levelProgress, toISODate, type Profile } from "@/lib/tracker-shared";
 
 export const Route = createFileRoute("/history")({
   head: () => ({
@@ -78,6 +83,34 @@ function HistoryPage() {
     pct: w.total ? Math.round((w.done / w.total) * 100) : 0,
   }));
 
+  // Completed tasks by subject — last 30 days (no time-range picker exists on this page,
+  // so the breakdown uses a fixed 30-day window).
+  const fetchBreakdown = useServerFn(getSubjectBreakdown);
+  const breakdownFrom = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 29);
+    return toISODate(d);
+  }, []);
+
+  const { data: breakdownData } = useQuery({
+    queryKey: ["subject-breakdown", breakdownFrom],
+    queryFn: () =>
+      fetchBreakdown({ data: { fromDate: breakdownFrom } }) as Promise<{
+        entries: SubjectBreakdownEntry[];
+      }>,
+  });
+  const subjectEntries = breakdownData?.entries ?? [];
+  const subjectChartRows = useMemo(
+    () =>
+      subjectEntries.map((e) => ({
+        name: e.name,
+        count: e.count,
+        color: e.subjectId === null ? "var(--muted-foreground)" : subjectColorHex(e.color),
+      })),
+    [subjectEntries],
+  );
+  const totalBreakdownCompletions = subjectEntries.reduce((sum, e) => sum + e.count, 0);
+
   return (
     <AppShell profile={profile}>
       <h1 className="text-3xl font-semibold tracking-tight">History & Analytics</h1>
@@ -126,6 +159,103 @@ function HistoryPage() {
           <span>📊 <strong>Multi-week trend chart:</strong> Keep tracking tasks! The week-over-week completion rate graph will appear once you have at least 2 weeks of activity.</span>
         </div>
       ) : null}
+
+      {/* Completed Tasks by Subject — last 30 days */}
+      <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-primary" />
+          <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">
+            Completed by Subject · Last 30 days
+          </p>
+        </div>
+
+        {subjectEntries.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-dashed border-border p-8 text-center">
+            <BookOpen className="mx-auto h-8 w-8 text-muted-foreground opacity-40" />
+            <p className="mt-2 text-sm font-medium">No subject activity yet</p>
+            <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+              Create subjects on the Subjects page, attach them to your tasks, and once you complete
+              some, your per-subject breakdown will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_280px]">
+            {/* Bar chart — subject name vs completed count, colored per subject */}
+            <div className="h-56 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={subjectChartRows}
+                  layout="vertical"
+                  margin={{ top: 4, right: 16, bottom: 0, left: 8 }}
+                >
+                  <CartesianGrid horizontal={false} stroke="var(--border)" />
+                  <XAxis
+                    type="number"
+                    allowDecimals={false}
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                    stroke="var(--muted-foreground)"
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={110}
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                    stroke="var(--muted-foreground)"
+                  />
+                  <Tooltip
+                    cursor={{ fill: "var(--secondary)" }}
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 12,
+                      fontSize: 12,
+                    }}
+                    formatter={(val: any) => [`${val} completed`, "Tasks"]}
+                  />
+                  <Bar dataKey="count" radius={[0, 6, 6, 0]}>
+                    {subjectChartRows.map((row, i) => (
+                      <Cell key={`${row.name}-${i}`} fill={row.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Ranked list fallback */}
+            <ol className="space-y-2 self-start">
+              {subjectEntries.map((e, i) => (
+                <li
+                  key={e.subjectId ?? "general"}
+                  className="flex items-center gap-2.5 rounded-lg bg-secondary/40 px-3 py-2"
+                >
+                  <span className="num w-4 shrink-0 text-[10px] font-bold text-muted-foreground">
+                    {i + 1}
+                  </span>
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{
+                      background:
+                        e.subjectId === null
+                          ? "var(--muted-foreground)"
+                          : subjectColorHex(e.color),
+                    }}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium">{e.name}</span>
+                  <span className="num text-xs font-semibold text-primary">{e.count}</span>
+                </li>
+              ))}
+              <li className="px-3 pt-1 text-[11px] text-muted-foreground">
+                {totalBreakdownCompletions} task{totalBreakdownCompletions !== 1 ? "s" : ""}{" "}
+                completed in the last 30 days
+              </li>
+            </ol>
+          </div>
+        )}
+      </section>
 
       {isLoading ? (
         <p className="mt-8 text-sm text-muted-foreground">Loading…</p>

@@ -11,6 +11,7 @@ import {
   type Profile,
   type WeekData,
 } from "./tracker-shared";
+import type { Subject } from "./subjects-shared";
 
 type DB = SupabaseClient<any, "public", any>;
 
@@ -40,7 +41,7 @@ export async function carryForwardIncompleteTasks(supabase: DB, userId: string):
 
   const { data } = await supabase
     .from("day_tasks")
-    .select("id, task_date, title, source, sort_order, routine_task_id, goal_id, completed_at")
+    .select("id, task_date, title, source, sort_order, routine_task_id, goal_id, subject_id, completed_at")
     .eq("user_id", userId)
     .lte("task_date", todayISO);
 
@@ -91,6 +92,7 @@ export async function carryForwardIncompleteTasks(supabase: DB, userId: string):
       source: t.source ?? "oneoff",
       routine_task_id: t.routine_task_id ?? null,
       goal_id: t.goal_id ?? null,
+      subject_id: t.subject_id ?? null,
     });
   }
 
@@ -157,6 +159,7 @@ export async function materializeWeek(supabase: DB, userId: string, weekStart: s
       source: "routine",
       routine_task_id: rt.id,
       goal_id: rt.goal_id,
+      subject_id: rt.subject_id ?? null,
     });
   }
 
@@ -181,6 +184,12 @@ export async function loadWeek(supabase: DB, userId: string, weekStart: string):
   const tasks = (data ?? []) as DayTask[];
   const profile = await ensureProfile(supabase, userId);
 
+  const { data: subjectRows } = await supabase
+    .from("subjects")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
   return {
     weekStart,
     days: dates.map((date, i) => ({
@@ -189,6 +198,7 @@ export async function loadWeek(supabase: DB, userId: string, weekStart: string):
       tasks: tasks.filter((t) => t.task_date === date),
     })),
     profile,
+    subjects: (subjectRows ?? []) as Subject[],
   };
 }
 

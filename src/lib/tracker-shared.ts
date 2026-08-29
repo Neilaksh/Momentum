@@ -1,3 +1,5 @@
+import type { Subject } from "./subjects-shared";
+
 export const WEEKDAY_NAMES = [
   "Monday",
   "Tuesday",
@@ -19,6 +21,7 @@ export type DayTask = {
   source: string;
   routine_task_id: string | null;
   goal_id: string | null;
+  subject_id: string | null;
   completed_at: string | null;
 };
 
@@ -28,6 +31,7 @@ export type RoutineTask = {
   title: string;
   sort_order: number;
   goal_id: string | null;
+  subject_id: string | null;
   is_active: boolean;
 };
 
@@ -55,6 +59,7 @@ export type WeekData = {
   weekStart: string;
   days: WeekDay[];
   profile: Profile | null;
+  subjects?: Subject[];
 };
 
 /** ISO date string (YYYY-MM-DD) in local time. */

@@ -40,6 +40,8 @@ import {
   updateRoutineTask,
 } from "@/lib/tracker.functions";
 import { getHabits } from "@/lib/habits.functions";
+import { getSubjects } from "@/lib/subjects.functions";
+import type { Subject } from "@/lib/subjects-shared";
 import {
   COLOR_PALETTE,
   DEFAULT_CATEGORIES,
@@ -138,6 +140,7 @@ function RoutinesPage() {
   const [formGoalId, setFormGoalId] = useState<string | null>(null);
   const [formHabitId, setFormHabitId] = useState<string | null>(null);
   const [formTaskId, setFormTaskId] = useState<string | null>(null);
+  const [formSubjectId, setFormSubjectId] = useState<string | null>(null);
   const [formIsActive, setFormIsActive] = useState<boolean>(true);
 
   // Form State for Custom Time Slot
@@ -155,6 +158,7 @@ function RoutinesPage() {
   const fetchRoutineFn = useServerFn(getRoutine);
   const fetchGoalsFn = useServerFn(getGoals);
   const fetchHabitsFn = useServerFn(getHabits);
+  const fetchSubjectsFn = useServerFn(getSubjects);
   const updateFn = useServerFn(updateRoutineTask);
   const toggleFn = useServerFn(toggleRoutineTaskActive);
   const batchAddFn = useServerFn(batchAddRoutineTasks);
@@ -182,8 +186,14 @@ function RoutinesPage() {
     queryFn: () => fetchHabitsFn({ data: { weekStart } }) as Promise<HabitsData>,
   });
 
+  const { data: subjectsData } = useQuery({
+    queryKey: ["subjects"],
+    queryFn: () => fetchSubjectsFn() as Promise<{ subjects: Subject[] }>,
+  });
+
   const tasks = (routineData?.tasks ?? []) as RoutineTask[];
   const goals = (goalsData?.goals ?? []) as Goal[];
+  const subjects = subjectsData?.subjects ?? [];
   const habitStats = habitsData?.stats ?? [];
   const existingTasks = useMemo(() => {
     const list: Array<{ id: string; title: string }> = [];
@@ -348,7 +358,7 @@ function RoutinesPage() {
 
   // Mutations
   const updateMutation = useMutation({
-    mutationFn: (vars: { id: string; title: string; weekday: number; goalId?: string | null; isActive?: boolean }) =>
+    mutationFn: (vars: { id: string; title: string; weekday: number; goalId?: string | null; subjectId?: string | null; isActive?: boolean }) =>
       updateFn({ data: vars }),
     onSuccess: () => {
       invalidate();
@@ -367,7 +377,7 @@ function RoutinesPage() {
   });
 
   const batchAddMutation = useMutation({
-    mutationFn: (items: Array<{ weekday: number; title: string; goalId?: string | null; isActive?: boolean }>) =>
+    mutationFn: (items: Array<{ weekday: number; title: string; goalId?: string | null; subjectId?: string | null; isActive?: boolean }>) =>
       batchAddFn({ data: { items } }),
     onSuccess: () => {
       invalidate();
@@ -405,6 +415,7 @@ function RoutinesPage() {
     setFormGoalId(null);
     setFormHabitId(null);
     setFormTaskId(null);
+    setFormSubjectId(null);
     setFormIsActive(true);
     setIsDialogOpen(true);
   };
@@ -421,6 +432,7 @@ function RoutinesPage() {
     setFormGoalId(task.goal_id);
     setFormHabitId(parsed.habitId);
     setFormTaskId(parsed.taskId);
+    setFormSubjectId(task.subject_id);
     setFormIsActive(task.is_active);
     setIsDialogOpen(true);
   };
@@ -478,6 +490,7 @@ function RoutinesPage() {
         title: fullTitle,
         weekday: formWeekdays[0] ?? editingTask.weekday,
         goalId: formGoalId,
+        subjectId: formSubjectId,
         isActive: formIsActive,
       });
     } else {
@@ -485,6 +498,7 @@ function RoutinesPage() {
         weekday: wd,
         title: fullTitle,
         goalId: formGoalId,
+        subjectId: formSubjectId,
         isActive: formIsActive,
       }));
       batchAddMutation.mutate(items);
@@ -1392,6 +1406,30 @@ function RoutinesPage() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Link to Subject (optional) */}
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                  Subject
+                </label>
+                <select
+                  value={formSubjectId ?? ""}
+                  onChange={(e) => setFormSubjectId(e.target.value || null)}
+                  className="w-full rounded-lg border border-border bg-background p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">-- No Subject --</option>
+                  {subjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                {subjects.length === 0 && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    No subjects yet — create one on the Manage Subjects page.
+                  </p>
+                )}
               </div>
 
               {/* Submit Buttons */}
