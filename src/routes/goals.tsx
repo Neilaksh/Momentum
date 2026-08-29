@@ -23,6 +23,8 @@ import {
 import { toast } from "sonner";
 import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
+import { SubjectSelect, SubjectTag, useSubjects } from "@/components/SubjectSelect";
+import type { Subject as SubjectType } from "@/lib/subjects-shared";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -107,6 +109,7 @@ function GoalsPage() {
   const linkHabitFn = useServerFn(linkHabitToGoal);
   const unlinkHabitFn = useServerFn(unlinkHabitFromGoal);
   const qc = useQueryClient();
+  const { subjects, subjectsMap } = useSubjects();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -188,8 +191,8 @@ function GoalsPage() {
   });
 
   const addDirectGoalTask = useMutation({
-    mutationFn: (v: { goalId: string; title: string; date: string }) =>
-      addTaskFn({ data: { title: v.title, goalId: v.goalId, date: v.date } }),
+    mutationFn: (v: { goalId: string; title: string; date: string; subjectId?: string | null }) =>
+      addTaskFn({ data: { title: v.title, goalId: v.goalId, date: v.date, subjectId: v.subjectId ?? null } }),
     onSuccess: () => {
       invalidate();
       toast.success("Task added to goal for today");
@@ -204,6 +207,7 @@ function GoalsPage() {
       startDate: string;
       repeatDays: number;
       weekdays?: number[];
+      subjectId?: string | null;
     }) => scheduleFn({ data: v }),
     onSuccess: (_d, v) =>
       {
@@ -359,15 +363,17 @@ function GoalsPage() {
                     stat={stats[g.id] ?? { total: 0, done: 0 }}
                     routines={routinesByGoal[g.id] ?? []}
                     tasks={tasksByGoal[g.id] ?? []}
+                    subjects={subjects}
+                    subjectsMap={subjectsMap}
                     allHabitStats={allHabitStats}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
-                    onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
-                    onScheduleTasks={(t, startDate, repeatDays, weekdays) =>
-                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays, weekdays })
+                    onAddDirectTask={(t, subjectId) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()), subjectId })}
+                    onScheduleTasks={(t, startDate, repeatDays, weekdays, subjectId) =>
+                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays, weekdays, subjectId })
                     }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
@@ -397,15 +403,17 @@ function GoalsPage() {
                     stat={stats[g.id] ?? { total: 0, done: 0 }}
                     routines={routinesByGoal[g.id] ?? []}
                     tasks={tasksByGoal[g.id] ?? []}
+                    subjects={subjects}
+                    subjectsMap={subjectsMap}
                     allHabitStats={allHabitStats}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
-                    onAddDirectTask={(t) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()) })}
-                    onScheduleTasks={(t, startDate, repeatDays, weekdays) =>
-                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays, weekdays })
+                    onAddDirectTask={(t, subjectId) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()), subjectId })}
+                    onScheduleTasks={(t, startDate, repeatDays, weekdays, subjectId) =>
+                      scheduleTasks.mutate({ goalId: g.id, title: t, startDate, repeatDays, weekdays, subjectId })
                     }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
@@ -433,6 +441,8 @@ function GoalsPage() {
                     stat={stats[g.id] ?? { total: 0, done: 0 }}
                     routines={[]}
                     tasks={tasksByGoal[g.id] ?? []}
+                    subjects={subjects}
+                    subjectsMap={subjectsMap}
                     allHabitStats={[]}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onReopen={() => markStatus.mutate({ id: g.id, status: "active" })}
@@ -461,6 +471,8 @@ function GoalCard({
   stat,
   routines,
   tasks,
+  subjects,
+  subjectsMap,
   allHabitStats,
   onDelete,
   onMarkComplete,
@@ -478,6 +490,8 @@ function GoalCard({
   stat: { total: number; done: number };
   routines: { id: string; title: string; weekday: number }[];
   tasks: DayTask[];
+  subjects: SubjectType[];
+  subjectsMap: Map<string, SubjectType>;
   allHabitStats: HabitsData["stats"];
   onDelete: () => void;
   onMarkComplete: () => void;
@@ -485,12 +499,13 @@ function GoalCard({
   onExtendDate: (d: string) => void;
   onRemoveRoutineGroup: (ids: string[]) => void;
   onToggleTask: (id: string, completed: boolean) => void;
-  onAddDirectTask: (title: string) => void;
+  onAddDirectTask: (title: string, subjectId: string | null) => void;
   onScheduleTasks: (
     title: string,
     startDate: string,
     repeatDays: number,
     weekdays: number[],
+    subjectId: string | null,
   ) => void;
   onLinkHabit: (habitId: string) => void;
   onUnlinkHabit: (habitId: string) => void;
@@ -501,6 +516,8 @@ function GoalCard({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [inlineTask, setInlineTask] = useState("");
+  const [inlineSubjectId, setInlineSubjectId] = useState<string | null>(null);
+  const [scheduleSubjectId, setScheduleSubjectId] = useState<string | null>(null);
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [repeatDays, setRepeatDays] = useState(1);
   const [scheduleWeekdays, setScheduleWeekdays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
@@ -521,8 +538,9 @@ function GoalCard({
 
   function submitSchedule() {
     if (!taskTitle.trim() || !scheduleDate || scheduleWeekdays.length === 0) return;
-    onScheduleTasks(taskTitle.trim(), scheduleDate, Math.max(1, repeatDays), scheduleWeekdays);
+    onScheduleTasks(taskTitle.trim(), scheduleDate, Math.max(1, repeatDays), scheduleWeekdays, scheduleSubjectId);
     setTaskTitle("");
+    setScheduleSubjectId(null);
     setRepeatDays(1);
     setScheduleWeekdays([0, 1, 2, 3, 4, 5, 6]);
     setShowSchedulePanel(false);
@@ -747,6 +765,7 @@ function GoalCard({
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+                    <SubjectTag subject={t.subject_id ? subjectsMap.get(t.subject_id) : null} />
                     <span className="text-[10px] num text-muted-foreground">
                       {formatDayDate(t.task_date)}
                     </span>
@@ -919,8 +938,9 @@ function GoalCard({
           onSubmit={(e) => {
             e.preventDefault();
             if (!inlineTask.trim()) return;
-            onAddDirectTask(inlineTask.trim());
+            onAddDirectTask(inlineTask.trim(), inlineSubjectId);
             setInlineTask("");
+            setInlineSubjectId(null);
           }}
         >
           <Input
@@ -928,6 +948,12 @@ function GoalCard({
             onChange={(e) => setInlineTask(e.target.value)}
             placeholder={`Add a task for today to "${goal.title}"...`}
             className="h-8.5 text-xs bg-background/70"
+          />
+          <SubjectSelect
+            value={inlineSubjectId}
+            onChange={setInlineSubjectId}
+            subjects={subjects}
+            className="h-8.5 w-32 shrink-0 text-xs"
           />
           <Button
             type="submit"
@@ -1021,6 +1047,16 @@ function GoalCard({
                 onChange={(e) => setTaskTitle(e.target.value)}
                 placeholder={`e.g. "Train for 5K" or "Study 1hr"`}
                 className="mt-1 h-9 text-sm"
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs">Subject (optional)</Label>
+              <SubjectSelect
+                value={scheduleSubjectId}
+                onChange={setScheduleSubjectId}
+                subjects={subjects}
+                className="mt-1 h-9 w-full text-sm"
               />
             </div>
 

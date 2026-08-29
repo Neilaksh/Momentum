@@ -279,7 +279,7 @@ export const getGoals = createServerFn({ method: "POST" })
     // Per-goal day_task completion stats
     const { data: linked } = await supabase
       .from("day_tasks")
-      .select("id, goal_id, completed_at, task_date, title, source, routine_task_id, sort_order")
+      .select("id, goal_id, completed_at, task_date, title, source, routine_task_id, sort_order, subject_id")
       .eq("user_id", context.userId)
       .not("goal_id", "is", null)
       .order("task_date", { ascending: false });
@@ -542,6 +542,7 @@ export const scheduleGoalTasks = createServerFn({ method: "POST" })
       startDate: string;
       repeatDays: number;
       weekdays?: number[];
+      subjectId?: string | null;
     }) =>
       z
         .object({
@@ -550,6 +551,7 @@ export const scheduleGoalTasks = createServerFn({ method: "POST" })
           startDate: z.string(),
           repeatDays: z.number().int().min(1).max(365),
           weekdays: z.array(z.number().int().min(0).max(6)).optional(),
+          subjectId: z.string().nullable().optional(),
         })
         .parse(input),
   )
@@ -564,6 +566,7 @@ export const scheduleGoalTasks = createServerFn({ method: "POST" })
         title: data.title.trim(),
         source: "oneoff",
         goal_id: data.goalId,
+        subject_id: data.subjectId ?? null,
         sort_order: 1000,
       }));
     if (rows.length === 0) return { ok: true, created: 0 };
