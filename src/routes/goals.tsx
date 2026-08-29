@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
 import { SubjectSelect, SubjectTag, useSubjects } from "@/components/SubjectSelect";
+import type { Subject as SubjectType } from "@/lib/subjects-shared";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
