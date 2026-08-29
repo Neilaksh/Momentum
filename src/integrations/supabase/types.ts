@@ -23,6 +23,7 @@ export type Database = {
           routine_task_id: string | null
           sort_order: number
           source: string
+          subject_id: string | null
           task_date: string
           title: string
           updated_at: string
@@ -36,6 +37,7 @@ export type Database = {
           routine_task_id?: string | null
           sort_order?: number
           source?: string
+          subject_id?: string | null
           task_date: string
           title: string
           updated_at?: string
@@ -49,6 +51,7 @@ export type Database = {
           routine_task_id?: string | null
           sort_order?: number
           source?: string
+          subject_id?: string | null
           task_date?: string
           title?: string
           updated_at?: string
@@ -67,6 +70,13 @@ export type Database = {
             columns: ["routine_task_id"]
             isOneToOne: false
             referencedRelation: "routine_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "day_tasks_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
             referencedColumns: ["id"]
           },
         ]
@@ -218,6 +228,7 @@ export type Database = {
           id: string
           is_active: boolean
           sort_order: number
+          subject_id: string | null
           title: string
           updated_at: string
           user_id: string
@@ -229,6 +240,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           sort_order?: number
+          subject_id?: string | null
           title: string
           updated_at?: string
           user_id: string
@@ -240,6 +252,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           sort_order?: number
+          subject_id?: string | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -253,7 +266,41 @@ export type Database = {
             referencedRelation: "goals"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "routine_tasks_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      subjects: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
