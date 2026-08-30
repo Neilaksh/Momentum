@@ -479,21 +479,37 @@ export const getGoals = createServerFn({ method: "POST" })
       );
     }
 
-    // Auto-complete: a goal whose computed overall progress reached 100% (and
-    // that actually has linked tasks/habits) is marked completed automatically.
-    const toComplete = goalRows.filter(
-      (g) =>
-        g.status !== "completed" &&
-        progressByGoal[g.id] &&
-        progressByGoal[g.id]!.overall !== null &&
-        progressByGoal[g.id]!.overall! >= 100,
-    );
+    // Auto-complete: a goal auto-completes ONLY on the genuine transition from
+    // below 100% to 100% — never on every read. The last computed overall is
+    // snapshotted on the goal row (goals.last_overall_pct), so a goal the user
+    // manually reopened while its linked tasks/habits are still at 100% stays
+    // open until progress actually changes (drops below 100, then climbs back).
+    const toComplete = goalRows.filter((g) => {
+      const p = progressByGoal[g.id];
+      if (!p || p.overall === null) return false;
+      if (g.status === "completed") return false;
+      return p.overall >= 100 && (g.last_overall_pct ?? 0) < 100;
+    });
     if (toComplete.length > 0) {
+      const completeIds = toComplete.map((g) => g.id);
+      await supabase.from("goals").update({ status: "completed" }).in("id", completeIds);
+      // Match the manual-complete path (updateGoalStatus): deactivate linked
+      // repeating routines so materializeWeek stops creating tasks for the goal.
       await supabase
-        .from("goals")
-        .update({ status: "completed" })
-        .in("id", toComplete.map((g) => g.id));
+        .from("routine_tasks")
+        .update({ is_active: false })
+        .in("goal_id", completeIds)
+        .eq("user_id", context.userId);
       for (const g of toComplete) g.status = "completed";
+    }
+
+    // Persist each goal's last computed overall snapshot so the next read can
+    // detect a <100 -> 100 transition. Only rows whose snapshot actually changed
+    // are written, so steady-state reads perform zero extra queries.
+    for (const g of goalRows) {
+      const overall = progressByGoal[g.id]?.overall ?? null;
+      if ((g.last_overall_pct ?? null) === overall) continue;
+      await supabase.from("goals").update({ last_overall_pct: overall }).eq("id", g.id);
     }
 
     // NOTE: overdue detection is intentionally done in the UI from target_date.
