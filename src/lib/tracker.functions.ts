@@ -10,7 +10,7 @@ import {
   recomputeStats,
   rolloverIncompleteGoalTasks,
 } from "./tracker.server";
-import { addDays, goalLinkKey, parseISODate, startOfWeek, toISODate, type GoalHabitStat, type GoalProgress } from "./tracker-shared";
+import { addDays, parseISODate, startOfWeek, toISODate, type GoalHabitStat, type GoalProgress } from "./tracker-shared";
 import { parseHabitTitle } from "./habits-shared";
 
 export const getWeek = createServerFn({ method: "POST" })
@@ -714,64 +714,4 @@ export const resetTrackerData = createServerFn({ method: "POST" })
       .eq("id", userId);
 
     return { ok: true };
-  });
-
-/** Schedule a goal task on a start date, optionally repeating it for N consecutive days. */
-export const scheduleGoalTasks = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: {
-      goalId: string;
-      title: string;
-      startDate: string;
-      repeatDays: number;
-      weekdays?: number[];
-      subjectId?: string | null;
-    }) =>
-      z
-        .object({
-          goalId: z.string(),
-          title: z.string().min(1).max(200),
-          startDate: z.string(),
-          repeatDays: z.number().int().min(1).max(365),
-          weekdays: z.array(z.number().int().min(0).max(6)).optional(),
-          subjectId: z.string().nullable().optional(),
-        })
-        .parse(input),
-  )
-  .handler(async ({ data, context }) => {
-    const start = parseISODate(data.startDate);
-    const allowed = data.weekdays && data.weekdays.length > 0 ? new Set(data.weekdays) : null;
-    const rows = Array.from({ length: data.repeatDays }, (_, i) => addDays(start, i))
-      .filter((d) => !allowed || allowed.has((d.getDay() + 6) % 7)) // 0 = Monday
-      .map((d) => ({
-        user_id: context.userId,
-        task_date: toISODate(d),
-        title: data.title.trim(),
-        source: "oneoff",
-        goal_id: data.goalId,
-        subject_id: data.subjectId ?? null,
-        sort_order: 1000,
-      }));
-    if (rows.length === 0) return { ok: true, created: 0 };
-    // Skip any (date, goal, title) that already has a goal-linked row — the
-    // rollover or materializeWeek may have created it first, and re-scheduling
-    // would otherwise duplicate the task on those days.
-    const dates = rows.map((r: any) => r.task_date);
-    const { data: existing } = await (context.supabase as any)
-      .from("day_tasks")
-      .select("task_date, goal_id, title")
-      .eq("user_id", context.userId)
-      .in("task_date", dates);
-    const haveGoal = new Set(
-      (existing ?? [])
-        .filter((r: any) => r.goal_id)
-        .map((r: any) => goalLinkKey(r.task_date, r)),
-    );
-    const toInsert = rows.filter(
-      (r: any) => !haveGoal.has(goalLinkKey(r.task_date, { goal_id: r.goal_id, title: r.title as string })),
-    );
-    if (toInsert.length === 0) return { ok: true, created: 0 };
-    await (context.supabase as any).from("day_tasks").insert(toInsert);
-    return { ok: true, created: toInsert.length };
   });
