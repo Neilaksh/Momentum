@@ -214,12 +214,20 @@ export async function listWeeklyReviews(supabase: DB, userId: string): Promise<s
 }
 
 /** Should we prompt the user to view last week's review (only true on a Monday). */
-export async function getReviewPromptStatus(supabase: DB, userId: string): Promise<ReviewPromptStatus> {
+export async function getReviewPromptStatus(
+  supabase: DB,
+  userId: string,
+  options?: { force?: boolean },
+): Promise<ReviewPromptStatus> {
   const today = new Date();
   const day = (today.getDay() + 6) % 7; // 0 = Monday
   const isMonday = day === 0;
   const thisWeekStart = toISODate(startOfWeek(today));
   const prevWeekStart = toISODate(addDays(parseISODate(thisWeekStart), -7));
+
+  // Dev-only preview hook (WeeklyReviewBanner passes this when the URL contains
+  // ?review-preview in development) — bypasses the Monday and last-seen checks.
+  if (options?.force) return { shouldShow: true, weekStart: prevWeekStart, isMonday };
 
   if (!isMonday) return { shouldShow: false, weekStart: prevWeekStart, isMonday };
 

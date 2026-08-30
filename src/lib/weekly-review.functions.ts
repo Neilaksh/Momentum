@@ -26,8 +26,15 @@ export const listWeeklyReviews = createServerFn({ method: "POST" })
 
 export const getReviewPromptStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const status = await loadReviewPromptStatus(context.supabase as any, context.userId);
+  .inputValidator((input: { force?: boolean } | undefined) =>
+    z.object({ force: z.boolean().optional() }).optional().parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const status = await loadReviewPromptStatus(
+      context.supabase as any,
+      context.userId,
+      data?.force ? { force: true } : undefined,
+    );
     return { status };
   });
 

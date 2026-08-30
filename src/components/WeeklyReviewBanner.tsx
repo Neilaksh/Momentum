@@ -13,9 +13,17 @@ export function WeeklyReviewBanner() {
   const markSeenFn = useServerFn(markReviewSeen);
   const [open, setOpen] = useState(false);
 
+  // Dev-only preview: visit /?review-preview in development to see the banner any
+  // day of the week. Compiled out in production (import.meta.env.DEV is false there).
+  const forcePreview =
+    import.meta.env.DEV &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("review-preview");
+
   const { data } = useQuery({
-    queryKey: ["review-prompt"],
-    queryFn: () => fetchStatus({ data: undefined }) as Promise<{ status: ReviewPromptStatus }>,
+    queryKey: ["review-prompt", forcePreview],
+    queryFn: () =>
+      fetchStatus({ data: { force: forcePreview } }) as Promise<{ status: ReviewPromptStatus }>,
   });
 
   const status = data?.status;
