@@ -75,6 +75,9 @@ export const Route = createFileRoute("/")({
 
 type TaskFilter = "all" | "pending" | "completed";
 
+/** Stable key for an in-flight add-task request (target day + trimmed title). */
+const addTaskKey = (date: string, title: string) => `${date}::${title}`;
+
 function UnifiedTasksPage() {
   const [weekStart, setWeekStart] = useState(() => toISODate(startOfWeek(new Date())));
   const todayISO = toISODate(new Date());
@@ -84,6 +87,9 @@ function UnifiedTasksPage() {
   const [filter, setFilter] = useState<TaskFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   const focusPanelRef = useRef<HTMLElement>(null);
+  // (date, title) pairs of add-task requests currently in flight, so a
+  // double-click / double-Enter can never create duplicate rows.
+  const addInflightKeys = useRef<Set<string>>(new Set());
   const qc = useQueryClient();
 
   const fetchWeek = useServerFn(getWeek);
@@ -138,6 +144,11 @@ function UnifiedTasksPage() {
       toast.success("Task added");
     },
     onError: () => toast.error("Couldn't add that task."),
+    // Release the in-flight dedupe key whether the insert succeeded or failed,
+    // so an intentional retry after an error is never blocked.
+    onSettled: (_data, _error, variables) => {
+      if (variables) addInflightKeys.current.delete(addTaskKey(variables.date, variables.title));
+    },
   });
 
   const removeTask = useMutation({
@@ -186,7 +197,10 @@ function UnifiedTasksPage() {
   // Selected Day resolution
   const activeDay = useMemo(() => {
     const found = days$.find((d) => d.date === selectedDate);
-    return found ?? days$[0] ?? { date: selectedDate, weekday: 0, tasks: [] };
+    // Never silently retarget to a different day: if the selected date isn't in
+    // the loaded week yet (week switch / refetch), keep targeting the date the
+    // user actually picked instead of falling back to days$[0].
+    return found ?? { date: selectedDate, weekday: 0, tasks: [] };
   }, [days$, selectedDate]);
 
   // Keep selected date inside active week when shifting weeks
@@ -674,7 +688,13 @@ function UnifiedTasksPage() {
           className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!draft.trim()) return;
+            const title = draft.trim();
+            if (!title) return;
+            // Double-submit guard: if this exact (day, title) add is already in
+            // flight (double-click / Enter+click / duplicate event), drop it.
+            const inflightKey = addTaskKey(activeDay.date, title);
+            if (addInflightKeys.current.has(inflightKey)) return;
+            addInflightKeys.current.add(inflightKey);
             addTask.mutate({ date: activeDay.date, title: draft.trim(), subjectId: draftSubjectId });
             setDraft("");
             setDraftSubjectId(null);
@@ -699,7 +719,12 @@ function UnifiedTasksPage() {
               </option>
             ))}
           </select>
-          <Button type="submit" className="h-10 shrink-0 gap-1.5 px-4" aria-label="Add task">
+          <Button
+            type="submit"
+            className="h-10 shrink-0 gap-1.5 px-4"
+            aria-label="Add task"
+            disabled={!draft.trim()}
+          >
             <Plus className="h-4 w-4" />
             <span>Add Task</span>
           </Button>

@@ -56,12 +56,30 @@ export const addDayTask = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
+    const title = data.title.trim();
+    // Server-side idempotency guard: if the exact same manual task (same day,
+    // same title) was already created within the last few seconds, treat the
+    // repeat request as a duplicate submit and return the existing row instead
+    // of inserting a second copy. Protects both the dashboard add-task input
+    // and the goals-page direct-task add against double-fires.
+    const dedupeWindowStart = new Date(Date.now() - 5_000).toISOString();
+    const { data: existing } = await (context.supabase as any)
+      .from("day_tasks")
+      .select("id")
+      .eq("user_id", context.userId)
+      .eq("task_date", data.date)
+      .eq("title", title)
+      .eq("source", "oneoff")
+      .gte("created_at", dedupeWindowStart)
+      .limit(1)
+      .maybeSingle();
+    if (existing) return { task: existing };
     const { data: row } = await (context.supabase as any)
       .from("day_tasks")
       .insert({
         user_id: context.userId,
         task_date: data.date,
-        title: data.title.trim(),
+        title,
         source: "oneoff",
         goal_id: data.goalId ?? null,
         subject_id: data.subjectId ?? null,

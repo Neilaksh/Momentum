@@ -48,7 +48,7 @@ const STALE_LIMIT = 3;
  * the user can still see and resolve it; the original stays in its original day as
  * a historical record (only the newest copy, never the original, is ever moved).
  */
-export async function carryForwardIncompleteTasks(supabase: DB, userId: string): Promise<number> {
+async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string): Promise<number> {
   const todayISO = toISODate(new Date());
 
   const { data } = await supabase
@@ -187,9 +187,54 @@ export async function carryForwardIncompleteTasks(supabase: DB, userId: string):
   }
 
   if (toInsert.length > 0) {
-    await supabase.from("day_tasks").insert(toInsert);
+    // Final idempotency check, immediately before writing: another invocation
+    // (a concurrent loader that started before this one, a second tab, or
+    // another server instance) may have created a copy for one of these tasks
+    // after this pass took its snapshot. Re-read today's rows and drop any copy
+    // whose task identity already exists for today, so a "Due" copy is only
+    // ever created once per (user, task_date, originating task) — no matter how
+    // many times this function gets invoked.
+    const { data: freshToday } = await supabase
+      .from("day_tasks")
+      .select("title, goal_id, routine_task_id")
+      .eq("user_id", userId)
+      .eq("task_date", todayISO);
+    const freshKeys = new Set(((freshToday ?? []) as any[]).map(taskKey));
+    const pending = toInsert.filter((r) => !freshKeys.has(taskKey(r as any)));
+    if (pending.length > 0) {
+      await supabase.from("day_tasks").insert(pending);
+    }
+    return pending.length;
   }
   return toInsert.length;
+}
+
+/*
+ * Rollover passes must never run concurrently for the same user. The dashboard
+ * fires getWeek + getDay + getGoals on mount and each of those triggers a
+ * carry-forward pass; two passes racing could both observe "no copy for today"
+ * and both insert one, producing duplicate "Due" rows milliseconds apart. Every
+ * pass for a user is therefore chained behind a per-user promise so they run
+ * strictly in order and each one re-reads fresh state before deciding.
+ */
+const rolloverQueues = new Map<string, Promise<unknown>>();
+
+function runRolloverExclusive<T>(userId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = rolloverQueues.get(userId) ?? Promise.resolve();
+  const run = prev.then(fn, fn); // run even if the previous pass failed
+  const tail = run.catch(() => undefined); // stored tail never rejects
+  rolloverQueues.set(userId, tail);
+  void tail.then(() => {
+    if (rolloverQueues.get(userId) === tail) rolloverQueues.delete(userId);
+  });
+  return run;
+}
+
+/** Carry-forward pass, serialized per user (see rolloverQueues above). */
+export function carryForwardIncompleteTasks(supabase: DB, userId: string): Promise<number> {
+  return runRolloverExclusive(userId, () =>
+    carryForwardIncompleteTasksInternal(supabase, userId),
+  );
 }
 
 /** @deprecated kept for compatibility — now copies forward instead of moving. */
@@ -199,8 +244,10 @@ export const rolloverIncompleteGoalTasks = carryForwardIncompleteTasks;
 /** Materialize goal-linked repeating routine tasks into day_tasks for the given week (idempotent).
  * General routine schedule blocks (without a goal_id) are kept in the Routines tab and not placed into day_tasks.
  */
-export async function materializeWeek(supabase: DB, userId: string, weekStart: string) {
-  await rolloverIncompleteGoalTasks(supabase, userId);
+async function materializeWeekInternal(supabase: DB, userId: string, weekStart: string) {
+  // Internal (unqueued) call: this whole body already runs inside the per-user
+  // rollover queue — calling the queued wrapper here would deadlock.
+  await carryForwardIncompleteTasksInternal(supabase, userId);
 
   // Clean up any legacy unlinked routine schedule tasks from day_tasks
   await supabase
@@ -268,6 +315,13 @@ export async function materializeWeek(supabase: DB, userId: string, weekStart: s
   if (rows.length > 0) {
     await supabase.from("day_tasks").insert(rows);
   }
+}
+
+/** Weekly materialization, serialized per user (same queue as the rollover pass). */
+export function materializeWeek(supabase: DB, userId: string, weekStart: string) {
+  return runRolloverExclusive(userId, () =>
+    materializeWeekInternal(supabase, userId, weekStart),
+  );
 }
 
 export async function loadWeek(supabase: DB, userId: string, weekStart: string): Promise<WeekData> {
