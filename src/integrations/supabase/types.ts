@@ -193,6 +193,7 @@ export type Database = {
           display_name: string | null
           id: string
           last_active_day: string | null
+          last_seen_review_week: string | null
           level: number
           total_xp: number
           updated_at: string
@@ -204,6 +205,7 @@ export type Database = {
           display_name?: string | null
           id: string
           last_active_day?: string | null
+          last_seen_review_week?: string | null
           level?: number
           total_xp?: number
           updated_at?: string
@@ -215,6 +217,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           last_active_day?: string | null
+          last_seen_review_week?: string | null
           level?: number
           total_xp?: number
           updated_at?: string
@@ -299,6 +302,30 @@ export type Database = {
           name?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      weekly_reviews: {
+        Row: {
+          created_at: string
+          id: string
+          reflection_text: string | null
+          user_id: string
+          week_start_date: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reflection_text?: string | null
+          user_id: string
+          week_start_date: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reflection_text?: string | null
+          user_id?: string
+          week_start_date?: string
         }
         Relationships: []
       }

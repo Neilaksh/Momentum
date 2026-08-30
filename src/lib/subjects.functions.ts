@@ -64,8 +64,15 @@ export const deleteSubject = createServerFn({ method: "POST" })
 
 export const getSubjectBreakdown = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { fromDate: string }) => z.object({ fromDate: z.string() }).parse(input))
+  .inputValidator((input: { fromDate: string; toDate?: string }) =>
+    z.object({ fromDate: z.string(), toDate: z.string().optional() }).parse(input),
+  )
   .handler(async ({ data, context }) => {
-    const entries = await loadSubjectBreakdown(context.supabase as any, context.userId, data.fromDate);
+    const entries = await loadSubjectBreakdown(
+      context.supabase as any,
+      context.userId,
+      data.fromDate,
+      data.toDate,
+    );
     return { entries };
   });

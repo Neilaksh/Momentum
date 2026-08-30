@@ -27,6 +27,7 @@ import {
 } from "recharts";
 import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
+import { WeeklyReviewBanner } from "@/components/WeeklyReviewBanner";
 import { ProgressRing } from "@/components/ProgressRing";
 import { PieStat } from "@/components/PieStat";
 import { Input } from "@/components/ui/input";
@@ -242,6 +243,9 @@ function UnifiedTasksPage() {
 
   return (
     <AppShell profile={data?.profile ?? null}>
+      {/* Weekly Review banner — visible on Monday until dismissed */}
+      <WeeklyReviewBanner />
+
       {/* Header: Week Switcher & Jump to Today */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>

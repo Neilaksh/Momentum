@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { AlertTriangle, BookOpen, Flame, RefreshCw, Trash2, Trophy, Zap } from "lucide-react";
+import { AlertTriangle, BookOpen, CalendarRange, ChevronRight, Flame, RefreshCw, Trash2, Trophy, Zap } from "lucide-react";
 import { toast } from "sonner";
 import {
   Bar,
@@ -19,10 +19,12 @@ import {
 import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
 import { ProgressRing } from "@/components/ProgressRing";
+import { WeeklyReviewDialog } from "@/components/WeeklyReviewDialog";
 import { Button } from "@/components/ui/button";
 import { getHistory, resetTrackerData } from "@/lib/tracker.functions";
 import { getSubjectBreakdown } from "@/lib/subjects.functions";
 import { subjectColorHex, type SubjectBreakdownEntry } from "@/lib/subjects-shared";
+import { listWeeklyReviews } from "@/lib/weekly-review.functions";
 import { formatDayDate, levelProgress, toISODate, type Profile } from "@/lib/tracker-shared";
 
 export const Route = createFileRoute("/history")({
@@ -110,6 +112,20 @@ function HistoryPage() {
     [subjectEntries],
   );
   const totalBreakdownCompletions = subjectEntries.reduce((sum, e) => sum + e.count, 0);
+
+  // Past weekly reviews (newest first) for browsing from the History page.
+  const fetchReviewList = useServerFn(listWeeklyReviews);
+  const [reviewWeek, setReviewWeek] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const { data: reviewListData } = useQuery({
+    queryKey: ["weekly-reviews"],
+    queryFn: () => fetchReviewList({ data: undefined }) as Promise<{ weekStarts: string[] }>,
+  });
+  const reviewWeeks = reviewListData?.weekStarts ?? [];
+  const openReview = (week: string) => {
+    setReviewWeek(week);
+    setReviewOpen(true);
+  };
 
   return (
     <AppShell profile={profile}>
@@ -252,6 +268,33 @@ function HistoryPage() {
         )}
       </section>
 
+      {/* Weekly Reviews — browse past weeks by Monday date */}
+      <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+        <div className="flex items-center gap-2">
+          <CalendarRange className="h-4 w-4 text-primary" />
+          <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">Weekly Reviews</p>
+        </div>
+        {reviewWeeks.length === 0 ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            No reviews yet — once you track a week, it will appear here to review at any time.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {reviewWeeks.map((week) => (
+              <li key={week}>
+                <button
+                  onClick={() => openReview(week)}
+                  className="flex w-full items-center justify-between rounded-lg bg-secondary/40 px-4 py-3 text-left transition-colors hover:bg-secondary/70"
+                >
+                  <span className="text-sm font-medium">Week of {formatDayDate(week)}</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {isLoading ? (
         <p className="mt-8 text-sm text-muted-foreground">Loading…</p>
       ) : weeks.length === 0 ? (
@@ -325,6 +368,9 @@ function HistoryPage() {
           )}
         </div>
       </section>
+
+      {/* Weekly Review dialog — opened from the list above */}
+      <WeeklyReviewDialog weekStart={reviewWeek} open={reviewOpen} onOpenChange={setReviewOpen} />
     </AppShell>
   );
 }

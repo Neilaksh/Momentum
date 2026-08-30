@@ -80,18 +80,24 @@ export async function deleteSubjectRow(supabase: DB, userId: string, id: string)
  * Completed tasks grouped by subject. Only tasks with an actual subject assigned
  * (subject_id NOT NULL and resolving to a subject) are counted — untagged tasks
  * are excluded entirely and no "General" bucket is produced.
+ *
+ * `fromDate` is inclusive; an optional `toDate` narrows the upper bound (also
+ * inclusive) — pass both for a single-week window.
  */
 export async function getSubjectBreakdown(
   supabase: DB,
   userId: string,
   fromDate: string,
+  toDate?: string,
 ): Promise<SubjectBreakdownEntry[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("day_tasks")
     .select("id, subject_id, subjects(name, color)")
     .eq("user_id", userId)
     .not("completed_at", "is", null)
     .gte("task_date", fromDate);
+  if (toDate) query = query.lte("task_date", toDate);
+  const { data, error } = await query;
   if (error) throw new Error(`Failed to load subject breakdown: ${error.message}`);
 
   const rows = (data ?? []) as unknown as Array<{
