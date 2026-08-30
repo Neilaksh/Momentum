@@ -52,19 +52,9 @@ export const updateHabit = createServerFn({ method: "POST" })
     const supabase = context.supabase as any;
     const patch: Record<string, unknown> = {};
     if (data.title !== undefined) {
-      const { data: existing } = await supabase
-        .from("habits")
-        .select("title")
-        .eq("id", data.id)
-        .eq("user_id", context.userId)
-        .maybeSingle();
-      if (existing) {
-        const goalMatch = (existing.title as string).match(/^\[goal:[^\]]+\]/);
-        const clean = data.title.trim().replace(/^\[goal:[^\]]+\]\s*/, "");
-        patch["title"] = goalMatch ? `${goalMatch[0]} ${clean}` : clean;
-      } else {
-        patch["title"] = data.title.trim();
-      }
+      // Goal membership lives in goal_habit_links now, so titles never carry a
+      // "[goal:<uuid>]" prefix — strip the legacy one if still present.
+      patch["title"] = data.title.trim().replace(/^\[goal:[^\]]+\]\s*/, "");
     }
     if (data.targetPerWeek !== undefined) patch["target_per_week"] = data.targetPerWeek;
     if (Object.keys(patch).length > 0) {
@@ -105,47 +95,37 @@ export const linkHabitToGoal = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase as any;
+    // Many-to-many: one habit may be linked to several goals. Goal ownership is
+    // enforced by RLS on goal_habit_links (rows are scoped through the owning
+    // goal's user_id); the habit itself must belong to the caller.
     const { data: habit } = await supabase
       .from("habits")
-      .select("title")
+      .select("id")
       .eq("id", data.habitId)
       .eq("user_id", context.userId)
       .maybeSingle();
-
-    if (habit) {
-      const rawTitle = habit.title as string;
-      const cleanTitle = rawTitle.replace(/^\[goal:[^\]]+\]\s*/, "");
-      const newTitle = `[goal:${data.goalId}] ${cleanTitle}`;
-      await supabase
-        .from("habits")
-        .update({ title: newTitle, goal_id: data.goalId })
-        .eq("id", data.habitId)
-        .eq("user_id", context.userId);
-    }
+    if (!habit) throw new Error("Habit not found");
+    await supabase.from("goal_habit_links").upsert(
+      { goal_id: data.goalId, habit_id: data.habitId },
+      { onConflict: "goal_id,habit_id" },
+    );
     return { ok: true };
   });
 
 export const unlinkHabitFromGoal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { habitId: string }) => z.object({ habitId: z.string() }).parse(input))
+  .inputValidator(
+    (input: { habitId: string; goalId: string }) =>
+      z.object({ habitId: z.string(), goalId: z.string() }).parse(input),
+  )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
-    const { data: habit } = await supabase
-      .from("habits")
-      .select("title")
-      .eq("id", data.habitId)
-      .eq("user_id", context.userId)
-      .maybeSingle();
-
-    if (habit) {
-      const rawTitle = habit.title as string;
-      const cleanTitle = rawTitle.replace(/^\[goal:[^\]]+\]\s*/, "");
-      await supabase
-        .from("habits")
-        .update({ title: cleanTitle, goal_id: null })
-        .eq("id", data.habitId)
-        .eq("user_id", context.userId);
-    }
+    // Remove just this (goal, habit) pair — other goals sharing the habit are
+    // unaffected.
+    await (context.supabase as any)
+      .from("goal_habit_links")
+      .delete()
+      .eq("goal_id", data.goalId)
+      .eq("habit_id", data.habitId);
     return { ok: true };
   });
 

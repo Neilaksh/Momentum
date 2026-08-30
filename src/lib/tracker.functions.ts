@@ -360,20 +360,19 @@ function computeHabitProgress(
 function computeGoalProgress(
   goal: { id: string; created_at: string },
   stat: { total: number; done: number },
-  habits: { id: string; title: string; goal_id: string | null; target_per_week: number }[],
+  habits: { id: string; title: string; target_per_week: number }[],
   logsByHabit: Map<string, Set<string>>,
+  linkedHabitIds: Set<string>,
 ): GoalProgress {
   const taskTotal = stat.total;
   const taskDone = stat.done;
   const hasTasks = taskTotal > 0;
   const taskScore = hasTasks ? Math.round((taskDone / taskTotal) * 100) : null;
 
-  // A habit is linked to the goal via the habits.goal_id column, or via the
-  // legacy "[goal:<id>]" title prefix used before that column existed.
-  const linked = habits.filter((h) => {
-    const parsedGoalId = parseHabitTitle(h.title).goalId;
-    return h.goal_id === goal.id || parsedGoalId === goal.id;
-  });
+  // Linked habits are pre-resolved by the caller from goal_habit_links, so a
+  // habit shared across goals is scoped to this goal's own hit-rate window —
+  // each goal uses its own created_at as the week-window start.
+  const linked = habits.filter((h) => linkedHabitIds.has(h.id));
 
   const linkedStats: GoalHabitStat[] = linked.map((h) =>
     computeHabitProgress(goal.created_at, h, logsByHabit.get(h.id)),
@@ -431,15 +430,28 @@ async function snapshotGoalHabitStats(
   const goals = (goalRows ?? []) as { id: string; created_at: string }[];
   if (goals.length === 0) return;
 
+  // Many-to-many goal<->habit links for exactly these goals, so a habit shared
+  // across several goals is snapshotted independently per goal (each snapshot
+  // row is keyed on (goal_id, habit_id)).
+  const habitIdsByGoal = new Map<string, Set<string>>();
+  const { data: linkRows } = await supabase
+    .from("goal_habit_links")
+    .select("goal_id, habit_id")
+    .in("goal_id", goals.map((g) => g.id));
+  for (const l of (linkRows ?? []) as { goal_id: string; habit_id: string }[]) {
+    const set = habitIdsByGoal.get(l.goal_id) ?? new Set<string>();
+    set.add(l.habit_id);
+    habitIdsByGoal.set(l.goal_id, set);
+  }
+
   const { data: habitRows } = await supabase
     .from("habits")
-    .select("id, title, goal_id, target_per_week")
+    .select("id, title, target_per_week")
     .eq("user_id", userId)
     .eq("is_archived", false);
   const habits = (habitRows ?? []) as {
     id: string;
     title: string;
-    goal_id: string | null;
     target_per_week: number;
   }[];
 
@@ -466,7 +478,7 @@ async function snapshotGoalHabitStats(
   for (const g of goals) {
     // Same computation the UI displays, so the snapshot matches what the user
     // saw at the moment of completion.
-    const progress = computeGoalProgress(g, { total: 0, done: 0 }, habits, logsByHabit);
+    const progress = computeGoalProgress(g, { total: 0, done: 0 }, habits, logsByHabit, habitIdsByGoal.get(g.id) ?? new Set<string>());
     for (const lh of progress.linkedHabits) {
       rows.push({
         goal_id: g.id,
@@ -533,22 +545,38 @@ export const getGoals = createServerFn({ method: "POST" })
       routinesByGoal[rt.goal_id]!.push(rt);
     }
 
-    // Habits linked to goals (via the habits.goal_id column or the legacy
-    // "[goal:<id>]" title prefix) and their logs — used to compute the habit
-    // half of each goal's progress.
+    // Habits and their logs — used to compute the habit half of each goal's
+    // progress. Habit->goal membership comes from goal_habit_links (below).
     const { data: habitRows } = await supabase
       .from("habits")
-      .select("id, title, goal_id, target_per_week")
+      .select("id, title, target_per_week")
       .eq("user_id", context.userId)
       .eq("is_archived", false);
 
     const habits = (habitRows ?? []) as {
       id: string;
       title: string;
-      goal_id: string | null;
       target_per_week: number;
     }[];
 
+    // Many-to-many goal<->habit links: a habit may back several goals, each
+    // computing its own hit-rate from its own created_at window. The flattened
+    // record is also returned to the client so the goal detail view's Linked
+    // Habits list reads the join table instead of the old single-FK column.
+    const habitIdsByGoal = new Map<string, Set<string>>();
+    if (goalRows.length > 0) {
+      const { data: linkRows } = await supabase
+        .from("goal_habit_links")
+        .select("goal_id, habit_id")
+        .in("goal_id", goalRows.map((gr: any) => gr.id));
+      for (const l of (linkRows ?? []) as { goal_id: string; habit_id: string }[]) {
+        const set = habitIdsByGoal.get(l.goal_id) ?? new Set<string>();
+        set.add(l.habit_id);
+        habitIdsByGoal.set(l.goal_id, set);
+      }
+    }
+    const habitIdsByGoalRecord: Record<string, string[]> = {};
+    for (const [gid, ids] of habitIdsByGoal) habitIdsByGoalRecord[gid] = [...ids];
     const logsByHabit = new Map<string, Set<string>>();
     if (habits.length > 0) {
       const { data: logRows } = await supabase
@@ -569,6 +597,7 @@ export const getGoals = createServerFn({ method: "POST" })
         stats[g.id] ?? { total: 0, done: 0 },
         habits,
         logsByHabit,
+        habitIdsByGoal.get(g.id) ?? new Set<string>(),
       );
     }
 
@@ -661,7 +690,15 @@ export const getGoals = createServerFn({ method: "POST" })
     }
 
     // NOTE: overdue detection is intentionally done in the UI from target_date.
-    return { goals: goalRows, stats, routinesByGoal, tasksByGoal, progressByGoal, snapshotsByGoal };
+    return {
+      goals: goalRows,
+      stats,
+      routinesByGoal,
+      tasksByGoal,
+      progressByGoal,
+      snapshotsByGoal,
+      habitIdsByGoal: habitIdsByGoalRecord,
+    };
   });
 
 export const saveGoal = createServerFn({ method: "POST" })

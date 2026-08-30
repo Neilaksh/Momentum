@@ -81,6 +81,42 @@ export type Database = {
           },
         ]
       }
+      goal_habit_links: {
+        Row: {
+          created_at: string
+          goal_id: string
+          habit_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          goal_id: string
+          habit_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          goal_id?: string
+          habit_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_habit_links_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_habit_links_habit_id_fkey"
+            columns: ["habit_id"]
+            isOneToOne: false
+            referencedRelation: "habits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_habit_snapshots: {
         Row: {
           goal_id: string
@@ -201,7 +237,6 @@ export type Database = {
         Row: {
           color: string
           created_at: string
-          goal_id: string | null
           id: string
           is_archived: boolean
           sort_order: number
@@ -213,7 +248,6 @@ export type Database = {
         Insert: {
           color?: string
           created_at?: string
-          goal_id?: string | null
           id?: string
           is_archived?: boolean
           sort_order?: number
@@ -225,7 +259,6 @@ export type Database = {
         Update: {
           color?: string
           created_at?: string
-          goal_id?: string | null
           id?: string
           is_archived?: boolean
           sort_order?: number
@@ -234,15 +267,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "habits_goal_id_fkey"
-            columns: ["goal_id"]
-            isOneToOne: false
-            referencedRelation: "goals"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {

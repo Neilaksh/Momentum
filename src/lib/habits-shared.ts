@@ -3,7 +3,6 @@ export type Habit = {
   title: string;
   color: string;
   target_per_week: number;
-  goal_id: string | null;
   is_archived: boolean;
   sort_order: number;
   created_at: string;
@@ -38,38 +37,31 @@ export type HabitsData = {
 export type ParsedHabitTitle = {
   cleanTitle: string;
   displayTitle: string;
-  goalId: string | null;
   rawTitle: string;
 };
 
+/**
+ * Goal membership used to be encoded as a "[goal:<uuid>]" title prefix; the
+ * goal_habit_links join table is the source of truth now. Legacy habit titles
+ * may still carry the prefix, so parse it off for display everywhere.
+ */
 export function parseHabitTitle(rawTitle: string): ParsedHabitTitle {
   if (!rawTitle) {
-    return { cleanTitle: "", displayTitle: "", goalId: null, rawTitle: "" };
+    return { cleanTitle: "", displayTitle: "", rawTitle: "" };
   }
   const match = rawTitle.match(/^\[goal:([^\]]+)\]\s*(.*)$/);
   if (match) {
-    const goalId = match[1] ?? null;
     const cleanTitle = match[2] ?? "";
     return {
       cleanTitle,
       displayTitle: cleanTitle,
-      goalId,
       rawTitle,
     };
   }
   return {
     cleanTitle: rawTitle,
     displayTitle: rawTitle,
-    goalId: null,
     rawTitle,
   };
-}
-
-export function formatHabitTitle(cleanTitle: string, goalId?: string | null): string {
-  const trimmed = cleanTitle.trim();
-  if (goalId) {
-    return `[goal:${goalId}] ${trimmed}`;
-  }
-  return trimmed;
 }
 

@@ -87,6 +87,7 @@ type GoalsResponse = {
   tasksByGoal?: Record<string, DayTask[]>;
   progressByGoal: Record<string, GoalProgress>;
   snapshotsByGoal: Record<string, GoalHabitSnapshot[]>;
+  habitIdsByGoal: Record<string, string[]>;
 };
 
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -220,7 +221,7 @@ function GoalsPage() {
   });
 
   const unlinkHabit = useMutation({
-    mutationFn: (v: { habitId: string }) => unlinkHabitFn({ data: v }),
+    mutationFn: (v: { goalId: string; habitId: string }) => unlinkHabitFn({ data: v }),
     onSuccess: () => { invalidate(); toast.success("Habit unlinked."); },
     onError: () => toast.error("Couldn't unlink habit."),
   });
@@ -231,6 +232,7 @@ function GoalsPage() {
   const tasksByGoal = data?.tasksByGoal ?? {};
   const progressByGoal = data?.progressByGoal ?? {};
   const snapshotsByGoal = data?.snapshotsByGoal ?? {};
+  const habitIdsByGoal = data?.habitIdsByGoal ?? {};
   const allHabitStats = habitsData?.stats ?? [];
 
   // Compute effective status client-side — no DB mutation on read
@@ -362,6 +364,7 @@ function GoalsPage() {
                     subjectsMap={subjectsMap}
                     allHabitStats={allHabitStats}
                     habitSnapshots={snapshotsByGoal[g.id] ?? []}
+                    goalHabitIds={new Set(habitIdsByGoal[g.id] ?? [])}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
@@ -370,7 +373,7 @@ function GoalsPage() {
                     onAddDirectTask={(t, subjectId) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()), subjectId })}
                     onScheduleTask={(v) => scheduleGoalTask.mutate({ goalId: g.id, title: v.title, date: v.date, subjectId: v.subjectId })}
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
-                    onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
+                    onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId, goalId: g.id })}
                   />
                 ))}
               </div>
@@ -402,6 +405,7 @@ function GoalsPage() {
                     subjectsMap={subjectsMap}
                     allHabitStats={allHabitStats}
                     habitSnapshots={snapshotsByGoal[g.id] ?? []}
+                    goalHabitIds={new Set(habitIdsByGoal[g.id] ?? [])}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
@@ -410,7 +414,7 @@ function GoalsPage() {
                     onAddDirectTask={(t, subjectId) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()), subjectId })}
                     onScheduleTask={(v) => scheduleGoalTask.mutate({ goalId: g.id, title: v.title, date: v.date, subjectId: v.subjectId })}
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
-                    onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
+                    onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId, goalId: g.id })}
                   />
                 ))}
               </div>
@@ -440,6 +444,7 @@ function GoalsPage() {
                     subjectsMap={subjectsMap}
                     allHabitStats={allHabitStats}
                     habitSnapshots={snapshotsByGoal[g.id] ?? []}
+                    goalHabitIds={new Set(habitIdsByGoal[g.id] ?? [])}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onReopen={() => markStatus.mutate({ id: g.id, status: "active" })}
                     onMarkComplete={() => {}}
@@ -481,6 +486,7 @@ function GoalCard({
   onScheduleTask,
   onLinkHabit,
   onUnlinkHabit,
+  goalHabitIds,
 }: {
   goal: Goal;
   effectiveStatus: "active" | "completed" | "overdue";
@@ -502,6 +508,7 @@ function GoalCard({
   onScheduleTask?: (v: { title: string; date: string; subjectId: string | null }) => void;
   onLinkHabit: (habitId: string) => void;
   onUnlinkHabit: (habitId: string) => void;
+  goalHabitIds: Set<string>;
 }) {
   const [showLinkHabitDropdown, setShowLinkHabitDropdown] = useState(false);
   const [showExtendPanel, setShowExtendPanel] = useState(false);
@@ -965,14 +972,10 @@ function GoalCard({
 
       {/* ── Linked Habits Section ── */}
       {(() => {
-        const linkedHabits = allHabitStats.filter((s) => {
-          const parsed = parseHabitTitle(s.habit.title);
-          return s.habit.goal_id === goal.id || parsed.goalId === goal.id;
-        });
-        const unlinkedHabits = allHabitStats.filter((s) => {
-          const parsed = parseHabitTitle(s.habit.title);
-          return !s.habit.goal_id && !parsed.goalId;
-        });
+        const linkedHabits = allHabitStats.filter((s) => goalHabitIds.has(s.habit.id));
+        // Habits can back multiple goals, so a habit is offerable here unless
+        // it's already linked to THIS goal.
+        const unlinkedHabits = allHabitStats.filter((s) => !goalHabitIds.has(s.habit.id));
 
         return (
           <div className="mt-4 rounded-xl bg-secondary/30 p-3.5">
