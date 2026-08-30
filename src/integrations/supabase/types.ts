@@ -18,12 +18,8 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
-          description: string | null
           goal_id: string | null
           id: string
-          is_stale: boolean
-          progress_pct: number
-          rollover_count: number
           routine_task_id: string | null
           sort_order: number
           source: string
@@ -36,12 +32,8 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           created_at?: string
-          description?: string | null
           goal_id?: string | null
           id?: string
-          is_stale?: boolean
-          progress_pct?: number
-          rollover_count?: number
           routine_task_id?: string | null
           sort_order?: number
           source?: string
@@ -54,12 +46,8 @@ export type Database = {
         Update: {
           completed_at?: string | null
           created_at?: string
-          description?: string | null
           goal_id?: string | null
           id?: string
-          is_stale?: boolean
-          progress_pct?: number
-          rollover_count?: number
           routine_task_id?: string | null
           sort_order?: number
           source?: string
