@@ -820,7 +820,7 @@ function GoalCard({
             {progress && progress.linkedHabits.length > 0 && (
               <div>
                 <p className="mb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Habit weekly hit-rate (since goal)
+                  Habit weekly hit-rate (since link)
                 </p>
                 <ul className="space-y-1">
                   {progress.linkedHabits.map((lh) => (

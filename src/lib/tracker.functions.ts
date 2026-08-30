@@ -309,17 +309,20 @@ export const clearAllRoutineTasks = createServerFn({ method: "POST" })
 
 
 /**
- * Weekly hit-rate for a habit over the whole Monday-weeks spanned since a goal
- * was created. `weeksTotal` counts every Monday-start week from the week that
- * contains `created_at` through the current week (inclusive). A week "counts"
- * when the habit's log count for that week is >= its target_per_week.
+ * Weekly hit-rate for a habit over the whole Monday-weeks spanned since THAT
+ * habit was linked to the goal (goal_habit_links.created_at) — not since the
+ * goal itself was created — so a habit connected weeks after goal creation is
+ * only accountable for weeks from the link onward. `weeksTotal` counts every
+ * Monday-start week from the week that contains the link's `created_at`
+ * through the current week (inclusive). A week "counts" when the habit's log
+ * count for that week is >= its target_per_week.
  */
 function computeHabitProgress(
-  goalCreatedAt: string,
+  linkCreatedAt: string,
   habit: { id: string; title: string; target_per_week: number },
   done: Set<string> | undefined,
 ): GoalHabitStat {
-  const created = parseISODate(goalCreatedAt.slice(0, 10));
+  const created = parseISODate(linkCreatedAt.slice(0, 10));
   const weekStarts: string[] = [];
   let cur = startOfWeek(created);
   const end = startOfWeek(new Date());
@@ -354,28 +357,30 @@ function computeHabitProgress(
 /**
  * Overall goal progress = simple average of the task score (completed vs total
  * linked day_tasks) and the habit score (average weekly hit-rate of linked
- * habits since the goal was created). Falls back to whichever single score
- * exists; both scores are null when the goal has no tasks and no habits.
+ * habits, each measured since its own link was created). Falls back to
+ * whichever single score exists; both scores are null when the goal has no
+ * tasks and no habits.
  */
 function computeGoalProgress(
-  goal: { id: string; created_at: string },
   stat: { total: number; done: number },
   habits: { id: string; title: string; target_per_week: number }[],
   logsByHabit: Map<string, Set<string>>,
-  linkedHabitIds: Set<string>,
+  linkedHabitLinks: Map<string, string>,
 ): GoalProgress {
   const taskTotal = stat.total;
   const taskDone = stat.done;
   const hasTasks = taskTotal > 0;
   const taskScore = hasTasks ? Math.round((taskDone / taskTotal) * 100) : null;
 
-  // Linked habits are pre-resolved by the caller from goal_habit_links, so a
-  // habit shared across goals is scoped to this goal's own hit-rate window —
-  // each goal uses its own created_at as the week-window start.
-  const linked = habits.filter((h) => linkedHabitIds.has(h.id));
+  // Linked habits are pre-resolved by the caller from goal_habit_links, keyed
+  // by habit id with that link's own created_at. A habit shared across goals
+  // gets an independent window per goal, starting when THAT link was made —
+  // not when the goal was created — so a habit linked late isn't penalized
+  // for the weeks before it was connected.
+  const linked = habits.filter((h) => linkedHabitLinks.has(h.id));
 
   const linkedStats: GoalHabitStat[] = linked.map((h) =>
-    computeHabitProgress(goal.created_at, h, logsByHabit.get(h.id)),
+    computeHabitProgress(linkedHabitLinks.get(h.id)!, h, logsByHabit.get(h.id)),
   );
 
   const hasHabits = linkedStats.length > 0;
@@ -424,24 +429,25 @@ async function snapshotGoalHabitStats(
   if (goalIds.length === 0) return;
   const { data: goalRows } = await supabase
     .from("goals")
-    .select("id, created_at")
+    .select("id")
     .in("id", goalIds)
     .eq("user_id", userId);
-  const goals = (goalRows ?? []) as { id: string; created_at: string }[];
+  const goals = (goalRows ?? []) as { id: string }[];
   if (goals.length === 0) return;
 
   // Many-to-many goal<->habit links for exactly these goals, so a habit shared
   // across several goals is snapshotted independently per goal (each snapshot
-  // row is keyed on (goal_id, habit_id)).
-  const habitIdsByGoal = new Map<string, Set<string>>();
+  // row is keyed on (goal_id, habit_id)). Each link carries its own created_at,
+  // which — not the goal's — is the hit-rate window start for that pair.
+  const habitLinksByGoal = new Map<string, Map<string, string>>();
   const { data: linkRows } = await supabase
     .from("goal_habit_links")
-    .select("goal_id, habit_id")
+    .select("goal_id, habit_id, created_at")
     .in("goal_id", goals.map((g) => g.id));
-  for (const l of (linkRows ?? []) as { goal_id: string; habit_id: string }[]) {
-    const set = habitIdsByGoal.get(l.goal_id) ?? new Set<string>();
-    set.add(l.habit_id);
-    habitIdsByGoal.set(l.goal_id, set);
+  for (const l of (linkRows ?? []) as { goal_id: string; habit_id: string; created_at: string }[]) {
+    const byHabit = habitLinksByGoal.get(l.goal_id) ?? new Map<string, string>();
+    byHabit.set(l.habit_id, l.created_at);
+    habitLinksByGoal.set(l.goal_id, byHabit);
   }
 
   const { data: habitRows } = await supabase
@@ -478,7 +484,7 @@ async function snapshotGoalHabitStats(
   for (const g of goals) {
     // Same computation the UI displays, so the snapshot matches what the user
     // saw at the moment of completion.
-    const progress = computeGoalProgress(g, { total: 0, done: 0 }, habits, logsByHabit, habitIdsByGoal.get(g.id) ?? new Set<string>());
+    const progress = computeGoalProgress({ total: 0, done: 0 }, habits, logsByHabit, habitLinksByGoal.get(g.id) ?? new Map<string, string>());
     for (const lh of progress.linkedHabits) {
       rows.push({
         goal_id: g.id,
@@ -559,24 +565,25 @@ export const getGoals = createServerFn({ method: "POST" })
       target_per_week: number;
     }[];
 
-    // Many-to-many goal<->habit links: a habit may back several goals, each
-    // computing its own hit-rate from its own created_at window. The flattened
-    // record is also returned to the client so the goal detail view's Linked
-    // Habits list reads the join table instead of the old single-FK column.
-    const habitIdsByGoal = new Map<string, Set<string>>();
+    // Many-to-many goal<->habit links: a habit may back several goals, and each
+    // (goal, habit) pair computes its own hit-rate starting from that link's
+    // created_at — not the goal's. The flattened habit-id record is also
+    // returned to the client so the goal detail view's Linked Habits list
+    // reads the join table instead of the old single-FK column.
+    const habitLinksByGoal = new Map<string, Map<string, string>>();
     if (goalRows.length > 0) {
       const { data: linkRows } = await supabase
         .from("goal_habit_links")
-        .select("goal_id, habit_id")
+        .select("goal_id, habit_id, created_at")
         .in("goal_id", goalRows.map((gr: any) => gr.id));
-      for (const l of (linkRows ?? []) as { goal_id: string; habit_id: string }[]) {
-        const set = habitIdsByGoal.get(l.goal_id) ?? new Set<string>();
-        set.add(l.habit_id);
-        habitIdsByGoal.set(l.goal_id, set);
+      for (const l of (linkRows ?? []) as { goal_id: string; habit_id: string; created_at: string }[]) {
+        const byHabit = habitLinksByGoal.get(l.goal_id) ?? new Map<string, string>();
+        byHabit.set(l.habit_id, l.created_at);
+        habitLinksByGoal.set(l.goal_id, byHabit);
       }
     }
     const habitIdsByGoalRecord: Record<string, string[]> = {};
-    for (const [gid, ids] of habitIdsByGoal) habitIdsByGoalRecord[gid] = [...ids];
+    for (const [gid, links] of habitLinksByGoal) habitIdsByGoalRecord[gid] = [...links.keys()];
     const logsByHabit = new Map<string, Set<string>>();
     if (habits.length > 0) {
       const { data: logRows } = await supabase
@@ -593,11 +600,10 @@ export const getGoals = createServerFn({ method: "POST" })
     const progressByGoal: Record<string, GoalProgress> = {};
     for (const g of goalRows) {
       progressByGoal[g.id] = computeGoalProgress(
-        g,
         stats[g.id] ?? { total: 0, done: 0 },
         habits,
         logsByHabit,
-        habitIdsByGoal.get(g.id) ?? new Set<string>(),
+        habitLinksByGoal.get(g.id) ?? new Map<string, string>(),
       );
     }
 

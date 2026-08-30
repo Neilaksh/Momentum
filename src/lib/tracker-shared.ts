@@ -67,7 +67,7 @@ export type GoalHabitStat = {
   habitId: string;
   title: string;
   targetPerWeek: number;
-  /** Whole Monday-weeks since the goal was created. */
+  /** Whole Monday-weeks since this habit was linked to the goal (goal_habit_links.created_at). */
   weeksTotal: number;
   /** Weeks in which the habit's logs met or exceeded target_per_week. */
   weeksMet: number;
@@ -90,9 +90,11 @@ export type GoalHabitSnapshot = {
 
 /**
  * Computed goal progress (server-side). Task score = completed/total day_tasks
- * linked to the goal. Habit score = average per-habit weekly hit-rate since the
- * goal was created. Overall = average of the two when both exist; falls back to
- * whichever single score exists; null when neither exists.
+ * linked to the goal. Habit score = average per-habit weekly hit-rate, each
+ * habit measured since its goal_habit_links.created_at (when it was linked to
+ * this goal), not since the goal itself was created. Overall = average of the
+ * two when both exist; falls back to whichever single score exists; null when
+ * neither exists.
  */
 export type GoalProgress = {
   taskScore: number | null;
