@@ -81,6 +81,51 @@ export type Database = {
           },
         ]
       }
+      goal_habit_snapshots: {
+        Row: {
+          goal_id: string
+          habit_id: string
+          hit_rate_pct: number
+          id: string
+          snapshotted_at: string
+          total_weeks: number
+          weeks_on_target: number
+        }
+        Insert: {
+          goal_id: string
+          habit_id: string
+          hit_rate_pct: number
+          id?: string
+          snapshotted_at?: string
+          total_weeks: number
+          weeks_on_target: number
+        }
+        Update: {
+          goal_id?: string
+          habit_id?: string
+          hit_rate_pct?: number
+          id?: string
+          snapshotted_at?: string
+          total_weeks?: number
+          weeks_on_target?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_habit_snapshots_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_habit_snapshots_habit_id_fkey"
+            columns: ["habit_id"]
+            isOneToOne: false
+            referencedRelation: "habits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goals: {
         Row: {
           color: string

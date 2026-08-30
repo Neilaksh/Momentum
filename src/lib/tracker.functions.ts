@@ -10,7 +10,7 @@ import {
   recomputeStats,
   rolloverIncompleteGoalTasks,
 } from "./tracker.server";
-import { addDays, parseISODate, startOfWeek, toISODate, type GoalHabitStat, type GoalProgress } from "./tracker-shared";
+import { addDays, parseISODate, startOfWeek, toISODate, type GoalHabitSnapshot, type GoalHabitStat, type GoalProgress } from "./tracker-shared";
 import { parseHabitTitle } from "./habits-shared";
 
 export const getWeek = createServerFn({ method: "POST" })
@@ -28,6 +28,25 @@ export const toggleDayTask = createServerFn({ method: "POST" })
     z.object({ id: z.string(), completed: z.boolean() }).parse(input),
   )
   .handler(async ({ data, context }) => {
+    // Completed-goal tasks are locked: the UI disables their checkboxes, this is
+    // the server-side backstop so no client can toggle them afterwards.
+    const { data: taskRow } = await (context.supabase as any)
+      .from("day_tasks")
+      .select("goal_id")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (taskRow?.goal_id) {
+      const { data: goalRow } = await (context.supabase as any)
+        .from("goals")
+        .select("status")
+        .eq("id", taskRow.goal_id)
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if (goalRow?.status === "completed") {
+        throw new Error("This task belongs to a completed goal and is locked.");
+      }
+    }
     const patch: Record<string, unknown> = { completed_at: data.completed ? new Date().toISOString() : null };
     if (data.completed) {
       patch["progress_pct"] = 100;
@@ -389,6 +408,80 @@ function computeGoalProgress(
   };
 }
 
+/**
+ * Freeze each linked habit's weekly hit-rate into goal_habit_snapshots at the
+ * moment a goal completes. Called on BOTH completion paths — the auto-complete
+ * transition in getGoals and a manual "Mark Complete" (updateGoalStatus) — so a
+ * completed goal always has frozen stats regardless of how it finished. Rows
+ * are upserted on (goal_id, habit_id), so a later re-completion overwrites the
+ * old snapshot. Reopening does not delete the row; it is simply ignored while
+ * the goal is active, and the habit keeps logging live everywhere else.
+ */
+async function snapshotGoalHabitStats(
+  supabase: any,
+  userId: string,
+  goalIds: string[],
+): Promise<void> {
+  if (goalIds.length === 0) return;
+  const { data: goalRows } = await supabase
+    .from("goals")
+    .select("id, created_at")
+    .in("id", goalIds)
+    .eq("user_id", userId);
+  const goals = (goalRows ?? []) as { id: string; created_at: string }[];
+  if (goals.length === 0) return;
+
+  const { data: habitRows } = await supabase
+    .from("habits")
+    .select("id, title, goal_id, target_per_week")
+    .eq("user_id", userId)
+    .eq("is_archived", false);
+  const habits = (habitRows ?? []) as {
+    id: string;
+    title: string;
+    goal_id: string | null;
+    target_per_week: number;
+  }[];
+
+  const logsByHabit = new Map<string, Set<string>>();
+  if (habits.length > 0) {
+    const { data: logRows } = await supabase
+      .from("habit_logs")
+      .select("habit_id, log_date")
+      .in("habit_id", habits.map((h) => h.id));
+    for (const l of (logRows ?? []) as { habit_id: string; log_date: string }[]) {
+      const set = logsByHabit.get(l.habit_id) ?? new Set<string>();
+      set.add(l.log_date);
+      logsByHabit.set(l.habit_id, set);
+    }
+  }
+
+  const rows: {
+    goal_id: string;
+    habit_id: string;
+    weeks_on_target: number;
+    total_weeks: number;
+    hit_rate_pct: number;
+  }[] = [];
+  for (const g of goals) {
+    // Same computation the UI displays, so the snapshot matches what the user
+    // saw at the moment of completion.
+    const progress = computeGoalProgress(g, { total: 0, done: 0 }, habits, logsByHabit);
+    for (const lh of progress.linkedHabits) {
+      rows.push({
+        goal_id: g.id,
+        habit_id: lh.habitId,
+        weeks_on_target: lh.weeksMet,
+        total_weeks: lh.weeksTotal,
+        hit_rate_pct: lh.hitRate,
+      });
+    }
+  }
+  if (rows.length > 0) {
+    await supabase.from("goal_habit_snapshots").upsert(rows, { onConflict: "goal_id,habit_id" });
+  }
+}
+
 export const getGoals = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -500,6 +593,9 @@ export const getGoals = createServerFn({ method: "POST" })
         .update({ is_active: false })
         .in("goal_id", completeIds)
         .eq("user_id", context.userId);
+      // Freeze each linked habit's weekly hit-rate at the completion moment —
+      // this block runs only on the genuine <100 -> 100 transition.
+      await snapshotGoalHabitStats(supabase, context.userId, completeIds);
       for (const g of toComplete) g.status = "completed";
     }
 
@@ -512,8 +608,60 @@ export const getGoals = createServerFn({ method: "POST" })
       await supabase.from("goals").update({ last_overall_pct: overall }).eq("id", g.id);
     }
 
+    // Frozen habit hit-rates taken at each goal's completion moment. Shown
+    // inside a completed goal instead of the live stats, which keep moving
+    // because the habits themselves continue running everywhere else.
+    const snapshotsByGoal: Record<string, GoalHabitSnapshot[]> = {};
+    if (goalRows.length > 0) {
+      const { data: snapRows } = await supabase
+        .from("goal_habit_snapshots")
+        .select("goal_id, habit_id, weeks_on_target, total_weeks, hit_rate_pct, snapshotted_at")
+        .in("goal_id", goalRows.map((g) => g.id));
+      for (const s of (snapRows ?? []) as any[]) {
+        if (!snapshotsByGoal[s.goal_id]) snapshotsByGoal[s.goal_id] = [];
+        snapshotsByGoal[s.goal_id]!.push({
+          habitId: s.habit_id,
+          weeksOnTarget: s.weeks_on_target,
+          totalWeeks: s.total_weeks,
+          hitRatePct: s.hit_rate_pct,
+          snapshottedAt: s.snapshotted_at,
+        });
+      }
+    }
+
+    // Freeze completed goals' habit stats at their completion-time snapshots.
+    // Linked habits keep logging live everywhere else in the app, but inside a
+    // completed goal the per-habit hit-rates (and the habit score / on-track
+    // count / overall derived from them) must show the values frozen at
+    // completion, not numbers that decay as empty weeks accumulate. Habits
+    // linked after completion (no snapshot) keep their live values, per-habit.
+    // Reopening the goal drops it out of this branch, so live stats resume;
+    // a later re-completion upserts a fresh snapshot over the old one.
+    for (const g of goalRows) {
+      if (g.status !== "completed") continue;
+      const snaps = snapshotsByGoal[g.id];
+      if (!snaps || snaps.length === 0) continue;
+      const p = progressByGoal[g.id];
+      if (!p) continue;
+      const snapMap = new Map(snaps.map((s) => [s.habitId, s]));
+      const linkedHabits = p.linkedHabits.map((lh) => {
+        const s = snapMap.get(lh.habitId);
+        return s ? { ...lh, weeksMet: s.weeksOnTarget, weeksTotal: s.totalWeeks, hitRate: s.hitRatePct } : lh;
+      });
+      const habitScore =
+        linkedHabits.length > 0
+          ? Math.round(linkedHabits.reduce((sum, s) => sum + s.hitRate, 0) / linkedHabits.length)
+          : null;
+      const habitsOnTrack = linkedHabits.filter((s) => s.hitRate >= 100).length;
+      const overall =
+        p.taskScore !== null && habitScore !== null
+          ? Math.round((p.taskScore + habitScore) / 2)
+          : (p.taskScore ?? habitScore);
+      progressByGoal[g.id] = { ...p, linkedHabits, habitScore, habitsOnTrack, overall };
+    }
+
     // NOTE: overdue detection is intentionally done in the UI from target_date.
-    return { goals: goalRows, stats, routinesByGoal, tasksByGoal, progressByGoal };
+    return { goals: goalRows, stats, routinesByGoal, tasksByGoal, progressByGoal, snapshotsByGoal };
   });
 
 export const saveGoal = createServerFn({ method: "POST" })
@@ -669,6 +817,8 @@ export const updateGoalStatus = createServerFn({ method: "POST" })
         .update({ is_active: false })
         .eq("goal_id", data.id)
         .eq("user_id", context.userId);
+      // Freeze linked habit hit-rates at the completion moment (manual path).
+      await snapshotGoalHabitStats(supabase, context.userId, [data.id]);
     }
     // When re-activating, re-enable linked routine tasks
     if (data.status === "active") {

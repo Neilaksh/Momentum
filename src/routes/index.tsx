@@ -164,7 +164,7 @@ function UnifiedTasksPage() {
   });
 
   const goalsMap = useMemo(() => {
-    const map = new Map<string, { id: string; title: string }>();
+    const map = new Map<string, { id: string; title: string; status?: string | null }>();
     for (const g of (goalsData?.goals ?? []) as any[]) {
       map.set(g.id, g);
     }
@@ -601,7 +601,10 @@ function UnifiedTasksPage() {
             </div>
           ) : (
             <ul className="space-y-2">
-              {filteredActiveTasks.map((t) => (
+              {filteredActiveTasks.map((t) => {
+                const goalLocked =
+                  !!(t as any).goal_id && goalsMap.get((t as any).goal_id)?.status === "completed";
+                return (
                 <li
                   key={t.id}
                   className={`group flex flex-col gap-1.5 rounded-xl border p-3 transition-all ${
@@ -612,12 +615,22 @@ function UnifiedTasksPage() {
                 >
                   <div className="flex items-center gap-3">
                     <button
+                      disabled={goalLocked}
                       onClick={() => toggle.mutate({ id: t.id, completed: !t.completed_at })}
-                      aria-label={t.completed_at ? `Mark ${t.title} incomplete` : `Mark ${t.title} complete`}
+                      aria-label={
+                        goalLocked
+                          ? `${t.title} is locked because its goal is completed`
+                          : t.completed_at
+                            ? `Mark ${t.title} incomplete`
+                            : `Mark ${t.title} complete`
+                      }
+                      title={goalLocked ? "Goal completed — task locked" : undefined}
                       className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
-                        t.completed_at
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border hover:border-primary"
+                        goalLocked
+                          ? "cursor-not-allowed border-border/60 bg-secondary/40 text-muted-foreground opacity-60"
+                          : t.completed_at
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border hover:border-primary"
                       }`}
                     >
                       {t.completed_at && (
@@ -678,7 +691,8 @@ function UnifiedTasksPage() {
                     </button>
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>

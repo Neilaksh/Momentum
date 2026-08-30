@@ -17,6 +17,7 @@ import {
   Repeat,
   Target,
   Trash2,
+  Snowflake,
   Unlink,
   X,
   Zap,
@@ -51,6 +52,7 @@ import {
   toISODate,
   type DayTask,
   type Goal,
+  type GoalHabitSnapshot,
   type GoalProgress,
   type WeekData,
 } from "@/lib/tracker-shared";
@@ -84,6 +86,7 @@ type GoalsResponse = {
   routinesByGoal: Record<string, { id: string; title: string; weekday: number }[]>;
   tasksByGoal?: Record<string, DayTask[]>;
   progressByGoal: Record<string, GoalProgress>;
+  snapshotsByGoal: Record<string, GoalHabitSnapshot[]>;
 };
 
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -227,6 +230,7 @@ function GoalsPage() {
   const routinesByGoal = data?.routinesByGoal ?? {};
   const tasksByGoal = data?.tasksByGoal ?? {};
   const progressByGoal = data?.progressByGoal ?? {};
+  const snapshotsByGoal = data?.snapshotsByGoal ?? {};
   const allHabitStats = habitsData?.stats ?? [];
 
   // Compute effective status client-side — no DB mutation on read
@@ -357,6 +361,7 @@ function GoalsPage() {
                     subjects={subjects}
                     subjectsMap={subjectsMap}
                     allHabitStats={allHabitStats}
+                    habitSnapshots={snapshotsByGoal[g.id] ?? []}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
@@ -396,6 +401,7 @@ function GoalsPage() {
                     subjects={subjects}
                     subjectsMap={subjectsMap}
                     allHabitStats={allHabitStats}
+                    habitSnapshots={snapshotsByGoal[g.id] ?? []}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
@@ -432,7 +438,8 @@ function GoalsPage() {
                     tasks={tasksByGoal[g.id] ?? []}
                     subjects={subjects}
                     subjectsMap={subjectsMap}
-                    allHabitStats={[]}
+                    allHabitStats={allHabitStats}
+                    habitSnapshots={snapshotsByGoal[g.id] ?? []}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onReopen={() => markStatus.mutate({ id: g.id, status: "active" })}
                     onMarkComplete={() => {}}
@@ -463,6 +470,7 @@ function GoalCard({
   subjects,
   subjectsMap,
   allHabitStats,
+  habitSnapshots,
   onDelete,
   onMarkComplete,
   onReopen,
@@ -483,6 +491,7 @@ function GoalCard({
   subjects: SubjectType[];
   subjectsMap: Map<string, SubjectType>;
   allHabitStats: HabitsData["stats"];
+  habitSnapshots: GoalHabitSnapshot[];
   onDelete: () => void;
   onMarkComplete: () => void;
   onReopen?: () => void;
@@ -508,6 +517,11 @@ function GoalCard({
 
   const isOverdue = effectiveStatus === "overdue";
   const isCompleted = effectiveStatus === "completed";
+  // Frozen habit stats: on a completed goal, a snapshot (if one exists at the
+  // completion moment) replaces the live, still-moving weekly hit-rate for
+  // that habit. Active/overdue goals always show live stats.
+  const snapFor = (habitId: string) =>
+    isCompleted ? habitSnapshots.find((h) => h.habitId === habitId) : undefined;
   const overall = progress?.overall ?? null;
   const taskScore = progress?.taskScore ?? null;
   const habitScore = progress?.habitScore ?? null;
@@ -856,12 +870,22 @@ function GoalCard({
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <button
+                      disabled={isCompleted}
                       onClick={() => onToggleTask(t.id, !isDone)}
-                      aria-label={isDone ? `Mark ${t.title} incomplete` : `Mark ${t.title} complete`}
+                      aria-label={
+                        isCompleted
+                          ? `${t.title} is locked because its goal is completed`
+                          : isDone
+                            ? `Mark ${t.title} incomplete`
+                            : `Mark ${t.title} complete`
+                      }
+                      title={isCompleted ? "Goal completed — task locked" : undefined}
                       className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
-                        isDone
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border hover:border-primary"
+                        isCompleted
+                          ? "cursor-not-allowed border-border/60 bg-secondary/40 text-muted-foreground opacity-60"
+                          : isDone
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border hover:border-primary"
                       }`}
                     >
                       {isDone && (
@@ -1007,6 +1031,7 @@ function GoalCard({
               <div className="space-y-2">
                 {linkedHabits.map((s) => {
                   const displayTitle = parseHabitTitle(s.habit.title).displayTitle;
+                  const snap = snapFor(s.habit.id);
                   const pctWeek = s.habit.target_per_week > 0
                     ? Math.min(100, Math.round((s.weekDone / s.habit.target_per_week) * 100))
                     : 0;
@@ -1017,23 +1042,25 @@ function GoalCard({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-1">
                           <span className="text-xs font-semibold text-foreground truncate">{displayTitle}</span>
-                          {s.streak > 0 && (
+                          {!snap && s.streak > 0 && (
                             <span className="flex items-center gap-0.5 text-[10px] font-semibold text-orange-400">
                               <Flame className="h-3 w-3" />{s.streak}d
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-amber-400 transition-all"
-                              style={{ width: `${pctWeek}%` }}
-                            />
+                        {!snap && (
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-amber-400 transition-all"
+                                style={{ width: `${pctWeek}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] num text-muted-foreground shrink-0">
+                              {weekDone}/{weekTarget} this wk
+                            </span>
                           </div>
-                          <span className="text-[10px] num text-muted-foreground shrink-0">
-                            {weekDone}/{weekTarget} this wk
-                          </span>
-                        </div>
+                        )}
                         {(() => {
                           const lh = progress?.linkedHabits.find((x) => x.habitId === s.habit.id);
                           return lh ? (
@@ -1042,6 +1069,15 @@ function GoalCard({
                                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${lh.hitRate >= 100 ? "bg-primary" : "bg-amber-400"}`}
                               />
                               {lh.hitRate}% hit rate · {lh.weeksMet}/{lh.weeksTotal} wks on target
+                              {snap && (
+                                <span
+                                  className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-sky-400"
+                                  title={`Frozen when the goal completed (${new Date(snap.snapshottedAt).toLocaleDateString()})`}
+                                >
+                                  <Snowflake className="h-2.5 w-2.5" />
+                                  Frozen
+                                </span>
+                              )}
                             </p>
                           ) : null;
                         })()}

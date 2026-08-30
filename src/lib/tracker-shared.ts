@@ -76,6 +76,19 @@ export type GoalHabitStat = {
 };
 
 /**
+ * Frozen per-habit hit-rate captured when its goal completed (stored in
+ * goal_habit_snapshots). Displayed inside a completed goal instead of the
+ * live, still-moving habit stats.
+ */
+export type GoalHabitSnapshot = {
+  habitId: string;
+  weeksOnTarget: number;
+  totalWeeks: number;
+  hitRatePct: number;
+  snapshottedAt: string;
+};
+
+/**
  * Computed goal progress (server-side). Task score = completed/total day_tasks
  * linked to the goal. Habit score = average per-habit weekly hit-rate since the
  * goal was created. Overall = average of the two when both exist; falls back to
