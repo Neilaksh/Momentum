@@ -76,7 +76,11 @@ export async function deleteSubjectRow(supabase: DB, userId: string, id: string)
   if (error) throw new Error(`Failed to delete subject: ${error.message}`);
 }
 
-/** Completed tasks grouped by subject (tasks with subject_id NULL → "General"). */
+/**
+ * Completed tasks grouped by subject. Only tasks with an actual subject assigned
+ * (subject_id NOT NULL and resolving to a subject) are counted — untagged tasks
+ * are excluded entirely and no "General" bucket is produced.
+ */
 export async function getSubjectBreakdown(
   supabase: DB,
   userId: string,
@@ -97,26 +101,19 @@ export async function getSubjectBreakdown(
   }>;
 
   const map = new Map<string, SubjectBreakdownEntry>();
-  let generalCount = 0;
 
   for (const r of rows) {
-    if (r.subject_id && r.subjects) {
-      const entry = map.get(r.subject_id) ?? {
-        subjectId: r.subject_id,
-        name: r.subjects.name,
-        color: r.subjects.color,
-        count: 0,
-      };
-      entry.count += 1;
-      map.set(r.subject_id, entry);
-    } else {
-      generalCount += 1;
-    }
+    // Skip untagged tasks (no subject_id) and any rows that fail to join a subject.
+    if (!r.subject_id || !r.subjects) continue;
+    const entry = map.get(r.subject_id) ?? {
+      subjectId: r.subject_id,
+      name: r.subjects.name,
+      color: r.subjects.color,
+      count: 0,
+    };
+    entry.count += 1;
+    map.set(r.subject_id, entry);
   }
 
-  const entries = [...map.values()];
-  if (generalCount > 0) {
-    entries.push({ subjectId: null, name: "General", color: "slate", count: generalCount });
-  }
-  return entries.sort((a, b) => b.count - a.count);
+  return [...map.values()].sort((a, b) => b.count - a.count);
 }

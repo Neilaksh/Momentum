@@ -105,7 +105,7 @@ function HistoryPage() {
       subjectEntries.map((e) => ({
         name: e.name,
         count: e.count,
-        color: e.subjectId === null ? "var(--muted-foreground)" : subjectColorHex(e.color),
+        color: subjectColorHex(e.color),
       })),
     [subjectEntries],
   );
@@ -160,12 +160,12 @@ function HistoryPage() {
         </div>
       ) : null}
 
-      {/* Completed Tasks by Subject — last 30 days */}
+      {/* By Subject — completed tasks grouped by subject, last 30 days */}
       <section className="mt-6 rounded-2xl border border-border bg-card p-5">
         <div className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-primary" />
           <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">
-            Completed by Subject · Last 30 days
+            By Subject · Last 30 days
           </p>
         </div>
 
@@ -229,7 +229,7 @@ function HistoryPage() {
             <ol className="space-y-2 self-start">
               {subjectEntries.map((e, i) => (
                 <li
-                  key={e.subjectId ?? "general"}
+                  key={e.subjectId}
                   className="flex items-center gap-2.5 rounded-lg bg-secondary/40 px-3 py-2"
                 >
                   <span className="num w-4 shrink-0 text-[10px] font-bold text-muted-foreground">
@@ -237,12 +237,7 @@ function HistoryPage() {
                   </span>
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{
-                      background:
-                        e.subjectId === null
-                          ? "var(--muted-foreground)"
-                          : subjectColorHex(e.color),
-                    }}
+                    style={{ background: subjectColorHex(e.color) }}
                   />
                   <span className="min-w-0 flex-1 truncate text-xs font-medium">{e.name}</span>
                   <span className="num text-xs font-semibold text-primary">{e.count}</span>
