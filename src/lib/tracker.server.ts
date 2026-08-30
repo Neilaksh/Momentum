@@ -241,13 +241,31 @@ export function carryForwardIncompleteTasks(supabase: DB, userId: string): Promi
 export const rolloverIncompleteGoalTasks = carryForwardIncompleteTasks;
 
 
+/**
+ * ROUTINE MATERIALIZATION IS DISABLED (product decision): the Routines tab is now a
+ * pure reference/template view — routine_tasks templates are no longer converted into
+ * day_tasks rows, so nothing is auto-created from the weekly routine anymore.
+ *
+ * day_tasks rows that were materialized in the past are historical data and are
+ * intentionally left untouched: the legacy unlinked-routine cleanup inside this
+ * function (which used to delete some of them) no longer runs either. Flip the flag
+ * below to true to restore the old behavior. The carry-forward pass is independent
+ * and keeps rolling existing uncompleted tasks forward.
+ */
+const ROUTINE_MATERIALIZATION_ENABLED: boolean = false;
+
 /** Materialize goal-linked repeating routine tasks into day_tasks for the given week (idempotent).
  * General routine schedule blocks (without a goal_id) are kept in the Routines tab and not placed into day_tasks.
+ * (Currently gated OFF by ROUTINE_MATERIALIZATION_ENABLED — see above.)
  */
 async function materializeWeekInternal(supabase: DB, userId: string, weekStart: string) {
   // Internal (unqueued) call: this whole body already runs inside the per-user
   // rollover queue — calling the queued wrapper here would deadlock.
   await carryForwardIncompleteTasksInternal(supabase, userId);
+
+  // Materialization disabled — see ROUTINE_MATERIALIZATION_ENABLED above. Only the
+  // carry-forward pass runs; no day_tasks rows are created, deleted or modified.
+  if (!ROUTINE_MATERIALIZATION_ENABLED) return;
 
   // Clean up any legacy unlinked routine schedule tasks from day_tasks
   await supabase
@@ -448,7 +466,7 @@ export async function loadHistory(supabase: DB, userId: string, weeks: number) {
   return { weeks: list, totalDone, totalTasks: rows.length };
 }
 
-/** Load a single day's tasks (materializing that day's week first) plus the profile. */
+/** Load a single day's tasks (running the carry-forward pass first) plus the profile. */
 export async function loadDay(supabase: DB, userId: string, date: string) {
   const d = parseISODate(date);
   const offset = (d.getDay() + 6) % 7;

@@ -228,6 +228,9 @@ function UnifiedTasksPage() {
   const parsedActiveDate = parseISODate(activeDay.date);
   const activeWeekdayName = WEEKDAY_NAMES[(parsedActiveDate.getDay() + 6) % 7]!;
   const isActiveDayToday = activeDay.date === todayISO;
+  // Past days are read-only in the focused panel: toggling, deleting and adding
+  // are locked for any date strictly before today. Today and future stay editable.
+  const isActiveDayPast = activeDay.date < todayISO;
 
   const filteredActiveTasks = useMemo(() => {
     let list = activeTasks;
@@ -615,18 +618,26 @@ function UnifiedTasksPage() {
                 >
                   <div className="flex items-center gap-3">
                     <button
-                      disabled={goalLocked}
+                      disabled={goalLocked || isActiveDayPast}
                       onClick={() => toggle.mutate({ id: t.id, completed: !t.completed_at })}
                       aria-label={
                         goalLocked
                           ? `${t.title} is locked because its goal is completed`
-                          : t.completed_at
-                            ? `Mark ${t.title} incomplete`
-                            : `Mark ${t.title} complete`
+                          : isActiveDayPast
+                            ? `${t.title} is locked because it belongs to a past day`
+                            : t.completed_at
+                              ? `Mark ${t.title} incomplete`
+                              : `Mark ${t.title} complete`
                       }
-                      title={goalLocked ? "Goal completed — task locked" : undefined}
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+                      title={
                         goalLocked
+                          ? "Goal completed — task locked"
+                          : isActiveDayPast
+                            ? "Past day — tasks are read-only"
+                            : undefined
+                      }
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+                        goalLocked || isActiveDayPast
                           ? "cursor-not-allowed border-border/60 bg-secondary/40 text-muted-foreground opacity-60"
                           : t.completed_at
                             ? "border-primary bg-primary text-primary-foreground"
@@ -683,9 +694,17 @@ function UnifiedTasksPage() {
                     )}
 
                     <button
+                      disabled={isActiveDayPast}
                       onClick={() => removeTask.mutate({ id: t.id })}
-                      aria-label={`Delete ${t.title}`}
-                      className="opacity-0 transition-opacity group-hover:opacity-100 p-1 hover:text-destructive text-muted-foreground"
+                      aria-label={
+                        isActiveDayPast
+                          ? `Past day — ${t.title} cannot be deleted`
+                          : `Delete ${t.title}`
+                      }
+                      title={isActiveDayPast ? "Past day — tasks are read-only" : undefined}
+                      className={`opacity-0 transition-opacity group-hover:opacity-100 p-1 text-muted-foreground ${
+                        isActiveDayPast ? "cursor-not-allowed" : "hover:text-destructive"
+                      }`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -702,6 +721,7 @@ function UnifiedTasksPage() {
           className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
+            if (isActiveDayPast) return;
             const title = draft.trim();
             if (!title) return;
             // Double-submit guard: if this exact (day, title) add is already in
@@ -719,12 +739,14 @@ function UnifiedTasksPage() {
             onChange={(e) => setDraft(e.target.value)}
             placeholder={`Add a task for ${activeWeekdayName}...`}
             className="h-10 min-w-0 flex-1 text-sm"
+            disabled={isActiveDayPast}
           />
           <select
             value={draftSubjectId ?? ""}
             onChange={(e) => setDraftSubjectId(e.target.value || null)}
             aria-label="Subject (optional)"
             className="h-10 rounded-lg border border-border bg-secondary/50 px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-44"
+            disabled={isActiveDayPast}
           >
             <option value="">No subject</option>
             {subjects.map((s) => (
@@ -737,12 +759,17 @@ function UnifiedTasksPage() {
             type="submit"
             className="h-10 shrink-0 gap-1.5 px-4"
             aria-label="Add task"
-            disabled={!draft.trim()}
+            disabled={isActiveDayPast || !draft.trim()}
           >
             <Plus className="h-4 w-4" />
             <span>Add Task</span>
           </Button>
         </form>
+        {isActiveDayPast && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Past days are read-only — select today or a future day to add or change tasks.
+          </p>
+        )}
       </section>
 
       {/* Full 7-Day Week Board Section (View Only) */}

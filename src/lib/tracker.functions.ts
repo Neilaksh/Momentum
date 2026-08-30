@@ -6,7 +6,6 @@ import {
   loadHistory,
   loadDay,
   loadWeek,
-  materializeWeek,
   recomputeStats,
   rolloverIncompleteGoalTasks,
 } from "./tracker.server";
@@ -32,10 +31,15 @@ export const toggleDayTask = createServerFn({ method: "POST" })
     // the server-side backstop so no client can toggle them afterwards.
     const { data: taskRow } = await (context.supabase as any)
       .from("day_tasks")
-      .select("goal_id")
+      .select("goal_id, task_date")
       .eq("id", data.id)
       .eq("user_id", context.userId)
       .maybeSingle();
+    // Past-day tasks are locked as well: history is read-only. The UI disables
+    // the controls; this is the server-side backstop so no client can bypass it.
+    if (taskRow?.task_date && taskRow.task_date < toISODate(new Date())) {
+      throw new Error("Tasks from past days are locked and cannot be changed.");
+    }
     if (taskRow?.goal_id) {
       const { data: goalRow } = await (context.supabase as any)
         .from("goals")
@@ -114,6 +118,17 @@ export const deleteDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
+    // Past-day tasks are locked: history is read-only. The UI disables the delete
+    // control; this is the server-side backstop so no client can bypass it.
+    const { data: taskRow } = await (context.supabase as any)
+      .from("day_tasks")
+      .select("task_date")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (taskRow?.task_date && taskRow.task_date < toISODate(new Date())) {
+      throw new Error("Tasks from past days are locked and cannot be deleted.");
+    }
     await (context.supabase as any).from("day_tasks").delete().eq("id", data.id);
     const profile = await recomputeStats(context.supabase as any, context.userId);
     return { profile };
@@ -786,9 +801,9 @@ export const addGoalRoutineTask = createServerFn({ method: "POST" })
     }));
     await supabase.from("routine_tasks").insert(rows);
 
-    // Auto-materialize into current week's day_tasks immediately
-    const weekStart = toISODate(startOfWeek(new Date()));
-    await materializeWeek(supabase, context.userId, weekStart);
+    // No auto-materialization: the Routines tab is a template/reference view only —
+    // routine entries no longer create day_tasks rows (ROUTINE_MATERIALIZATION_ENABLED
+    // is false in tracker.server.ts). Existing day_tasks stay as historical data.
 
     return { ok: true };
   });

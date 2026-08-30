@@ -867,6 +867,8 @@ function GoalCard({
             {activeTasks.map((t) => {
               const isDone = !!t.completed_at;
               const isToday = t.task_date === today;
+              // Past-day tasks are read-only: history cannot be toggled from here.
+              const isPastDay = t.task_date < today;
 
               return (
                 <li
@@ -877,18 +879,26 @@ function GoalCard({
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <button
-                      disabled={isCompleted}
+                      disabled={isCompleted || isPastDay}
                       onClick={() => onToggleTask(t.id, !isDone)}
                       aria-label={
                         isCompleted
                           ? `${t.title} is locked because its goal is completed`
-                          : isDone
-                            ? `Mark ${t.title} incomplete`
-                            : `Mark ${t.title} complete`
+                          : isPastDay
+                            ? `${t.title} is locked because it belongs to a past day`
+                            : isDone
+                              ? `Mark ${t.title} incomplete`
+                              : `Mark ${t.title} complete`
                       }
-                      title={isCompleted ? "Goal completed — task locked" : undefined}
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
+                      title={
                         isCompleted
+                          ? "Goal completed — task locked"
+                          : isPastDay
+                            ? "Past day — tasks are read-only"
+                            : undefined
+                      }
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
+                        isCompleted || isPastDay
                           ? "cursor-not-allowed border-border/60 bg-secondary/40 text-muted-foreground opacity-60"
                           : isDone
                             ? "border-primary bg-primary text-primary-foreground"
