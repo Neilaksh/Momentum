@@ -10,7 +10,7 @@ import {
   recomputeStats,
   rolloverIncompleteGoalTasks,
 } from "./tracker.server";
-import { addDays, parseISODate, startOfWeek, toISODate } from "./tracker-shared";
+import { addDays, goalLinkKey, parseISODate, startOfWeek, toISODate } from "./tracker-shared";
 
 export const getWeek = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -27,9 +27,17 @@ export const toggleDayTask = createServerFn({ method: "POST" })
     z.object({ id: z.string(), completed: z.boolean() }).parse(input),
   )
   .handler(async ({ data, context }) => {
+    const patch: Record<string, unknown> = { completed_at: data.completed ? new Date().toISOString() : null };
+    if (data.completed) {
+      patch["progress_pct"] = 100;
+    } else {
+      // Un-marking a task manually re-engages it: clear stale / rollover state.
+      patch["is_stale"] = false;
+      patch["rollover_count"] = 0;
+    }
     await (context.supabase as any)
       .from("day_tasks")
-      .update({ completed_at: data.completed ? new Date().toISOString() : null })
+      .update(patch)
       .eq("id", data.id);
     const profile = await recomputeStats(context.supabase as any, context.userId);
     return { profile };
@@ -82,7 +90,7 @@ export const updateDayTaskDate = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await (context.supabase as any)
       .from("day_tasks")
-      .update({ task_date: data.date })
+      .update({ task_date: data.date, is_stale: false, rollover_count: 0 })
       .eq("id", data.id)
       .eq("user_id", context.userId);
     return { ok: true };
@@ -570,6 +578,24 @@ export const scheduleGoalTasks = createServerFn({ method: "POST" })
         sort_order: 1000,
       }));
     if (rows.length === 0) return { ok: true, created: 0 };
-    await (context.supabase as any).from("day_tasks").insert(rows);
-    return { ok: true, created: rows.length };
+    // Skip any (date, goal, title) that already has a goal-linked row — the
+    // rollover or materializeWeek may have created it first, and re-scheduling
+    // would otherwise duplicate the task on those days.
+    const dates = rows.map((r: any) => r.task_date);
+    const { data: existing } = await (context.supabase as any)
+      .from("day_tasks")
+      .select("task_date, goal_id, title")
+      .eq("user_id", context.userId)
+      .in("task_date", dates);
+    const haveGoal = new Set(
+      (existing ?? [])
+        .filter((r: any) => r.goal_id)
+        .map((r: any) => goalLinkKey(r.task_date, r)),
+    );
+    const toInsert = rows.filter(
+      (r: any) => !haveGoal.has(goalLinkKey(r.task_date, { goal_id: r.goal_id, title: r.title as string })),
+    );
+    if (toInsert.length === 0) return { ok: true, created: 0 };
+    await (context.supabase as any).from("day_tasks").insert(toInsert);
+    return { ok: true, created: toInsert.length };
   });

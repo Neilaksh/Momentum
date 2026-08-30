@@ -17,13 +17,31 @@ export type DayTask = {
   id: string;
   task_date: string;
   title: string;
+  description: string | null;
   sort_order: number;
   source: string;
   routine_task_id: string | null;
   goal_id: string | null;
   subject_id: string | null;
   completed_at: string | null;
+  progress_pct: number;
+  rollover_count: number;
+  is_stale: boolean;
 };
+
+/**
+ * Dedupe key for a goal-linked day_tasks row. The rollover, weekly
+ * materialization and goal-schedule paths all insert goal-linked rows, and each
+ * path may use a different routine_task_id (or none). They must agree on what
+ * counts as "the same task on the same day", so they all key on
+ * (task_date, goal_id, normalized title) here.
+ */
+export function goalLinkKey(
+  date: string,
+  t: { goal_id?: string | null; title?: string | null },
+): string {
+  return `goal|${date}|${t.goal_id ?? ""}|${(t.title ?? "").trim().toLowerCase()}`;
+}
 
 export type RoutineTask = {
   id: string;

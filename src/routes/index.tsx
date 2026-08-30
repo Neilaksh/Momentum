@@ -115,7 +115,7 @@ function UnifiedTasksPage() {
             ...d,
             tasks: d.tasks.map((t) =>
               t.id === v.id
-                ? { ...t, completed_at: v.completed ? new Date().toISOString() : null }
+                ? { ...t, completed_at: v.completed ? new Date().toISOString() : null, progress_pct: v.completed ? 100 : t.progress_pct }
                 : t,
             ),
           })),
@@ -586,74 +586,79 @@ function UnifiedTasksPage() {
               {filteredActiveTasks.map((t) => (
                 <li
                   key={t.id}
-                  className={`group flex items-center gap-3 rounded-xl border p-3 transition-all ${
+                  className={`group flex flex-col gap-1.5 rounded-xl border p-3 transition-all ${
                     t.completed_at
                       ? "border-border/40 bg-secondary/20 opacity-80"
                       : "border-border/80 bg-secondary/40 hover:border-primary/50"
                   }`}
                 >
-                  <button
-                    onClick={() => toggle.mutate({ id: t.id, completed: !t.completed_at })}
-                    aria-label={t.completed_at ? `Mark ${t.title} incomplete` : `Mark ${t.title} complete`}
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
-                      t.completed_at
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border hover:border-primary"
-                    }`}
-                  >
-                    {t.completed_at && (
-                      <svg
-                        viewBox="0 0 12 12"
-                        className="h-3.5 w-3.5 stroke-primary-foreground"
-                        fill="none"
-                        strokeWidth={2.5}
-                      >
-                        <path d="M2.5 6.3l2.4 2.4 4.6-5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => toggle.mutate({ id: t.id, completed: !t.completed_at })}
+                      aria-label={t.completed_at ? `Mark ${t.title} incomplete` : `Mark ${t.title} complete`}
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+                        t.completed_at
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border hover:border-primary"
+                      }`}
+                    >
+                      {t.completed_at && (
+                        <svg
+                          viewBox="0 0 12 12"
+                          className="h-3.5 w-3.5 stroke-primary-foreground"
+                          fill="none"
+                          strokeWidth={2.5}
+                        >
+                          <path d="M2.5 6.3l2.4 2.4 4.6-5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </button>
+
+                    <span
+                      className={`flex-1 text-sm font-medium transition-all ${
+                        t.completed_at ? "text-muted-foreground line-through" : "text-foreground"
+                      }`}
+                    >
+                      {parseRoutineTitle(t.title).displayTitle}
+                    </span>
+
+                    {!t.completed_at && activeDay.date < todayISO && (
+                      t.is_stale ? (
+                        <span className="rounded-full bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-500">
+                          Stale
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
+                          Due
+                        </span>
+                      )
                     )}
-                  </button>
 
-                  <span
-                    className={`flex-1 text-sm font-medium transition-all ${
-                      t.completed_at ? "text-muted-foreground line-through" : "text-foreground"
-                    }`}
-                  >
-                    {parseRoutineTitle(t.title).displayTitle}
-                  </span>
+                    {(t as any).subject_id && subjectsMap.get((t as any).subject_id) && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <span
+                          className="h-2 w-2 rounded-full shrink-0"
+                          style={{ background: subjectColorHex(subjectsMap.get((t as any).subject_id)!.color) }}
+                        />
+                        <span className="max-w-[100px] truncate">{subjectsMap.get((t as any).subject_id)!.name}</span>
+                      </span>
+                    )}
 
-                  {!t.completed_at && activeDay.date < todayISO && (
-                    <span className="rounded-full bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
-                      Due
-                    </span>
-                  )}
+                    {(t as any).goal_id && goalsMap.get((t as any).goal_id) && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                        <Target className="h-2.5 w-2.5" />
+                        <span className="max-w-[120px] truncate">{goalsMap.get((t as any).goal_id)?.title}</span>
+                      </span>
+                    )}
 
-
-                  {(t as any).subject_id && subjectsMap.get((t as any).subject_id) && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      <span
-                        className="h-2 w-2 rounded-full shrink-0"
-                        style={{ background: subjectColorHex(subjectsMap.get((t as any).subject_id)!.color) }}
-                      />
-                      <span className="max-w-[100px] truncate">{subjectsMap.get((t as any).subject_id)!.name}</span>
-                    </span>
-                  )}
-
-                  {(t as any).goal_id && goalsMap.get((t as any).goal_id) && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                      <Target className="h-2.5 w-2.5" />
-                      <span className="max-w-[120px] truncate">{goalsMap.get((t as any).goal_id)?.title}</span>
-                    </span>
-                  )}
-
-
-
-                  <button
-                    onClick={() => removeTask.mutate({ id: t.id })}
-                    aria-label={`Delete ${t.title}`}
-                    className="opacity-0 transition-opacity group-hover:opacity-100 p-1 hover:text-destructive text-muted-foreground"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                    <button
+                      onClick={() => removeTask.mutate({ id: t.id })}
+                      aria-label={`Delete ${t.title}`}
+                      className="opacity-0 transition-opacity group-hover:opacity-100 p-1 hover:text-destructive text-muted-foreground"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -755,7 +760,7 @@ function DayCard({
   isToday: boolean;
   isPast?: boolean;
   isSelected: boolean;
-  tasks: { id: string; title: string; completed_at: string | null; source: string }[];
+  tasks: { id: string; title: string; completed_at: string | null; source: string; is_stale?: boolean }[];
   onSelectDay: () => void;
 }) {
 
@@ -817,28 +822,35 @@ function DayCard({
           {tasks.map((t) => (
             <li
               key={t.id}
-              className="flex items-start gap-2 rounded-lg px-2 py-1 text-xs transition-colors bg-secondary/20"
+              className="flex flex-col gap-0.5 rounded-lg px-2 py-1 text-xs transition-colors bg-secondary/20"
             >
-              <div className="mt-0.5 shrink-0">
-                {t.completed_at ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                ) : (
-                  <Circle className="h-3.5 w-3.5 text-muted-foreground/60" />
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5 shrink-0">
+                  {t.completed_at ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 text-muted-foreground/60" />
+                  )}
+                </div>
+                <span
+                  className={`flex-1 leading-snug truncate ${
+                    t.completed_at ? "text-muted-foreground line-through" : "text-foreground"
+                  }`}
+                >
+                  {parseRoutineTitle(t.title).displayTitle}
+                </span>
+                {isPast && !t.completed_at && (
+                  t.is_stale ? (
+                    <span className="shrink-0 rounded-full bg-amber-500/15 border border-amber-500/40 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-500">
+                      Stale
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[9px] font-bold uppercase text-destructive">
+                      Due
+                    </span>
+                  )
                 )}
               </div>
-              <span
-                className={`flex-1 leading-snug truncate ${
-                  t.completed_at ? "text-muted-foreground line-through" : "text-foreground"
-                }`}
-              >
-                {parseRoutineTitle(t.title).displayTitle}
-              </span>
-              {isPast && !t.completed_at && (
-                <span className="shrink-0 rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[9px] font-bold uppercase text-destructive">
-                  Due
-                </span>
-              )}
-
             </li>
           ))}
         </ul>

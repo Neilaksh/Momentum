@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   XP_PER_TASK,
   XP_PERFECT_DAY,
+  goalLinkKey,
   levelFromXp,
   parseISODate,
   parseRoutineTitle,
@@ -31,24 +32,35 @@ function taskKey(t: { title?: string | null; goal_id?: string | null; routine_ta
   return `${(t.title ?? "").trim().toLowerCase()}|${t.goal_id ?? ""}|${t.routine_task_id ?? ""}`;
 }
 
+/** How many days in a row an uncompleted task may roll over before going stale. */
+const STALE_LIMIT = 3;
+
 /**
  * Incomplete tasks from past days stay where they are (they render as "Due"),
- * and a copy carrying the same title / goal link / routine link is created for today.
- * Works for manual dashboard tasks as well as goal-scheduled tasks.
+ * and a copy carrying the same title / description / subject / goal link / routine
+ * link / progress is created for today. Works for manual dashboard tasks as well
+ * as goal-scheduled tasks.
+ *
+ * Rollover counting: every copy inherits the parent's rollover_count, so the whole
+ * chain is the same task identity. Once a task has rolled over rollover limit times
+ * in a row without being completed, it is marked "Stale" (is_stale = true) and no
+ * further copies are created. The most recent copy is parked into today's list so
+ * the user can still see and resolve it; the original stays in its original day as
+ * a historical record (only the newest copy, never the original, is ever moved).
  */
 export async function carryForwardIncompleteTasks(supabase: DB, userId: string): Promise<number> {
   const todayISO = toISODate(new Date());
 
   const { data } = await supabase
     .from("day_tasks")
-    .select("id, task_date, title, source, sort_order, routine_task_id, goal_id, subject_id, completed_at")
+    .select("id, task_date, title, description, source, sort_order, routine_task_id, goal_id, subject_id, completed_at, progress_pct, rollover_count, is_stale")
     .eq("user_id", userId)
     .lte("task_date", todayISO);
 
   const rows = (data ?? []) as any[];
   if (rows.length === 0) return 0;
 
-  const overdue = rows.filter((r) => !r.completed_at && r.task_date < todayISO);
+  const overdue = rows.filter((r) => !r.completed_at && r.task_date < todayISO && !r.is_stale);
   if (overdue.length === 0) return 0;
 
   // Goal tasks only carry forward while their goal is still active.
@@ -75,25 +87,103 @@ export async function carryForwardIncompleteTasks(supabase: DB, userId: string):
 
   const todayKeys = new Set(rows.filter((r) => r.task_date === todayISO).map(taskKey));
 
+  // Same-goal dedupe for today: goal-linked tasks are also created by
+  // materializeWeek / scheduleGoalTasks, which may use a different
+  // routine_task_id (or none). Key on goal + title so the rollover never adds a
+  // second row for a goal task that already exists today.
+  const todayGoalKeys = new Set(
+    rows
+      .filter((r) => r.task_date === todayISO && r.goal_id)
+      .map((r) => goalLinkKey(todayISO, r)),
+  );
+  const dateById = new Map<string, string>(rows.map((r) => [r.id, r.task_date]));
+
+  // Track the oldest ("original") and newest (active copy) overdue row per task key.
+  const oldestIdByKey = new Map<string, string>();
+  const newestIdByKey = new Map<string, string>();
+  for (const t of overdue) {
+    const k = taskKey(t);
+    const oldest = oldestIdByKey.get(k);
+    if (!oldest || (dateById.get(t.id) ?? "") < (dateById.get(oldest) ?? "")) oldestIdByKey.set(k, t.id);
+    const newest = newestIdByKey.get(k);
+    if (!newest || (dateById.get(t.id) ?? "") > (dateById.get(newest) ?? "")) newestIdByKey.set(k, t.id);
+  }
+
   const toInsert: Record<string, unknown>[] = [];
+  const toUpdate: { id: string; rollover_count: number; is_stale: boolean; parkToday?: boolean }[] = [];
+
   for (const t of overdue) {
     if (t.goal_id && !activeGoalIds.has(t.goal_id)) continue;
     const k = taskKey(t);
+    // A copy of this task already exists for today (created by an earlier pass or
+    // pre-existing). Never create a second one — otherwise every week refetch
+    // would spawn a fresh zero-progress duplicate while the chain is under the
+    // stale limit. The existing copy carries the chain's rollover_count already.
     if (todayKeys.has(k)) continue;
+    // Goal-linked tasks: also skip if a row for the same goal + title already
+    // exists today (it may have a different routine_task_id, e.g. created by
+    // materializeWeek or scheduleGoalTasks).
+    if (t.goal_id && todayGoalKeys.has(goalLinkKey(todayISO, t))) continue;
     // Already caught up on a later day — no need to keep dragging it forward.
     const done = lastDone.get(k);
     if (done && done > t.task_date) continue;
+
+    const countSoFar = t.rollover_count ?? 0;
+    const becomesStale = countSoFar + 1 >= STALE_LIMIT;
+
+    if (countSoFar >= STALE_LIMIT || becomesStale) {
+      // Rollover limit reached (or already reached in a previous pass): mark the
+      // task stale and stop creating further copies. The newest copy gets parked
+      // into today's list so it stays visible until the user resolves it.
+      const isNewest = newestIdByKey.get(k) === t.id;
+      const isOriginal = oldestIdByKey.get(k) === t.id;
+      toUpdate.push({
+        id: t.id,
+        rollover_count: Math.max(countSoFar, STALE_LIMIT),
+        is_stale: true,
+        parkToday: isNewest && !isOriginal && !todayKeys.has(k),
+      });
+      continue;
+    }
+
+    // Rolling over: mark progress on this row and create the next-day copy, which
+    // INHERITS the rollover count so the identity self-limits after 3 days.
+    const newCount = countSoFar + 1;
     todayKeys.add(k);
+    todayGoalKeys.add(goalLinkKey(todayISO, t));
+    toUpdate.push({ id: t.id, rollover_count: newCount, is_stale: false });
     toInsert.push({
       user_id: userId,
       task_date: todayISO,
       title: t.title,
+      description: t.description ?? null,
       sort_order: t.sort_order ?? 0,
       source: t.source ?? "oneoff",
       routine_task_id: t.routine_task_id ?? null,
       goal_id: t.goal_id ?? null,
       subject_id: t.subject_id ?? null,
+      progress_pct: t.progress_pct ?? 0,
+      rollover_count: newCount,
     });
+  }
+
+  // Apply rollover count / stale updates (and park the newest stale copy in today).
+  for (const u of toUpdate) {
+    if (u.parkToday) {
+      await supabase
+        .from("day_tasks")
+        .update({
+          task_date: todayISO,
+          rollover_count: u.rollover_count,
+          is_stale: u.is_stale,
+        })
+        .eq("id", u.id);
+    } else {
+      await supabase
+        .from("day_tasks")
+        .update({ rollover_count: u.rollover_count, is_stale: u.is_stale })
+        .eq("id", u.id);
+    }
   }
 
   if (toInsert.length > 0) {
@@ -132,7 +222,7 @@ export async function materializeWeek(supabase: DB, userId: string, weekStart: s
 
   const { data: existing } = await supabase
     .from("day_tasks")
-    .select("task_date, routine_task_id")
+    .select("task_date, routine_task_id, goal_id, title")
     .eq("user_id", userId)
     .gte("task_date", dates[0]!)
     .lte("task_date", dates[6]!);
@@ -143,6 +233,15 @@ export async function materializeWeek(supabase: DB, userId: string, weekStart: s
       .map((r: any) => `${r.task_date}|${r.routine_task_id}`),
   );
 
+  // Same-goal dedupe: a goal task may already exist on a date as a rollover copy
+  // or via another routine entry with a different/null routine_task_id. Key on
+  // goal + title so we never materialize a second row for the same goal task.
+  const haveGoal = new Set(
+    (existing ?? [])
+      .filter((r: any) => r.goal_id)
+      .map((r: any) => goalLinkKey(r.task_date, r)),
+  );
+
   const rows: Record<string, unknown>[] = [];
   for (const rt of (goalRoutines ?? []) as any[]) {
     const date = dates[rt.weekday];
@@ -151,6 +250,9 @@ export async function materializeWeek(supabase: DB, userId: string, weekStart: s
     const parsed = parseRoutineTitle(rt.title);
     // Habits linked to goals are tracked in the Habits/Goals tabs and must not create task items in the Tasks section
     if (parsed.habitId && parsed.habitId !== "none") continue;
+    const goalKey = goalLinkKey(date, { goal_id: rt.goal_id, title: parsed.displayTitle || rt.title });
+    if (rt.goal_id && haveGoal.has(goalKey)) continue;
+    haveGoal.add(goalKey);
     rows.push({
       user_id: userId,
       task_date: date,
