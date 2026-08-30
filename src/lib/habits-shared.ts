@@ -3,6 +3,7 @@ export type Habit = {
   title: string;
   color: string;
   target_per_week: number;
+  goal_id: string | null;
   is_archived: boolean;
   sort_order: number;
   created_at: string;

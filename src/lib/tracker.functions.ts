@@ -10,7 +10,8 @@ import {
   recomputeStats,
   rolloverIncompleteGoalTasks,
 } from "./tracker.server";
-import { addDays, goalLinkKey, parseISODate, startOfWeek, toISODate } from "./tracker-shared";
+import { addDays, goalLinkKey, parseISODate, startOfWeek, toISODate, type GoalHabitStat, type GoalProgress } from "./tracker-shared";
+import { parseHabitTitle } from "./habits-shared";
 
 export const getWeek = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -288,6 +289,106 @@ export const clearAllRoutineTasks = createServerFn({ method: "POST" })
   });
 
 
+/**
+ * Weekly hit-rate for a habit over the whole Monday-weeks spanned since a goal
+ * was created. `weeksTotal` counts every Monday-start week from the week that
+ * contains `created_at` through the current week (inclusive). A week "counts"
+ * when the habit's log count for that week is >= its target_per_week.
+ */
+function computeHabitProgress(
+  goalCreatedAt: string,
+  habit: { id: string; title: string; target_per_week: number },
+  done: Set<string> | undefined,
+): GoalHabitStat {
+  const created = parseISODate(goalCreatedAt.slice(0, 10));
+  const weekStarts: string[] = [];
+  let cur = startOfWeek(created);
+  const end = startOfWeek(new Date());
+  while (cur <= end) {
+    weekStarts.push(toISODate(cur));
+    cur = addDays(cur, 7);
+  }
+  const weeksTotal = weekStarts.length;
+  let weeksMet = 0;
+  for (const ws of weekStarts) {
+    const weekEnd = toISODate(addDays(parseISODate(ws), 6));
+    let count = 0;
+    if (done) {
+      for (const d of done) {
+        if (d >= ws && d <= weekEnd) count += 1;
+        if (count >= habit.target_per_week) break;
+      }
+    }
+    if (count >= habit.target_per_week) weeksMet += 1;
+  }
+  const hitRate = weeksTotal > 0 ? Math.round((weeksMet / weeksTotal) * 100) : 0;
+  return {
+    habitId: habit.id,
+    title: parseHabitTitle(habit.title).displayTitle || habit.title,
+    targetPerWeek: habit.target_per_week,
+    weeksTotal,
+    weeksMet,
+    hitRate,
+  };
+}
+
+/**
+ * Overall goal progress = simple average of the task score (completed vs total
+ * linked day_tasks) and the habit score (average weekly hit-rate of linked
+ * habits since the goal was created). Falls back to whichever single score
+ * exists; both scores are null when the goal has no tasks and no habits.
+ */
+function computeGoalProgress(
+  goal: { id: string; created_at: string },
+  stat: { total: number; done: number },
+  habits: { id: string; title: string; goal_id: string | null; target_per_week: number }[],
+  logsByHabit: Map<string, Set<string>>,
+): GoalProgress {
+  const taskTotal = stat.total;
+  const taskDone = stat.done;
+  const hasTasks = taskTotal > 0;
+  const taskScore = hasTasks ? Math.round((taskDone / taskTotal) * 100) : null;
+
+  // A habit is linked to the goal via the habits.goal_id column, or via the
+  // legacy "[goal:<id>]" title prefix used before that column existed.
+  const linked = habits.filter((h) => {
+    const parsedGoalId = parseHabitTitle(h.title).goalId;
+    return h.goal_id === goal.id || parsedGoalId === goal.id;
+  });
+
+  const linkedStats: GoalHabitStat[] = linked.map((h) =>
+    computeHabitProgress(goal.created_at, h, logsByHabit.get(h.id)),
+  );
+
+  const hasHabits = linkedStats.length > 0;
+  const habitScore = hasHabits
+    ? Math.round(linkedStats.reduce((sum: number, s) => sum + s.hitRate, 0) / linkedStats.length)
+    : null;
+  const habitsOnTrack = linkedStats.filter((s) => s.hitRate >= 100).length;
+
+  const overall =
+    hasTasks && hasHabits
+      ? Math.round(((taskScore ?? 0) + (habitScore ?? 0)) / 2)
+      : hasTasks
+        ? taskScore
+        : hasHabits
+          ? habitScore
+          : null;
+
+  return {
+    taskScore,
+    taskTotal,
+    taskDone,
+    habitScore,
+    habitsOnTrack,
+    habitsTotal: linkedStats.length,
+    overall,
+    hasTasks,
+    hasHabits,
+    linkedHabits: linkedStats,
+  };
+}
+
 export const getGoals = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -301,6 +402,8 @@ export const getGoals = createServerFn({ method: "POST" })
       .select("*")
       .eq("user_id", context.userId)
       .order("created_at", { ascending: true });
+
+    const goalRows = (goals ?? []) as any[];
 
     // Per-goal day_task completion stats
     const { data: linked } = await supabase
@@ -337,9 +440,64 @@ export const getGoals = createServerFn({ method: "POST" })
       routinesByGoal[rt.goal_id]!.push(rt);
     }
 
+    // Habits linked to goals (via the habits.goal_id column or the legacy
+    // "[goal:<id>]" title prefix) and their logs — used to compute the habit
+    // half of each goal's progress.
+    const { data: habitRows } = await supabase
+      .from("habits")
+      .select("id, title, goal_id, target_per_week")
+      .eq("user_id", context.userId)
+      .eq("is_archived", false);
+
+    const habits = (habitRows ?? []) as {
+      id: string;
+      title: string;
+      goal_id: string | null;
+      target_per_week: number;
+    }[];
+
+    const logsByHabit = new Map<string, Set<string>>();
+    if (habits.length > 0) {
+      const { data: logRows } = await supabase
+        .from("habit_logs")
+        .select("habit_id, log_date")
+        .in("habit_id", habits.map((h) => h.id));
+      for (const l of (logRows ?? []) as { habit_id: string; log_date: string }[]) {
+        const set = logsByHabit.get(l.habit_id) ?? new Set<string>();
+        set.add(l.log_date);
+        logsByHabit.set(l.habit_id, set);
+      }
+    }
+
+    const progressByGoal: Record<string, GoalProgress> = {};
+    for (const g of goalRows) {
+      progressByGoal[g.id] = computeGoalProgress(
+        g,
+        stats[g.id] ?? { total: 0, done: 0 },
+        habits,
+        logsByHabit,
+      );
+    }
+
+    // Auto-complete: a goal whose computed overall progress reached 100% (and
+    // that actually has linked tasks/habits) is marked completed automatically.
+    const toComplete = goalRows.filter(
+      (g) =>
+        g.status !== "completed" &&
+        progressByGoal[g.id] &&
+        progressByGoal[g.id]!.overall !== null &&
+        progressByGoal[g.id]!.overall! >= 100,
+    );
+    if (toComplete.length > 0) {
+      await supabase
+        .from("goals")
+        .update({ status: "completed" })
+        .in("id", toComplete.map((g) => g.id));
+      for (const g of toComplete) g.status = "completed";
+    }
+
     // NOTE: overdue detection is intentionally done in the UI from target_date.
-    // We do NOT auto-mutate goal status on read — only explicit user actions should write.
-    return { goals: goals ?? [], stats, routinesByGoal, tasksByGoal };
+    return { goals: goalRows, stats, routinesByGoal, tasksByGoal, progressByGoal };
   });
 
 export const saveGoal = createServerFn({ method: "POST" })

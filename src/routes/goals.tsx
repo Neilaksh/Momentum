@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
+import { ProgressRing } from "@/components/ProgressRing";
 import { SubjectSelect, SubjectTag, useSubjects } from "@/components/SubjectSelect";
 import type { Subject as SubjectType } from "@/lib/subjects-shared";
 import { Input } from "@/components/ui/input";
@@ -52,6 +53,7 @@ import {
   WEEKDAY_NAMES,
   type DayTask,
   type Goal,
+  type GoalProgress,
   type WeekData,
 } from "@/lib/tracker-shared";
 
@@ -83,6 +85,7 @@ type GoalsResponse = {
   stats: Record<string, { total: number; done: number }>;
   routinesByGoal: Record<string, { id: string; title: string; weekday: number }[]>;
   tasksByGoal?: Record<string, DayTask[]>;
+  progressByGoal: Record<string, GoalProgress>;
 };
 
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -237,6 +240,7 @@ function GoalsPage() {
   const stats = data?.stats ?? {};
   const routinesByGoal = data?.routinesByGoal ?? {};
   const tasksByGoal = data?.tasksByGoal ?? {};
+  const progressByGoal = data?.progressByGoal ?? {};
   const allHabitStats = habitsData?.stats ?? [];
 
   // Compute effective status client-side — no DB mutation on read
@@ -361,6 +365,7 @@ function GoalsPage() {
                     goal={g}
                     effectiveStatus="overdue"
                     stat={stats[g.id] ?? { total: 0, done: 0 }}
+                    progress={progressByGoal[g.id]}
                     routines={routinesByGoal[g.id] ?? []}
                     tasks={tasksByGoal[g.id] ?? []}
                     subjects={subjects}
@@ -401,6 +406,7 @@ function GoalsPage() {
                     goal={g}
                     effectiveStatus="active"
                     stat={stats[g.id] ?? { total: 0, done: 0 }}
+                    progress={progressByGoal[g.id]}
                     routines={routinesByGoal[g.id] ?? []}
                     tasks={tasksByGoal[g.id] ?? []}
                     subjects={subjects}
@@ -439,6 +445,7 @@ function GoalsPage() {
                     goal={g}
                     effectiveStatus="completed"
                     stat={stats[g.id] ?? { total: 0, done: 0 }}
+                    progress={progressByGoal[g.id]}
                     routines={[]}
                     tasks={tasksByGoal[g.id] ?? []}
                     subjects={subjects}
@@ -469,6 +476,7 @@ function GoalCard({
   goal,
   effectiveStatus,
   stat,
+  progress,
   routines,
   tasks,
   subjects,
@@ -488,6 +496,7 @@ function GoalCard({
   goal: Goal;
   effectiveStatus: "active" | "completed" | "overdue";
   stat: { total: number; done: number };
+  progress: GoalProgress | undefined;
   routines: { id: string; title: string; weekday: number }[];
   tasks: DayTask[];
   subjects: SubjectType[];
@@ -522,12 +531,14 @@ function GoalCard({
   const [repeatDays, setRepeatDays] = useState(1);
   const [scheduleWeekdays, setScheduleWeekdays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [extendDate, setExtendDate] = useState(goal.target_date ?? "");
+  const [showProgressDetails, setShowProgressDetails] = useState(false);
 
-  const pct = stat.total ? Math.round((stat.done / stat.total) * 100) : 0;
-  const allTasksDone = stat.total > 0 && stat.done === stat.total;
   const isOverdue = effectiveStatus === "overdue";
   const isCompleted = effectiveStatus === "completed";
-  const barPct = isCompleted || allTasksDone ? 100 : pct;
+  const overall = progress?.overall ?? null;
+  const taskScore = progress?.taskScore ?? null;
+  const habitScore = progress?.habitScore ?? null;
+  const barPct = isCompleted ? 100 : overall ?? 0;
 
   const today = new Date().toISOString().slice(0, 10);
   const daysUntilDue = goal.target_date
@@ -686,27 +697,171 @@ function GoalCard({
         </div>
       </div>
 
-      {/* Progress Bar */}
-      <div className="mt-4">
-        <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              isOverdue ? "bg-destructive/70" : "bg-primary"
-            }`}
-            style={{ width: `${barPct}%` }}
+      {/* Progress overview */}
+      <div className="mt-4 rounded-xl bg-secondary/25 p-3.5">
+        <div className="flex items-center gap-4">
+          <ProgressRing
+            value={barPct}
+            size={68}
+            stroke={7}
+            label={overall === null ? "—" : `${overall}%`}
           />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Overall Progress
+              </span>
+              <span className="num text-sm font-bold">
+                {overall === null ? "No tasks or habits yet" : `${overall}%`}
+              </span>
+            </div>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              {progress
+                ? [
+                    progress.hasTasks
+                      ? `${progress.taskDone}/${progress.taskTotal} tasks`
+                      : "no tasks",
+                    progress.hasHabits
+                      ? `${progress.habitsOnTrack}/${progress.habitsTotal} habits on track`
+                      : "no habits",
+                  ].join(" · ")
+                : `${stat.done}/${stat.total} tasks · 0 habits`}
+            </p>
+
+            {(taskScore !== null || habitScore !== null) && (
+              <div className="mt-2.5 space-y-1.5">
+                {taskScore !== null && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-12 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Tasks
+                    </span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{ width: `${taskScore}%` }}
+                      />
+                    </div>
+                    <span className="num w-9 shrink-0 text-right text-[10px] text-muted-foreground">
+                      {taskScore}%
+                    </span>
+                  </div>
+                )}
+                {habitScore !== null && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-12 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Habits
+                    </span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className="h-full rounded-full bg-amber-400 transition-all"
+                        style={{ width: `${habitScore}%` }}
+                      />
+                    </div>
+                    <span className="num w-9 shrink-0 text-right text-[10px] text-muted-foreground">
+                      {habitScore}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowProgressDetails((v) => !v)}
+              className="mt-2.5 flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+            >
+              {showProgressDetails ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
+              {showProgressDetails ? "Hide progress details" : "Show progress details"}
+            </button>
+          </div>
         </div>
-        <p className="num mt-1.5 text-xs text-muted-foreground">
-          {stat.done} / {stat.total} scheduled tasks completed
-          {allTasksDone && !isCompleted && (
-            <span className="ml-1 font-semibold text-primary">— all tasks done! 🎉</span>
-          )}
-          {stat.total === 0 && routines.length > 0 && (
-            <span className="ml-1 text-muted-foreground/70">
-              (tasks appear once a linked week is loaded on the Tasks tab)
-            </span>
-          )}
-        </p>
+
+        {showProgressDetails && (
+          <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Calendar className="h-3.5 w-3.5" />
+              {goal.target_date
+                ? daysUntilDue === 0
+                  ? "Due today!"
+                  : daysUntilDue === 1
+                    ? "Due tomorrow · 1 day left"
+                    : daysUntilDue !== null && daysUntilDue > 0
+                      ? `Due ${formatDayDate(goal.target_date)} · ${daysUntilDue} days left`
+                      : `Overdue by ${Math.abs(daysUntilDue ?? 0)} ${Math.abs(daysUntilDue ?? 0) === 1 ? "day" : "days"}`
+                : "No deadline"}
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-lg bg-secondary/40 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Tasks</p>
+                <p className="num mt-0.5 text-sm font-bold">
+                  {taskScore !== null ? `${taskScore}%` : "—"}
+                </p>
+                <p className="num text-[10px] text-muted-foreground">
+                  {progress ? `${progress.taskDone}/${progress.taskTotal} done` : "no tasks"}
+                </p>
+              </div>
+              <div className="rounded-lg bg-secondary/40 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Habits</p>
+                <p className="num mt-0.5 text-sm font-bold">
+                  {habitScore !== null ? `${habitScore}%` : "—"}
+                </p>
+                <p className="num text-[10px] text-muted-foreground">
+                  {progress
+                    ? `${progress.habitsOnTrack}/${progress.habitsTotal} on track`
+                    : "no habits"}
+                </p>
+              </div>
+              <div className="rounded-lg bg-secondary/40 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Overall</p>
+                <p className="num mt-0.5 text-sm font-bold">
+                  {overall === null ? "—" : `${overall}%`}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {overall === null
+                    ? "No tasks or habits yet"
+                    : overall >= 100
+                      ? "Goal complete"
+                      : "Goal in progress"}
+                </p>
+              </div>
+            </div>
+
+            {progress && progress.linkedHabits.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Habit weekly hit-rate (since goal)
+                </p>
+                <ul className="space-y-1">
+                  {progress.linkedHabits.map((lh) => (
+                    <li key={lh.habitId} className="flex items-center gap-2 text-xs">
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${lh.hitRate >= 100 ? "bg-primary" : "bg-amber-400"}`}
+                      />
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                        {lh.title}
+                      </span>
+                      <div className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-secondary">
+                        <div
+                          className={`h-full rounded-full ${lh.hitRate >= 100 ? "bg-primary" : "bg-amber-400"}`}
+                          style={{ width: `${lh.hitRate}%` }}
+                        />
+                      </div>
+                      <span className="num shrink-0 text-[11px] text-muted-foreground">
+                        {lh.weeksMet}/{lh.weeksTotal} wks · {lh.hitRate}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
 
       {/* Active Goal Tasks (Today / Pending / Shifted) */}
@@ -792,11 +947,11 @@ function GoalCard({
       {(() => {
         const linkedHabits = allHabitStats.filter((s) => {
           const parsed = parseHabitTitle(s.habit.title);
-          return parsed.goalId === goal.id;
+          return s.habit.goal_id === goal.id || parsed.goalId === goal.id;
         });
         const unlinkedHabits = allHabitStats.filter((s) => {
           const parsed = parseHabitTitle(s.habit.title);
-          return !parsed.goalId;
+          return !s.habit.goal_id && !parsed.goalId;
         });
 
         return (
@@ -883,6 +1038,17 @@ function GoalCard({
                             {weekDone}/{weekTarget} this wk
                           </span>
                         </div>
+                        {(() => {
+                          const lh = progress?.linkedHabits.find((x) => x.habitId === s.habit.id);
+                          return lh ? (
+                            <p className="mt-1 flex items-center gap-1.5 text-[10px] num text-muted-foreground/70">
+                              <span
+                                className={`h-1.5 w-1.5 shrink-0 rounded-full ${lh.hitRate >= 100 ? "bg-primary" : "bg-amber-400"}`}
+                              />
+                              {lh.hitRate}% hit rate · {lh.weeksMet}/{lh.weeksTotal} wks on target
+                            </p>
+                          ) : null;
+                        })()}
                       </div>
                       {!isCompleted && (
                         <button

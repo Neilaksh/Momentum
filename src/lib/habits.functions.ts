@@ -118,7 +118,7 @@ export const linkHabitToGoal = createServerFn({ method: "POST" })
       const newTitle = `[goal:${data.goalId}] ${cleanTitle}`;
       await supabase
         .from("habits")
-        .update({ title: newTitle })
+        .update({ title: newTitle, goal_id: data.goalId })
         .eq("id", data.habitId)
         .eq("user_id", context.userId);
     }
@@ -142,7 +142,7 @@ export const unlinkHabitFromGoal = createServerFn({ method: "POST" })
       const cleanTitle = rawTitle.replace(/^\[goal:[^\]]+\]\s*/, "");
       await supabase
         .from("habits")
-        .update({ title: cleanTitle })
+        .update({ title: cleanTitle, goal_id: null })
         .eq("id", data.habitId)
         .eq("user_id", context.userId);
     }
