@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Calendar,
+  CalendarClock,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -43,6 +44,7 @@ import { getHabits, linkHabitToGoal, unlinkHabitFromGoal } from "@/lib/habits.fu
 import { parseHabitTitle, type HabitsData } from "@/lib/habits-shared";
 import { getWeek } from "@/lib/tracker.functions";
 import {
+  addDays,
   formatDayDate,
   parseRoutineTitle,
   startOfWeek,
@@ -198,6 +200,16 @@ function GoalsPage() {
     onError: () => toast.error("Couldn't add task."),
   });
 
+  const scheduleGoalTask = useMutation({
+    mutationFn: (v: { goalId: string; title: string; date: string; subjectId?: string | null }) =>
+      addTaskFn({ data: { title: v.title, goalId: v.goalId, date: v.date, subjectId: v.subjectId ?? null } }),
+    onSuccess: (_data, vars) => {
+      invalidate();
+      toast.success(`Task scheduled for ${formatDayDate(vars.date)}`);
+    },
+    onError: () => toast.error("Couldn't schedule task."),
+  });
+
   const linkHabit = useMutation({
     mutationFn: (v: { habitId: string; goalId: string }) => linkHabitFn({ data: v }),
     onSuccess: () => { invalidate(); toast.success("Habit linked to goal!"); },
@@ -351,6 +363,7 @@ function GoalsPage() {
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={(t, subjectId) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()), subjectId })}
+                    onScheduleTask={(v) => scheduleGoalTask.mutate({ goalId: g.id, title: v.title, date: v.date, subjectId: v.subjectId })}
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
                   />
@@ -389,6 +402,7 @@ function GoalsPage() {
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
                     onAddDirectTask={(t, subjectId) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()), subjectId })}
+                    onScheduleTask={(v) => scheduleGoalTask.mutate({ goalId: g.id, title: v.title, date: v.date, subjectId: v.subjectId })}
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId })}
                   />
@@ -456,6 +470,7 @@ function GoalCard({
   onRemoveRoutineGroup,
   onToggleTask,
   onAddDirectTask,
+  onScheduleTask,
   onLinkHabit,
   onUnlinkHabit,
 }: {
@@ -475,6 +490,7 @@ function GoalCard({
   onRemoveRoutineGroup: (ids: string[]) => void;
   onToggleTask: (id: string, completed: boolean) => void;
   onAddDirectTask: (title: string, subjectId: string | null) => void;
+  onScheduleTask?: (v: { title: string; date: string; subjectId: string | null }) => void;
   onLinkHabit: (habitId: string) => void;
   onUnlinkHabit: (habitId: string) => void;
 }) {
@@ -483,6 +499,10 @@ function GoalCard({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [inlineTask, setInlineTask] = useState("");
   const [inlineSubjectId, setInlineSubjectId] = useState<string | null>(null);
+  const [showSchedulePanel, setShowSchedulePanel] = useState(false);
+  const [scheduleTitle, setScheduleTitle] = useState("");
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleSubjectId, setScheduleSubjectId] = useState<string | null>(null);
   const [extendDate, setExtendDate] = useState(goal.target_date ?? "");
   const [showProgressDetails, setShowProgressDetails] = useState(false);
 
@@ -510,7 +530,11 @@ function GoalCard({
     }, new Map<string, typeof routines>()),
   );
 
-  const pendingTasks = tasks.filter((t) => !t.completed_at);
+  const pendingTasks = tasks.filter((t) => !t.completed_at && t.task_date <= today);
+  const activeTasks = tasks.filter((t) => !(t.task_date > today && !t.completed_at));
+  const upcomingTasks = tasks
+    .filter((t) => !t.completed_at && t.task_date > today)
+    .sort((a, b) => a.task_date.localeCompare(b.task_date));
 
   return (
     <article
@@ -806,7 +830,7 @@ function GoalCard({
       </div>
 
       {/* Active Goal Tasks (Today / Pending / Shifted) */}
-      {tasks.length > 0 && (
+      {activeTasks.length > 0 && (
         <div className="mt-4 rounded-xl bg-secondary/30 p-3.5">
           <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -819,7 +843,7 @@ function GoalCard({
           </div>
 
           <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-            {tasks.map((t) => {
+            {activeTasks.map((t) => {
               const isDone = !!t.completed_at;
               const isToday = t.task_date === today;
 
@@ -880,6 +904,37 @@ function GoalCard({
                 </li>
               );
             })}
+          </ul>
+        </div>
+      )}
+
+      {/* Upcoming (scheduled for future dates) — view-only */}
+      {upcomingTasks.length > 0 && (
+        <div className="mt-4 rounded-xl bg-secondary/30 p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <CalendarClock className="h-3.5 w-3.5 text-primary" />
+              Upcoming ({upcomingTasks.length})
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              They appear on Today's Tasks when their day arrives
+            </span>
+          </div>
+          <ul className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+            {upcomingTasks.map((t) => (
+              <li
+                key={t.id}
+                className="flex items-center justify-between gap-2 rounded-lg bg-secondary/40 px-2.5 py-1.5 text-xs"
+              >
+                <span className="truncate font-medium text-foreground">{t.title}</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <SubjectTag subject={t.subject_id ? subjectsMap.get(t.subject_id) : null} />
+                  <span className="text-[10px] num text-muted-foreground">
+                    {formatDayDate(t.task_date)}
+                  </span>
+                </div>
+              </li>
+            ))}
           </ul>
         </div>
       )}
@@ -1101,6 +1156,27 @@ function GoalCard({
             Change Deadline
             {showExtendPanel ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
+
+          {/* Schedule a future task for this goal */}
+          {onScheduleTask && (
+            <button
+              onClick={() => {
+                if (!showSchedulePanel && !scheduleDate) {
+                  setScheduleDate(toISODate(addDays(new Date(), 1)));
+                }
+                setShowSchedulePanel((v) => !v);
+              }}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                showSchedulePanel
+                  ? "bg-primary/20 text-primary"
+                  : "bg-secondary/50 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <CalendarClock className="h-3.5 w-3.5" />
+              Schedule Task
+              {showSchedulePanel ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+          )}
         </div>
       )}
 
@@ -1166,6 +1242,68 @@ function GoalCard({
               size="sm"
               variant="ghost"
               onClick={() => setShowExtendPanel(false)}
+              className="h-9 px-3 text-xs"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Future Task Panel */}
+      {showSchedulePanel && onScheduleTask && (
+        <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-primary mb-3 flex items-center gap-1.5">
+            <CalendarClock className="h-3.5 w-3.5" />
+            Schedule a Future Task
+          </h4>
+          <div className="space-y-2">
+            <Input
+              value={scheduleTitle}
+              onChange={(e) => setScheduleTitle(e.target.value)}
+              placeholder={`Task title for "${goal.title}"...`}
+              className="h-9 text-sm bg-background/70"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <SubjectSelect
+                value={scheduleSubjectId}
+                onChange={setScheduleSubjectId}
+                subjects={subjects}
+                className="h-9 w-36 shrink-0 text-sm"
+              />
+              <Input
+                type="date"
+                value={scheduleDate}
+                min={today}
+                onChange={(e) => setScheduleDate(e.target.value)}
+                className="h-9 text-sm flex-1 min-w-[140px]"
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!scheduleTitle.trim() || !scheduleDate) return;
+                onScheduleTask({
+                  title: scheduleTitle.trim(),
+                  date: scheduleDate,
+                  subjectId: scheduleSubjectId,
+                });
+                setScheduleTitle("");
+                setScheduleSubjectId(null);
+                setShowSchedulePanel(false);
+              }}
+              disabled={!scheduleTitle.trim() || !scheduleDate}
+              className="h-9 px-3 text-xs gap-1.5"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Schedule
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowSchedulePanel(false)}
               className="h-9 px-3 text-xs"
             >
               Cancel
