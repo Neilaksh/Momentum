@@ -946,6 +946,11 @@ function GoalCard({
                         Today
                       </span>
                     )}
+                    {isDone && t.rollover_count > 0 && (
+                      <span className="rounded-full bg-secondary/70 border border-border/70 px-1.5 py-0.5 text-[9px] font-bold uppercase text-muted-foreground">
+                        Completed late
+                      </span>
+                    )}
 
                   </div>
                 </li>

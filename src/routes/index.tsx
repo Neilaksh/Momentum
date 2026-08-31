@@ -676,6 +676,12 @@ function UnifiedTasksPage() {
                       )
                     )}
 
+                    {t.completed_at && t.rollover_count > 0 && (
+                      <span className="rounded-full bg-secondary/70 border border-border/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Completed late
+                      </span>
+                    )}
+
                     {(t as any).subject_id && subjectsMap.get((t as any).subject_id) && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                         <span
@@ -830,7 +836,7 @@ function DayCard({
   isToday: boolean;
   isPast?: boolean;
   isSelected: boolean;
-  tasks: { id: string; title: string; completed_at: string | null; source: string; is_stale?: boolean }[];
+  tasks: { id: string; title: string; completed_at: string | null; source: string; is_stale?: boolean; rollover_count?: number }[];
   onSelectDay: () => void;
 }) {
 
@@ -919,6 +925,11 @@ function DayCard({
                       Due
                     </span>
                   )
+                )}
+                {t.completed_at && (t.rollover_count ?? 0) > 0 && (
+                  <span className="shrink-0 rounded-full bg-secondary/70 border border-border/70 px-1.5 py-0.5 text-[9px] font-bold uppercase text-muted-foreground">
+                    Completed late
+                  </span>
                 )}
               </div>
             </li>
