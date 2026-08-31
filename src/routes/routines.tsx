@@ -15,6 +15,7 @@ import {
   Heart,
   Layers,
   List,
+  MoreHorizontal,
   Plus,
   Repeat,
   RotateCcw,
@@ -39,6 +40,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   batchAddRoutineTasks,
   clearAllRoutineTasks,
@@ -138,6 +148,7 @@ function RoutinesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAddSlotOpen, setIsAddSlotOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<RoutineTask | null>(null);
 
@@ -621,33 +632,32 @@ function RoutinesPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 border-border hover:bg-secondary"
-              onClick={() => setIsAddSlotOpen(true)}
-            >
-              <Clock className="h-4 w-4 text-primary" /> + Time Slot
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 border-border hover:bg-secondary"
-              onClick={() => setIsAddCategoryOpen(true)}
-            >
-              <Tag className="h-4 w-4 text-cyan-400" /> + Category
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
-              onClick={loadSampleSchedule}
-              disabled={batchAddMutation.isPending}
-            >
-              <Zap className="h-4 w-4" /> Load Sample
-            </Button>
+            {/* Secondary actions consolidated into a dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-border hover:bg-secondary"
+                  disabled={batchAddMutation.isPending}
+                >
+                  <MoreHorizontal className="h-4 w-4 text-muted-foreground" /> More Actions
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel className="text-xs text-muted-foreground">Schedule Options</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setIsAddSlotOpen(true)}>
+                  <Clock className="h-4 w-4 text-primary" /> + Time Slot
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsAddCategoryOpen(true)}>
+                  <Tag className="h-4 w-4 text-cyan-400" /> + Category
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={loadSampleSchedule} disabled={batchAddMutation.isPending}>
+                  <Zap className="h-4 w-4" /> Load Sample
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <Button size="sm" className="gap-1.5" onClick={() => openAddModal()}>
               <Plus className="h-4 w-4" /> Add Routine Slot
@@ -943,7 +953,7 @@ function RoutinesPage() {
                                       {linkedHabit && (
                                         <span className="inline-flex items-center gap-0.5 text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">
                                           <Repeat className="h-2 w-2" />
-                                          <span className="truncate max-w-[80px]">{linkedHabit.habit.title}</span>
+                                          <span className="truncate max-w-[80px]">{parseHabitTitle(linkedHabit.habit.title).displayTitle}</span>
                                         </span>
                                       )}
                                     </div>
@@ -1051,7 +1061,7 @@ function RoutinesPage() {
                           {linkedHabit && (
                             <div className="flex items-center gap-1.5 text-amber-400">
                               <Repeat className="h-3.5 w-3.5" />
-                              <span>Habit: {linkedHabit.habit.title} ({linkedHabit.weekDone}/{linkedHabit.weekTarget} this week)</span>
+                              <span>Habit: {parseHabitTitle(linkedHabit.habit.title).displayTitle} ({linkedHabit.weekDone}/{linkedHabit.weekTarget} this week)</span>
                             </div>
                           )}
 
@@ -1217,7 +1227,7 @@ function RoutinesPage() {
                       {analytics.habitAllocations.map((ha, i) => (
                         <div key={i} className="flex items-center justify-between rounded-lg border border-border bg-secondary/40 p-2.5 text-xs">
                           <div>
-                            <span className="font-semibold text-foreground">{ha.habitTitle}</span>
+                            <span className="font-semibold text-foreground">{parseHabitTitle(ha.habitTitle).displayTitle}</span>
                             <div className="text-[10px] text-muted-foreground">
                               Scheduled in routine: {ha.scheduledDays}x / Target: {ha.target}x/week
                             </div>
@@ -1293,25 +1303,41 @@ function RoutinesPage() {
                 </div>
               )}
 
-              {/* Emoji Quick Picker */}
+              {/* Emoji Quick Picker (collapsed by default; expands into a popover) */}
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
                   Choose Icon / Emoji
                 </label>
-                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 border border-border rounded-lg bg-secondary/40">
-                  {EMOJI_PRESETS.map((emo) => (
+                <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
+                  <PopoverTrigger asChild>
                     <button
-                      key={emo}
                       type="button"
-                      onClick={() => setFormEmoji(emo)}
-                      className={`h-8 w-8 rounded text-lg flex items-center justify-center transition-all ${
-                        formEmoji === emo ? "bg-primary text-primary-foreground scale-110 shadow" : "hover:bg-secondary"
-                      }`}
+                      className="flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-secondary transition-colors"
                     >
-                      {emo}
+                      <span className="text-lg leading-none">{formEmoji}</span>
+                      <span className="font-medium">Choose icon</span>
                     </button>
-                  ))}
-                </div>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64">
+                    <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-1">
+                      {EMOJI_PRESETS.map((emo) => (
+                        <button
+                          key={emo}
+                          type="button"
+                          onClick={() => {
+                            setFormEmoji(emo);
+                            setEmojiPickerOpen(false);
+                          }}
+                          className={`h-8 w-8 rounded text-lg flex items-center justify-center transition-all ${
+                            formEmoji === emo ? "bg-primary text-primary-foreground scale-110 shadow" : "hover:bg-secondary"
+                          }`}
+                        >
+                          {emo}
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {/* Category & Time Slot */}
