@@ -293,7 +293,12 @@ function computeHabitProgress(
     cur = addDays(cur, 7);
   }
   const weeksTotal = weekStarts.length;
+  const thisWeekStart = weekStarts[weekStarts.length - 1];
   let weeksMet = 0;
+  // Partial credit for the current, still-in-progress week: fraction of the
+  // weekly target actually logged so far (e.g. 1/7 logged ≈ 14%), capped at
+  // 100% so over-logging can't exceed full credit.
+  let partial = 0;
   for (const ws of weekStarts) {
     const weekEnd = toISODate(addDays(parseISODate(ws), 6));
     let count = 0;
@@ -303,9 +308,14 @@ function computeHabitProgress(
         if (count >= habit.target_per_week) break;
       }
     }
-    if (count >= habit.target_per_week) weeksMet += 1;
+    if (count >= habit.target_per_week) {
+      weeksMet += 1;
+    } else if (ws === thisWeekStart && count > 0) {
+      // Current (in-progress) week: partial credit instead of binary 1/0.
+      partial = Math.min(count / habit.target_per_week, 1);
+    }
   }
-  const hitRate = weeksTotal > 0 ? Math.round((weeksMet / weeksTotal) * 100) : 0;
+  const hitRate = weeksTotal > 0 ? Math.round((weeksMet + partial) / weeksTotal * 100) : 0;
   return {
     habitId: habit.id,
     title: parseHabitTitle(habit.title).displayTitle || habit.title,
@@ -349,7 +359,11 @@ function computeGoalProgress(
   const habitScore = hasHabits
     ? Math.round(linkedStats.reduce((sum: number, s) => sum + s.hitRate, 0) / linkedStats.length)
     : null;
-  const habitsOnTrack = linkedStats.filter((s) => s.hitRate >= 100).length;
+  // Strict on-track: every week in the link window — past and current — must be
+  // fully met. Using weeksMet === weeksTotal (not hitRate >= 100) avoids a
+  // Math.round edge where a long, mostly-perfect window could tip a not-yet-finished
+  // current week (e.g. 28/29 weeks, current 6/7) into a rounded 100%.
+  const habitsOnTrack = linkedStats.filter((s) => s.weeksMet === s.weeksTotal).length;
 
   const overall =
     hasTasks && hasHabits
@@ -703,7 +717,11 @@ export const getGoals = createServerFn({ method: "POST" })
         linkedHabits.length > 0
           ? Math.round(linkedHabits.reduce((sum, s) => sum + s.hitRate, 0) / linkedHabits.length)
           : null;
-      const habitsOnTrack = linkedHabits.filter((s) => s.hitRate >= 100).length;
+      // Strict on-track for frozen stats too (same rule as live path):
+      // snapshotted weeksOnTarget must equal totalWeeks. hitRate >= 100 is avoided
+      // because a rounded-up frozen percentage could mark a partially-met final
+      // week (captured at completion) as on-track when it isn't.
+      const habitsOnTrack = linkedHabits.filter((s) => s.weeksMet === s.weeksTotal).length;
       const overall =
         p.taskScore !== null && habitScore !== null
           ? Math.round((p.taskScore + habitScore) / 2)
