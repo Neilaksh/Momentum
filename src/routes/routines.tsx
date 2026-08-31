@@ -98,6 +98,7 @@ const STORAGE_CUSTOM_CATS_KEY = "momentum_custom_routine_categories";
 function RoutinesPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("matrix");
   const [selectedDay, setSelectedDay] = useState<number>(0); // 0=Mon, ..., 6=Sun
+  const [editMode, setEditMode] = useState(false); // grid "view" (default) vs "edit"
   
   // Custom Time Slots & Categories (stored in localStorage with fallback)
   const [customTimeSlots, setCustomTimeSlots] = useState<string[]>(() => {
@@ -739,6 +740,19 @@ function RoutinesPage() {
               <RotateCcw className="h-3 w-3" /> Clear Timeslots & Schedule
             </button>
           ) : null}
+
+          {/* Matrix Edit / Done Editing toggle (view mode by default) */}
+          <button
+            onClick={() => setEditMode((e) => !e)}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+              editMode
+                ? "bg-primary text-primary-foreground shadow"
+                : "border border-border bg-card text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+            {editMode ? "Done Editing" : "Edit"}
+          </button>
         </div>
 
         {/* View Mode 1: 7-Day Timetable Matrix */}
@@ -799,7 +813,7 @@ function RoutinesPage() {
                     {allTimeSlots.map((timeSlot) => (
                       <tr key={timeSlot} className="hover:bg-secondary/20 transition-colors">
                         {/* Time Column with hover delete button */}
-                        <td className="sticky left-0 z-10 border-r border-border bg-card/95 p-2 font-mono font-medium text-[11px] text-center text-muted-foreground group/time">
+                        <td className="sticky left-0 z-10 border-r border-border bg-card/95 py-2.5 px-2 font-mono font-medium text-[11px] text-center text-muted-foreground group/time">
                           <div className="flex items-center justify-center gap-1">
                             <span>{timeSlot}</span>
                             <button
@@ -810,7 +824,7 @@ function RoutinesPage() {
                               <Trash2 className="h-3 w-3" />
                             </button>
                           </div>
-                          <div className="text-[9px] text-muted-foreground/60 font-sans">
+                          <div className="mt-0.5 text-[8px] text-muted-foreground/40 font-sans">
                             {calculateSlotDurationMinutes(timeSlot)}m
                           </div>
                         </td>
@@ -824,11 +838,11 @@ function RoutinesPage() {
                           return (
                             <td
                               key={dayIdx}
-                              className={`p-1.5 border-r border-border/30 vertical-top align-top min-h-[52px] transition-colors relative group ${
+                              className={`p-2 border-r border-border/30 vertical-top align-top min-h-[52px] transition-colors relative group ${
                                 isWeekend ? "bg-rose-500/[0.02]" : ""
                               }`}
                             >
-                            <div className="space-y-1 min-h-[44px] flex flex-col justify-center">
+                            <div className="space-y-1.5 min-h-[44px] flex flex-col justify-center">
                               {cellTasks.map((task) => {
                                 const parsed = parseRoutineTitle(task.title);
                                 const color = COLOR_PALETTE[parsed.colorKey] ?? COLOR_PALETTE.slate;
@@ -839,10 +853,16 @@ function RoutinesPage() {
                                   <div
                                     key={task.id}
                                     onClick={() => openEditModal(task)}
-                                    className={`group/item relative flex flex-col gap-0.5 rounded-lg border p-1.5 text-[11px] cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${
-                                      color.bg
-                                    } ${color.border} ${!task.is_active ? "opacity-40 grayscale" : ""}`}
+                                    className={`group/item relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${
+                                      !task.is_active ? "opacity-40 grayscale" : ""
+                                    }`}
                                   >
+                                    {/* Category colour accent: thin left stripe carries the
+                                        category's colour; the card itself stays neutral. */}
+                                    <span
+                                      aria-hidden
+                                      className={`absolute left-0.5 top-1 bottom-1 w-[3px] rounded-full bg-current ${color.text}`}
+                                    />
                                     <div className="flex items-center justify-between gap-1">
                                       <span className="font-semibold truncate text-foreground flex items-center gap-1">
                                         <span className="text-sm leading-none">{parsed.emoji}</span>
