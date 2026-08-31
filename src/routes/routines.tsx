@@ -30,6 +30,16 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   batchAddRoutineTasks,
   clearAllRoutineTasks,
   deleteRoutineTask,
@@ -128,6 +138,7 @@ function RoutinesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAddSlotOpen, setIsAddSlotOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<RoutineTask | null>(null);
 
   // Form State for Routine Slot
@@ -557,15 +568,13 @@ function RoutinesPage() {
     toast.success(`Removed time slot "${slotToDelete}"`);
   };
 
-  const handleClearAllSlots = () => {
-    if (confirm("Are you sure you want to delete all custom time slots and clear your schedule?")) {
-      setCustomTimeSlots([]);
-      try {
-        localStorage.removeItem(STORAGE_CUSTOM_SLOTS_KEY);
-      } catch {}
-      clearMutation.mutate();
-      toast.success("All time slots and routines cleared");
-    }
+  const doClearAllSlots = () => {
+    setCustomTimeSlots([]);
+    try {
+      localStorage.removeItem(STORAGE_CUSTOM_SLOTS_KEY);
+    } catch {}
+    clearMutation.mutate();
+    toast.success("All time slots and routines cleared");
   };
 
   const loadSampleSchedule = () => {
@@ -734,7 +743,7 @@ function RoutinesPage() {
 
           {tasks.length > 0 || customTimeSlots.length > 0 ? (
             <button
-              onClick={handleClearAllSlots}
+              onClick={() => setIsClearConfirmOpen(true)}
               className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors ml-auto"
             >
               <RotateCcw className="h-3 w-3" /> Clear Timeslots & Schedule
@@ -755,6 +764,28 @@ function RoutinesPage() {
           </button>
         </div>
 
+        {/* Clear-schedule confirmation (destructive, gated behind explicit confirm) */}
+        <AlertDialog open={isClearConfirmOpen} onOpenChange={setIsClearConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear timeslots &amp; schedule?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete all custom time slots and every routine in your weekly
+                schedule. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={doClearAllSlots}
+                className="bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
+              >
+                Clear Everything
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* View Mode 1: 7-Day Timetable Matrix */}
         {viewMode === "matrix" && (
           <div className="space-y-4">
@@ -763,7 +794,7 @@ function RoutinesPage() {
                 {/* Header Row */}
                 <thead>
                   <tr className="border-b border-border bg-secondary/70 backdrop-blur">
-                    <th className="sticky left-0 z-20 w-36 border-r border-border bg-secondary p-3 font-semibold uppercase tracking-wider text-muted-foreground text-center">
+                    <th className="sticky left-0 z-20 w-44 border-r border-border bg-secondary p-3 font-semibold uppercase tracking-wider text-muted-foreground text-center">
                       Time Slot
                     </th>
                     {WEEKDAY_NAMES.map((dayName, idx) => {
@@ -813,16 +844,18 @@ function RoutinesPage() {
                     {allTimeSlots.map((timeSlot) => (
                       <tr key={timeSlot} className="hover:bg-secondary/20 transition-colors">
                         {/* Time Column with hover delete button */}
-                        <td className="sticky left-0 z-10 border-r border-border bg-card/95 py-2.5 px-2 font-mono font-medium text-[11px] text-center text-muted-foreground group/time">
+                        <td className="sticky left-0 z-10 w-44 border-r border-border bg-card/95 py-2.5 px-2 font-mono font-medium text-[11px] text-center text-muted-foreground group/time">
                           <div className="flex items-center justify-center gap-1">
-                            <span>{timeSlot}</span>
-                            <button
-                              onClick={() => handleDeleteTimeSlotRow(timeSlot)}
-                              className="hidden group-hover/time:inline-flex text-muted-foreground hover:text-destructive p-0.5 transition-colors"
-                              title={`Delete time slot "${timeSlot}"`}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
+                            <span className="whitespace-nowrap">{timeSlot.replace(/\s*-\s*/g, "–")}</span>
+                            {editMode && (
+                              <button
+                                onClick={() => handleDeleteTimeSlotRow(timeSlot)}
+                                className="hidden group-hover/time:inline-flex text-muted-foreground hover:text-destructive p-0.5 transition-colors"
+                                title={`Delete time slot "${timeSlot}"`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
                           </div>
                           <div className="mt-0.5 text-[8px] text-muted-foreground/40 font-sans">
                             {calculateSlotDurationMinutes(timeSlot)}m
@@ -838,9 +871,9 @@ function RoutinesPage() {
                           return (
                             <td
                               key={dayIdx}
-                              className={`p-2 border-r border-border/30 vertical-top align-top min-h-[52px] transition-colors relative group ${
+                              className={`p-2 border-r border-border/30 vertical-top align-top min-h-[52px] transition-colors relative ${
                                 isWeekend ? "bg-rose-500/[0.02]" : ""
-                              }`}
+                              } ${editMode ? "group" : ""}`}
                             >
                             <div className="space-y-1.5 min-h-[44px] flex flex-col justify-center">
                               {cellTasks.map((task) => {
@@ -852,8 +885,10 @@ function RoutinesPage() {
                                 return (
                                   <div
                                     key={task.id}
-                                    onClick={() => openEditModal(task)}
-                                    className={`group/item relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${
+                                    onClick={editMode ? () => openEditModal(task) : undefined}
+                                    className={`relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] transition-all ${
+                                      editMode ? "group/item cursor-pointer hover:scale-[1.02] hover:shadow-md" : "cursor-default"
+                                    } ${
                                       !task.is_active ? "opacity-40 grayscale" : ""
                                     }`}
                                   >
@@ -869,29 +904,31 @@ function RoutinesPage() {
                                         <span className="truncate">{parsed.cleanTitle}</span>
                                       </span>
 
-                                      {/* Action icons on item hover */}
-                                      <div className="hidden group-hover/item:flex items-center gap-1">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggleMutation.mutate({ id: task.id, isActive: !task.is_active });
-                                          }}
-                                          title={task.is_active ? "Deactivate" : "Activate"}
-                                          className="text-muted-foreground hover:text-foreground"
-                                        >
-                                          <Check className={`h-3 w-3 ${task.is_active ? "text-emerald-400" : ""}`} />
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteMutation.mutate(task.id);
-                                          }}
-                                          title="Delete slot"
-                                          className="text-muted-foreground hover:text-destructive"
-                                        >
-                                          <Trash2 className="h-3 w-3" />
-                                        </button>
-                                      </div>
+                                      {/* Action icons on item hover (edit mode only) */}
+                                      {editMode && (
+                                        <div className="hidden group-hover/item:flex items-center gap-1">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleMutation.mutate({ id: task.id, isActive: !task.is_active });
+                                            }}
+                                            title={task.is_active ? "Deactivate" : "Activate"}
+                                            className="text-muted-foreground hover:text-foreground"
+                                          >
+                                            <Check className={`h-3 w-3 ${task.is_active ? "text-emerald-400" : ""}`} />
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              deleteMutation.mutate(task.id);
+                                            }}
+                                            title="Delete slot"
+                                            className="text-muted-foreground hover:text-destructive"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
 
                                     {/* Link Badges */}
@@ -914,13 +951,15 @@ function RoutinesPage() {
                                 );
                               })}
 
-                              {/* Add button on hover */}
-                              <button
-                                onClick={() => openAddModal(dayIdx, timeSlot)}
-                                className="w-full hidden group-hover:flex items-center justify-center rounded border border-dashed border-border/60 py-1 text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-all"
-                              >
-                                <Plus className="h-3 w-3 mr-0.5" /> Add
-                              </button>
+                              {/* Add button on hover (edit mode only) */}
+                              {editMode && (
+                                <button
+                                  onClick={() => openAddModal(dayIdx, timeSlot)}
+                                  className="w-full hidden group-hover:flex items-center justify-center rounded border border-dashed border-border/60 py-1 text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-all"
+                                >
+                                  <Plus className="h-3 w-3 mr-0.5" /> Add
+                                </button>
+                              )}
                             </div>
                           </td>
                         );
@@ -954,9 +993,11 @@ function RoutinesPage() {
                 </p>
               </div>
 
-              <Button size="sm" onClick={() => openAddModal(selectedDay)}>
-                <Plus className="h-4 w-4 mr-1" /> Add to {WEEKDAY_NAMES[selectedDay]?.slice(0, 3) ?? "Day"}
-              </Button>
+              {editMode && (
+                <Button size="sm" onClick={() => openAddModal(selectedDay)}>
+                  <Plus className="h-4 w-4 mr-1" /> Add to {WEEKDAY_NAMES[selectedDay]?.slice(0, 3) ?? "Day"}
+                </Button>
+              )}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1028,20 +1069,22 @@ function RoutinesPage() {
                           {parsed.category}
                         </span>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => openEditModal(task)}
-                            className="text-muted-foreground hover:text-foreground transition-colors p-1"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => deleteMutation.mutate(task.id)}
-                            className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                        {editMode && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openEditModal(task)}
+                              className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => deleteMutation.mutate(task.id)}
+                              className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
