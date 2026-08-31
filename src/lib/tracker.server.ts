@@ -246,11 +246,12 @@ export const rolloverIncompleteGoalTasks = carryForwardIncompleteTasks;
  * pure reference/template view — routine_tasks templates are no longer converted into
  * day_tasks rows, so nothing is auto-created from the weekly routine anymore.
  *
- * day_tasks rows that were materialized in the past are historical data and are
- * intentionally left untouched: the legacy unlinked-routine cleanup inside this
- * function (which used to delete some of them) no longer runs either. Flip the flag
- * below to true to restore the old behavior. The carry-forward pass is independent
- * and keeps rolling existing uncompleted tasks forward.
+ * day_tasks rows that were materialized in the past are historical data and are left
+ * exactly as they are. The legacy cleanup that used to delete unlinked routine rows
+ * from day_tasks has been removed entirely, so no code path can delete them — even if
+ * this flag is ever flipped back on. Flipping it to true restores only the insert side
+ * of the old behavior. The carry-forward pass is independent and keeps rolling existing
+ * uncompleted tasks forward.
  */
 const ROUTINE_MATERIALIZATION_ENABLED: boolean = false;
 
@@ -266,14 +267,6 @@ async function materializeWeekInternal(supabase: DB, userId: string, weekStart: 
   // Materialization disabled — see ROUTINE_MATERIALIZATION_ENABLED above. Only the
   // carry-forward pass runs; no day_tasks rows are created, deleted or modified.
   if (!ROUTINE_MATERIALIZATION_ENABLED) return;
-
-  // Clean up any legacy unlinked routine schedule tasks from day_tasks
-  await supabase
-    .from("day_tasks")
-    .delete()
-    .eq("user_id", userId)
-    .eq("source", "routine")
-    .is("goal_id", null);
 
   const dates = weekDates(weekStart);
 
