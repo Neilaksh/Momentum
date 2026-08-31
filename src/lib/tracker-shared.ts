@@ -50,17 +50,25 @@ export type Goal = {
   color: string;
 };
 
-/** Weekly hit-rate for a single habit linked to a goal. */
+/** Progress for a single habit linked to a goal. */
 export type GoalHabitStat = {
   habitId: string;
   title: string;
   targetPerWeek: number;
-  /** Whole Monday-weeks since this habit was linked to the goal (goal_habit_links.created_at). */
+  /**
+   * Unlimited links: whole Monday-weeks since the link (goal_habit_links.created_at).
+   * Duration-limited links: the duration window's day count (repurposed so the
+   * shared on-track rule weeksMet === weeksTotal stays uniform across both modes).
+   */
   weeksTotal: number;
-  /** Weeks in which the habit's logs met or exceeded target_per_week. */
+  /** Unlimited: weeks that met the weekly target. Duration-limited: days logged in the window. */
   weeksMet: number;
-  /** 0–100 percentage of weeks on target. */
+  /** 0–100 percentage. Unlimited: weeks on target. Duration-limited: days logged / duration. */
   hitRate: number;
+  /** Present only for duration-limited links — the tracking window in days. */
+  durationDays?: number;
+  /** Present only for duration-limited links — distinct days logged in the window. */
+  daysLogged?: number;
 };
 
 /**

@@ -45,6 +45,7 @@ const schema = {
   },
   goal_habit_links: {
     created_at: ["timestamptz", false, true],
+    duration_days: ["integer", true, false],
     goal_id: ["uuid", false, false],
     habit_id: ["uuid", false, false],
     id: ["uuid", false, true],

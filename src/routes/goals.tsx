@@ -41,12 +41,13 @@ import {
   toggleDayTask,
   updateGoalStatus,
 } from "@/lib/tracker.functions";
-import { getHabits, linkHabitToGoal, unlinkHabitFromGoal } from "@/lib/habits.functions";
+import { getHabits, linkHabitToGoal, updateHabitTrackingDuration, unlinkHabitFromGoal } from "@/lib/habits.functions";
 import { parseHabitTitle, type HabitsData } from "@/lib/habits-shared";
 import { getWeek } from "@/lib/tracker.functions";
 import {
   addDays,
   formatDayDate,
+  parseISODate,
   parseRoutineTitle,
   startOfWeek,
   toISODate,
@@ -88,6 +89,10 @@ type GoalsResponse = {
   progressByGoal: Record<string, GoalProgress>;
   snapshotsByGoal: Record<string, GoalHabitSnapshot[]>;
   habitIdsByGoal: Record<string, string[]>;
+  habitDurationsByGoal: Record<
+    string,
+    Record<string, { durationDays: number | null; createdAt: string }>
+  >;
 };
 
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -112,6 +117,7 @@ function GoalsPage() {
   const addTaskFn = useServerFn(addDayTask);
   const linkHabitFn = useServerFn(linkHabitToGoal);
   const unlinkHabitFn = useServerFn(unlinkHabitFromGoal);
+  const setDurationFn = useServerFn(updateHabitTrackingDuration);
   const qc = useQueryClient();
   const { subjects, subjectsMap } = useSubjects();
 
@@ -226,6 +232,13 @@ function GoalsPage() {
     onError: () => toast.error("Couldn't unlink habit."),
   });
 
+  const setHabitDuration = useMutation({
+    mutationFn: (v: { goalId: string; habitId: string; durationDays: number | null }) =>
+      setDurationFn({ data: v }),
+    onSuccess: invalidate,
+    onError: () => toast.error("Couldn't update the tracking duration."),
+  });
+
   const goals = data?.goals ?? [];
   const stats = data?.stats ?? {};
   const routinesByGoal = data?.routinesByGoal ?? {};
@@ -233,6 +246,7 @@ function GoalsPage() {
   const progressByGoal = data?.progressByGoal ?? {};
   const snapshotsByGoal = data?.snapshotsByGoal ?? {};
   const habitIdsByGoal = data?.habitIdsByGoal ?? {};
+  const habitDurationsByGoal = data?.habitDurationsByGoal ?? {};
   const allHabitStats = habitsData?.stats ?? [];
 
   // Compute effective status client-side — no DB mutation on read
@@ -365,6 +379,7 @@ function GoalsPage() {
                     allHabitStats={allHabitStats}
                     habitSnapshots={snapshotsByGoal[g.id] ?? []}
                     goalHabitIds={new Set(habitIdsByGoal[g.id] ?? [])}
+                    habitDurations={habitDurationsByGoal[g.id] ?? {}}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
@@ -374,6 +389,7 @@ function GoalsPage() {
                     onScheduleTask={(v) => scheduleGoalTask.mutate({ goalId: g.id, title: v.title, date: v.date, subjectId: v.subjectId })}
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId, goalId: g.id })}
+                    onSetDuration={(habitId, durationDays) => setHabitDuration.mutate({ goalId: g.id, habitId, durationDays })}
                   />
                 ))}
               </div>
@@ -406,6 +422,7 @@ function GoalsPage() {
                     allHabitStats={allHabitStats}
                     habitSnapshots={snapshotsByGoal[g.id] ?? []}
                     goalHabitIds={new Set(habitIdsByGoal[g.id] ?? [])}
+                    habitDurations={habitDurationsByGoal[g.id] ?? {}}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
@@ -415,6 +432,7 @@ function GoalsPage() {
                     onScheduleTask={(v) => scheduleGoalTask.mutate({ goalId: g.id, title: v.title, date: v.date, subjectId: v.subjectId })}
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId, goalId: g.id })}
+                    onSetDuration={(habitId, durationDays) => setHabitDuration.mutate({ goalId: g.id, habitId, durationDays })}
                   />
                 ))}
               </div>
@@ -445,6 +463,7 @@ function GoalsPage() {
                     allHabitStats={allHabitStats}
                     habitSnapshots={snapshotsByGoal[g.id] ?? []}
                     goalHabitIds={new Set(habitIdsByGoal[g.id] ?? [])}
+                    habitDurations={habitDurationsByGoal[g.id] ?? {}}
                     onDelete={() => remove.mutate({ id: g.id })}
                     onReopen={() => markStatus.mutate({ id: g.id, status: "active" })}
                     onMarkComplete={() => {}}
@@ -454,6 +473,7 @@ function GoalsPage() {
                     onAddDirectTask={() => {}}
                     onLinkHabit={() => {}}
                     onUnlinkHabit={() => {}}
+                    onSetDuration={() => {}}
                   />
                 ))}
               </div>
@@ -462,6 +482,121 @@ function GoalsPage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * Set / edit / clear the per-link tracking duration for one (goal, habit) pair.
+ * Writes only to goal_habit_links.duration_days for that pair — the habit's
+ * weekly target, logging, and its links to other goals are untouched.
+ */
+function HabitDurationControl({
+  durationDays,
+  trackedFrom,
+  canEdit,
+  onSet,
+}: {
+  durationDays: number | null;
+  trackedFrom: string;
+  canEdit: boolean;
+  onSet: (durationDays: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const trackedFromDay = trackedFrom ? parseISODate(trackedFrom.slice(0, 10)) : null;
+  // Last tracked day = link created_at + duration_days - 1 (duration_days days
+  // starting from the link's created_at).
+  const endDate =
+    durationDays != null && trackedFromDay
+      ? formatDayDate(toISODate(addDays(trackedFromDay, durationDays - 1)))
+      : null;
+  const parsed = Number.parseInt(draft, 10);
+  const draftValid =
+    draft.trim() === "" || (Number.isInteger(parsed) && parsed >= 1 && parsed <= 3650);
+
+  if (!editing) {
+    if (endDate) {
+      return (
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-sky-500/20 bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-medium text-sky-400"
+            title="Tracking duration for this goal"
+          >
+            <CalendarClock className="h-2.5 w-2.5" />
+            Tracked until {endDate}
+          </span>
+          {canEdit && (
+            <>
+              <button
+                onClick={() => {
+                  setDraft(String(durationDays));
+                  setEditing(true);
+                }}
+                className="text-[9px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Edit tracking duration"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => onSet(null)}
+                className="text-[9px] font-medium text-muted-foreground hover:text-destructive transition-colors"
+                aria-label="Clear tracking duration"
+              >
+                Clear
+              </button>
+            </>
+          )}
+        </div>
+      );
+    }
+    if (canEdit) {
+      return (
+        <button
+          onClick={() => {
+            setDraft("");
+            setEditing(true);
+          }}
+          className="mt-0.5 text-[9px] font-medium text-muted-foreground/70 hover:text-foreground transition-colors"
+          aria-label="Set tracking duration"
+        >
+          + Set duration
+        </button>
+      );
+    }
+    return null;
+  }
+
+  return (
+    <div className="mt-1 flex items-center gap-1.5">
+      <input
+        type="number"
+        min={1}
+        max={3650}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="days"
+        aria-label="Tracking duration in days"
+        className="h-6 w-16 rounded-md border border-border bg-secondary/50 px-1.5 text-[10px] num text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+      <button
+        disabled={!draftValid}
+        onClick={() => {
+          const trimmed = draft.trim();
+          onSet(trimmed === "" ? null : Number.parseInt(trimmed, 10));
+          setEditing(false);
+        }}
+        className="rounded-md border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+      >
+        Save
+      </button>
+      <button
+        onClick={() => setEditing(false)}
+        className="text-[9px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+      >
+        Cancel
+      </button>
+    </div>
   );
 }
 
@@ -487,6 +622,8 @@ function GoalCard({
   onLinkHabit,
   onUnlinkHabit,
   goalHabitIds,
+  habitDurations,
+  onSetDuration,
 }: {
   goal: Goal;
   effectiveStatus: "active" | "completed" | "overdue";
@@ -509,6 +646,8 @@ function GoalCard({
   onLinkHabit: (habitId: string) => void;
   onUnlinkHabit: (habitId: string) => void;
   goalHabitIds: Set<string>;
+  habitDurations: Record<string, { durationDays: number | null; createdAt: string }>;
+  onSetDuration: (habitId: string, durationDays: number | null) => void;
 }) {
   const [showLinkHabitDropdown, setShowLinkHabitDropdown] = useState(false);
   const [showExtendPanel, setShowExtendPanel] = useState(false);
@@ -829,25 +968,29 @@ function GoalCard({
                   Habit weekly hit-rate (since link)
                 </p>
                 <ul className="space-y-1">
-                  {progress.linkedHabits.map((lh) => (
-                    <li key={lh.habitId} className="flex items-center gap-2 text-xs">
-                      <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${lh.hitRate >= 100 ? "bg-primary" : "bg-amber-400"}`}
-                      />
-                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-                        {lh.title}
-                      </span>
-                      <div className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-secondary">
-                        <div
-                          className={`h-full rounded-full ${lh.hitRate >= 100 ? "bg-primary" : "bg-amber-400"}`}
-                          style={{ width: `${lh.hitRate}%` }}
-                        />
-                      </div>
-                      <span className="num shrink-0 text-[11px] text-muted-foreground">
-                        {lh.weeksMet}/{lh.weeksTotal} wks · {lh.hitRate}%
-                      </span>
-                    </li>
-                  ))}
+                  {progress.linkedHabits.map((lh) => {
+                    const isDurationMode = lh.durationDays != null;
+                    const onTrack = isDurationMode
+                      ? lh.daysLogged === lh.durationDays
+                      : lh.weeksMet === lh.weeksTotal;
+                    return (
+                      <li key={lh.habitId} className="flex items-center gap-2 text-xs">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${onTrack ? "bg-primary" : "bg-amber-400"}`} />
+                        <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                          {lh.title}
+                        </span>
+                        <div className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-secondary">
+                          <div
+                            className={`h-full rounded-full ${onTrack ? "bg-primary" : "bg-amber-400"}`}
+                            style={{ width: `${lh.hitRate}%` }}
+                          />
+                        </div>
+                        <span className="num shrink-0 text-[11px] text-muted-foreground">
+                          {isDurationMode ? `${lh.daysLogged}/${lh.durationDays} days` : `${lh.weeksMet}/${lh.weeksTotal} wks`} · {lh.hitRate}%
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -1056,6 +1199,11 @@ function GoalCard({
                 {linkedHabits.map((s) => {
                   const displayTitle = parseHabitTitle(s.habit.title).displayTitle;
                   const snap = snapFor(s.habit.id);
+                  const lh = progress?.linkedHabits.find((x) => x.habitId === s.habit.id) ?? null;
+                  const durationLimited = lh?.durationDays != null;
+                  const habitOnTrack = durationLimited && lh
+                    ? lh.daysLogged === lh.durationDays
+                    : (lh?.weeksMet ?? 0) === (lh?.weeksTotal ?? -1);
                   const pctWeek = s.habit.target_per_week > 0
                     ? Math.min(100, Math.round((s.weekDone / s.habit.target_per_week) * 100))
                     : 0;
@@ -1072,7 +1220,7 @@ function GoalCard({
                             </span>
                           )}
                         </div>
-                        {!snap && (
+                        {!snap && !durationLimited && (
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
                               <div
@@ -1085,27 +1233,32 @@ function GoalCard({
                             </span>
                           </div>
                         )}
-                        {(() => {
-                          const lh = progress?.linkedHabits.find((x) => x.habitId === s.habit.id);
-                          return lh ? (
-                            <p className="mt-1 flex items-center gap-1.5 text-[10px] num text-muted-foreground/70">
+                        {lh && (
+                          <p className="mt-1 flex items-center gap-1.5 text-[10px] num text-muted-foreground/70">
+                            <span
+                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${habitOnTrack ? "bg-primary" : "bg-amber-400"}`}
+                            />
+                            {durationLimited
+                              ? `${lh.daysLogged}/${lh.durationDays} days (${lh.hitRate}%)`
+                              : `${lh.hitRate}% hit rate · ${lh.weeksMet}/${lh.weeksTotal} wks on target`}
+                            {snap && (
                               <span
-                                className={`h-1.5 w-1.5 shrink-0 rounded-full ${lh.hitRate >= 100 ? "bg-primary" : "bg-amber-400"}`}
-                              />
-                              {lh.hitRate}% hit rate · {lh.weeksMet}/{lh.weeksTotal} wks on target
-                              {snap && (
-                                <span
-                                  className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-sky-400"
-                                  title={`Frozen when the goal completed (${new Date(snap.snapshottedAt).toLocaleDateString()})`}
-                                >
-                                  <Snowflake className="h-2.5 w-2.5" />
-                                  Frozen
-                                </span>
-                              )}
-                            </p>
-                          ) : null;
-                        })()}
+                                className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-sky-400"
+                                title={`Frozen when the goal completed (${new Date(snap.snapshottedAt).toLocaleDateString()})`}
+                              >
+                                <Snowflake className="h-2.5 w-2.5" />
+                                Frozen
+                              </span>
+                            )}
+                          </p>
+                        )}
                       </div>
+                      <HabitDurationControl
+                        durationDays={habitDurations[s.habit.id]?.durationDays ?? null}
+                        trackedFrom={habitDurations[s.habit.id]?.createdAt ?? ""}
+                        canEdit={!isCompleted}
+                        onSet={(days) => onSetDuration(s.habit.id, days)}
+                      />
                       {!isCompleted && (
                         <button
                           onClick={() => onUnlinkHabit(s.habit.id)}

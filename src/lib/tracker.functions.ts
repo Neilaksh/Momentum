@@ -271,23 +271,69 @@ export const clearAllRoutineTasks = createServerFn({ method: "POST" })
 
 
 /**
- * Weekly hit-rate for a habit over the whole Monday-weeks spanned since THAT
- * habit was linked to the goal (goal_habit_links.created_at) — not since the
- * goal itself was created — so a habit connected weeks after goal creation is
- * only accountable for weeks from the link onward. `weeksTotal` counts every
- * Monday-start week from the week that contains the link's `created_at`
- * through the current week (inclusive). A week "counts" when the habit's log
- * count for that week is >= its target_per_week.
+ * Progress for a habit linked to a goal, windowed from that specific link's
+ * goal_habit_links.created_at (not the habit's or the goal's creation date).
+ *
+ * Duration-limited (durationDays set): day-count mode. The window is
+ * [link_created_at, link_created_at + duration_days). Progress is distinct
+ * days logged in that window / duration_days, shown as "X/Y days" and that
+ * same fraction as the percentage. On-track = every day in the window was
+ * logged (daysLogged === durationDays).
+ *
+ * Unlimited (durationDays null): weekly-bucket mode (unchanged). A week
+ * "counts" when the habit's log count for that week is >= its target_per_week;
+ * hit-rate is weeks met / weeks total through the current week.
  */
+type HabitLinkWindow = { createdAt: string; durationDays: number | null };
+
 function computeHabitProgress(
   linkCreatedAt: string,
+  durationDays: number | null,
   habit: { id: string; title: string; target_per_week: number },
   done: Set<string> | undefined,
 ): GoalHabitStat {
   const created = parseISODate(linkCreatedAt.slice(0, 10));
+
+  // ---- Duration-limited: day-count mode ----
+  if (durationDays != null) {
+    const windowStartISO = toISODate(created);
+    const windowEndISO = toISODate(addDays(created, durationDays - 1));
+    let daysLogged = 0;
+    if (done) {
+      for (const d of done) {
+        if (d >= windowStartISO && d <= windowEndISO) daysLogged += 1;
+      }
+    }
+    return {
+      habitId: habit.id,
+      title: parseHabitTitle(habit.title).displayTitle || habit.title,
+      targetPerWeek: habit.target_per_week,
+      // weeksMet/weeksTotal are repurposed to daysLogged/durationDays so the
+      // shared on-track rule and snapshot mapping stay uniform across modes.
+      weeksTotal: durationDays,
+      weeksMet: daysLogged,
+      hitRate: durationDays > 0 ? (daysLogged / durationDays) * 100 : 0,
+      durationDays,
+      daysLogged,
+    };
+  }
+
+  // ---- Unlimited: weekly-bucket mode (unchanged) ----
   const weekStarts: string[] = [];
   let cur = startOfWeek(created);
-  const end = startOfWeek(new Date());
+  let end = startOfWeek(new Date());
+  // Optional bounded window: track for duration_days days starting from the
+  // link's created_at. The last tracked day is created_at + duration_days - 1;
+  // enumeration stops at the week containing it and never runs past the
+  // current week (no phantom future weeks).
+  const windowRange: [string, string] | null =
+    durationDays != null
+      ? [toISODate(created), toISODate(addDays(created, durationDays - 1))]
+      : null;
+  if (windowRange) {
+    const windowEndWeek = startOfWeek(parseISODate(windowRange[1]));
+    if (windowEndWeek < end) end = windowEndWeek;
+  }
   while (cur <= end) {
     weekStarts.push(toISODate(cur));
     cur = addDays(cur, 7);
@@ -295,15 +341,19 @@ function computeHabitProgress(
   const weeksTotal = weekStarts.length;
   const thisWeekStart = weekStarts[weekStarts.length - 1];
   let weeksMet = 0;
-  // Partial credit for the current, still-in-progress week: fraction of the
-  // weekly target actually logged so far (e.g. 1/7 logged ≈ 14%), capped at
-  // 100% so over-logging can't exceed full credit.
+  // Partial credit for the last enumerated week — the current in-progress week
+  // for an open-ended window, or the final tracked week of a closed duration
+  // window: fraction of the weekly target actually logged (e.g. 1/7 ≈ 14%),
+  // capped at 1 so over-logging can't exceed full credit.
   let partial = 0;
   for (const ws of weekStarts) {
     const weekEnd = toISODate(addDays(parseISODate(ws), 6));
     let count = 0;
     if (done) {
       for (const d of done) {
+        // Bounded window: logs outside [created, created + duration_days) do
+        // not count toward this goal's tracking of the habit.
+        if (windowRange && (d < windowRange[0] || d > windowRange[1])) continue;
         if (d >= ws && d <= weekEnd) count += 1;
         if (count >= habit.target_per_week) break;
       }
@@ -311,7 +361,6 @@ function computeHabitProgress(
     if (count >= habit.target_per_week) {
       weeksMet += 1;
     } else if (ws === thisWeekStart && count > 0) {
-      // Current (in-progress) week: partial credit instead of binary 1/0.
       partial = Math.min(count / habit.target_per_week, 1);
     }
   }
@@ -337,7 +386,7 @@ function computeGoalProgress(
   stat: { total: number; done: number },
   habits: { id: string; title: string; target_per_week: number }[],
   logsByHabit: Map<string, Set<string>>,
-  linkedHabitLinks: Map<string, string>,
+  linkedHabitLinks: Map<string, HabitLinkWindow>,
 ): GoalProgress {
   const taskTotal = stat.total;
   const taskDone = stat.done;
@@ -351,9 +400,10 @@ function computeGoalProgress(
   // for the weeks before it was connected.
   const linked = habits.filter((h) => linkedHabitLinks.has(h.id));
 
-  const linkedStats: GoalHabitStat[] = linked.map((h) =>
-    computeHabitProgress(linkedHabitLinks.get(h.id)!, h, logsByHabit.get(h.id)),
-  );
+  const linkedStats: GoalHabitStat[] = linked.map((h) => {
+    const link = linkedHabitLinks.get(h.id)!;
+    return computeHabitProgress(link.createdAt, link.durationDays, h, logsByHabit.get(h.id));
+  });
 
   const hasHabits = linkedStats.length > 0;
   const habitScore = hasHabits
@@ -413,16 +463,16 @@ async function snapshotGoalHabitStats(
 
   // Many-to-many goal<->habit links for exactly these goals, so a habit shared
   // across several goals is snapshotted independently per goal (each snapshot
-  // row is keyed on (goal_id, habit_id)). Each link carries its own created_at,
-  // which — not the goal's — is the hit-rate window start for that pair.
-  const habitLinksByGoal = new Map<string, Map<string, string>>();
+  // row is keyed on (goal_id, habit_id)). Each link carries its own created_at
+  // (the hit-rate window start for that pair) and an optional duration_days cap.
+  const habitLinksByGoal = new Map<string, Map<string, HabitLinkWindow>>();
   const { data: linkRows } = await supabase
     .from("goal_habit_links")
-    .select("goal_id, habit_id, created_at")
+    .select("goal_id, habit_id, created_at, duration_days")
     .in("goal_id", goals.map((g) => g.id));
   for (const l of linkRows ?? []) {
-    const byHabit = habitLinksByGoal.get(l.goal_id) ?? new Map<string, string>();
-    byHabit.set(l.habit_id, l.created_at);
+    const byHabit = habitLinksByGoal.get(l.goal_id) ?? new Map<string, HabitLinkWindow>();
+    byHabit.set(l.habit_id, { createdAt: l.created_at, durationDays: l.duration_days });
     habitLinksByGoal.set(l.goal_id, byHabit);
   }
 
@@ -450,7 +500,7 @@ async function snapshotGoalHabitStats(
   for (const g of goals) {
     // Same computation the UI displays, so the snapshot matches what the user
     // saw at the moment of completion.
-    const progress = computeGoalProgress({ total: 0, done: 0 }, habits, logsByHabit, habitLinksByGoal.get(g.id) ?? new Map<string, string>());
+    const progress = computeGoalProgress({ total: 0, done: 0 }, habits, logsByHabit, habitLinksByGoal.get(g.id) ?? new Map<string, HabitLinkWindow>());
     for (const lh of progress.linkedHabits) {
       rows.push({
         goal_id: g.id,
@@ -597,23 +647,35 @@ export const getGoals = createServerFn({ method: "POST" })
 
     // Many-to-many goal<->habit links: a habit may back several goals, and each
     // (goal, habit) pair computes its own hit-rate starting from that link's
-    // created_at — not the goal's. The flattened habit-id record is also
-    // returned to the client so the goal detail view's Linked Habits list
-    // reads the join table instead of the old single-FK column.
-    const habitLinksByGoal = new Map<string, Map<string, string>>();
+    // created_at — not the goal's — optionally bounded by the link's
+    // duration_days. The flattened habit-id record is also returned to the
+    // client so the goal detail view's Linked Habits list reads the join table
+    // instead of the old single-FK column.
+    const habitLinksByGoal = new Map<string, Map<string, HabitLinkWindow>>();
     if (goalRows.length > 0) {
       const { data: linkRows } = await supabase
         .from("goal_habit_links")
-        .select("goal_id, habit_id, created_at")
+        .select("goal_id, habit_id, created_at, duration_days")
         .in("goal_id", goalRows.map((gr) => gr.id));
       for (const l of linkRows ?? []) {
-        const byHabit = habitLinksByGoal.get(l.goal_id) ?? new Map<string, string>();
-        byHabit.set(l.habit_id, l.created_at);
+        const byHabit = habitLinksByGoal.get(l.goal_id) ?? new Map<string, HabitLinkWindow>();
+        byHabit.set(l.habit_id, { createdAt: l.created_at, durationDays: l.duration_days });
         habitLinksByGoal.set(l.goal_id, byHabit);
       }
     }
     const habitIdsByGoalRecord: Record<string, string[]> = {};
     for (const [gid, links] of habitLinksByGoal) habitIdsByGoalRecord[gid] = [...links.keys()];
+    const habitDurationsByGoal: Record<
+      string,
+      Record<string, { durationDays: number | null; createdAt: string }>
+    > = {};
+    for (const [gid, links] of habitLinksByGoal) {
+      const perHabit: Record<string, { durationDays: number | null; createdAt: string }> = {};
+      for (const [habitId, link] of links) {
+        perHabit[habitId] = { durationDays: link.durationDays, createdAt: link.createdAt };
+      }
+      habitDurationsByGoal[gid] = perHabit;
+    }
     const logsByHabit = new Map<string, Set<string>>();
     if (habits.length > 0) {
       const { data: logRows } = await supabase
@@ -633,7 +695,7 @@ export const getGoals = createServerFn({ method: "POST" })
         stats[g.id] ?? { total: 0, done: 0 },
         habits,
         logsByHabit,
-        habitLinksByGoal.get(g.id) ?? new Map<string, string>(),
+        habitLinksByGoal.get(g.id) ?? new Map<string, HabitLinkWindow>(),
       );
     }
 
@@ -711,7 +773,18 @@ export const getGoals = createServerFn({ method: "POST" })
       const snapMap = new Map(snaps.map((s) => [s.habitId, s]));
       const linkedHabits = p.linkedHabits.map((lh) => {
         const s = snapMap.get(lh.habitId);
-        return s ? { ...lh, weeksMet: s.weeksOnTarget, weeksTotal: s.totalWeeks, hitRate: s.hitRatePct } : lh;
+        if (!s) return lh;
+        const restored = {
+          ...lh,
+          weeksMet: s.weeksOnTarget,
+          weeksTotal: s.totalWeeks,
+          hitRate: s.hitRatePct,
+        };
+        // Duration-limited links store daysLogged/durationDays in the snapshot's
+        // weeks_on_target/total_weeks; restore the day count for the display.
+        return lh.durationDays != null
+          ? { ...restored, daysLogged: s.weeksOnTarget }
+          : restored;
       });
       const habitScore =
         linkedHabits.length > 0
@@ -738,6 +811,7 @@ export const getGoals = createServerFn({ method: "POST" })
       progressByGoal,
       snapshotsByGoal,
       habitIdsByGoal: habitIdsByGoalRecord,
+      habitDurationsByGoal,
     };
   });
 

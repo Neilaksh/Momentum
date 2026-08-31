@@ -96,18 +96,21 @@ export type Database = {
       goal_habit_links: {
         Row: {
           created_at: string
+          duration_days: number | null
           goal_id: string
           habit_id: string
           id: string
         }
         Insert: {
           created_at?: string
+          duration_days?: number | null
           goal_id: string
           habit_id: string
           id?: string
         }
         Update: {
           created_at?: string
+          duration_days?: number | null
           goal_id?: string
           habit_id?: string
           id?: string

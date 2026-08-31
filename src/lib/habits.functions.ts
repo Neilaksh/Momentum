@@ -106,10 +106,23 @@ export const linkHabitToGoal = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .maybeSingle();
     if (!habit) throw new Error("Habit not found");
-    await supabase.from("goal_habit_links").upsert(
-      { goal_id: data.goalId, habit_id: data.habitId },
+    // Reset-on-conflict: if a row for this (goal, habit) pair already exists —
+    // e.g. because an unlink delete was a silent no-op — a default upsert merge
+    // (ON CONFLICT DO UPDATE) only writes the columns present in the payload.
+    // By explicitly including duration_days: null and created_at: now, both a
+    // fresh insert and a merge-on-conflict converge to the same "genuinely new
+    // link" state: the tracking window and "Tracked until" date restart from
+    // today instead of carrying over the pre-existing row's values.
+    const { error } = await supabase.from("goal_habit_links").upsert(
+      {
+        goal_id: data.goalId,
+        habit_id: data.habitId,
+        duration_days: null,
+        created_at: new Date().toISOString(),
+      },
       { onConflict: "goal_id,habit_id" },
     );
+    if (error) throw new Error(`Failed to link habit to goal: ${error.message}`);
     return { ok: true };
   });
 
@@ -122,9 +135,39 @@ export const unlinkHabitFromGoal = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     // Remove just this (goal, habit) pair — other goals sharing the habit are
     // unaffected.
-    await context.supabase
+    const { error } = await context.supabase
       .from("goal_habit_links")
       .delete()
+      .eq("goal_id", data.goalId)
+      .eq("habit_id", data.habitId);
+    // Surface DB failures instead of silently reporting a successful unlink
+    // (PostgREST returns 200 with zero affected rows when RLS filters the
+    // row out, so absence of an error does not prove the row was removed — but
+    // a real DB error must not be swallowed).
+    if (error) throw new Error(`Failed to unlink habit from goal: ${error.message}`);
+    return { ok: true };
+  });
+
+export const updateHabitTrackingDuration = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { goalId: string; habitId: string; durationDays: number | null }) =>
+      z
+        .object({
+          goalId: z.string(),
+          habitId: z.string(),
+          durationDays: z.number().int().min(1).max(3650).nullable(),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    // Scoped update: touches duration_days on the exact (goal_id, habit_id)
+    // link row only. It cannot create or delete links, and cannot affect the
+    // habit's links to any other goal. RLS scopes the row to the owning goal.
+    const patch: TablesUpdate<"goal_habit_links"> = { duration_days: data.durationDays };
+    await context.supabase
+      .from("goal_habit_links")
+      .update(patch)
       .eq("goal_id", data.goalId)
       .eq("habit_id", data.habitId);
     return { ok: true };
