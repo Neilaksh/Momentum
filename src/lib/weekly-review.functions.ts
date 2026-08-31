@@ -13,14 +13,14 @@ export const getWeeklyReview = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { weekStart: string }) => z.object({ weekStart: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
-    const review = await loadWeeklyReview(context.supabase as any, context.userId, data.weekStart);
+    const review = await loadWeeklyReview(context.supabase, context.userId, data.weekStart);
     return { review };
   });
 
 export const listWeeklyReviews = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const weekStarts = await loadListWeeklyReviews(context.supabase as any, context.userId);
+    const weekStarts = await loadListWeeklyReviews(context.supabase, context.userId);
     return { weekStarts };
   });
 
@@ -31,7 +31,7 @@ export const getReviewPromptStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const status = await loadReviewPromptStatus(
-      context.supabase as any,
+      context.supabase,
       context.userId,
       data?.force ? { force: true } : undefined,
     );
@@ -42,7 +42,7 @@ export const markReviewSeen = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { weekStart: string }) => z.object({ weekStart: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
-    await markReviewSeenRow(context.supabase as any, context.userId, data.weekStart);
+    await markReviewSeenRow(context.supabase, context.userId, data.weekStart);
     return { ok: true };
   });
 
@@ -52,6 +52,6 @@ export const saveWeeklyReflection = createServerFn({ method: "POST" })
     z.object({ weekStart: z.string(), reflectionText: z.string().max(300) }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    await saveWeeklyReflectionRow(context.supabase as any, context.userId, data.weekStart, data.reflectionText);
+    await saveWeeklyReflectionRow(context.supabase, context.userId, data.weekStart, data.reflectionText);
     return { ok: true };
   });

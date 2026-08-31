@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, parseISODate, toISODate, weekDates } from "./tracker-shared";
-import type { Habit, HabitStat, HabitsData } from "./habits-shared";
+import type { HabitStat, HabitsData } from "./habits-shared";
+import type { Database } from "@/integrations/supabase/types";
 
-type DB = SupabaseClient<any, "public", any>;
+type DB = SupabaseClient<Database>;
 
 /** Number of whole-ish weeks elapsed in the window [from, to] inclusive, as a fraction. */
 function weeksBetween(from: Date, to: Date): number {
@@ -40,7 +41,7 @@ export async function loadHabits(
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
-  const habits = (habitRows ?? []) as Habit[];
+  const habits = habitRows ?? [];
 
   const rangeStart = yearStartISO < dates[0]! ? yearStartISO : dates[0]!;
   const rangeEnd = toISODate(today) > dates[6]! ? toISODate(today) : dates[6]!;
@@ -52,7 +53,7 @@ export async function loadHabits(
     .gte("log_date", rangeStart)
     .lte("log_date", rangeEnd);
 
-  const logs = (logRows ?? []) as { habit_id: string; log_date: string }[];
+  const logs = logRows ?? [];
   const byHabit = new Map<string, Set<string>>();
   for (const l of logs) {
     const set = byHabit.get(l.habit_id) ?? new Set<string>();

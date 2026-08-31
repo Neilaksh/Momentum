@@ -13,7 +13,7 @@ import {
 export const getSubjects = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const subjects = await listSubjects(context.supabase as any, context.userId);
+    const subjects = await listSubjects(context.supabase, context.userId);
     return { subjects };
   });
 
@@ -23,7 +23,7 @@ export const createSubject = createServerFn({ method: "POST" })
     z.object({ name: z.string().min(1).max(120), color: z.string().min(1).max(40) }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const subject = await insertSubject(context.supabase as any, context.userId, data.name, data.color);
+    const subject = await insertSubject(context.supabase, context.userId, data.name, data.color);
     return { subject };
   });
 
@@ -42,7 +42,7 @@ export const updateSubject = createServerFn({ method: "POST" })
     const patch: { name?: string; color?: string } = {};
     if (data.name !== undefined) patch.name = data.name;
     if (data.color !== undefined) patch.color = data.color;
-    const subject = await updateSubjectRow(context.supabase as any, context.userId, data.id, patch);
+    const subject = await updateSubjectRow(context.supabase, context.userId, data.id, patch);
     return { subject };
   });
 
@@ -50,7 +50,7 @@ export const checkSubjectUsage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
-    const usage = await countSubjectUsage(context.supabase as any, context.userId, data.id);
+    const usage = await countSubjectUsage(context.supabase, context.userId, data.id);
     return { usage };
   });
 
@@ -58,7 +58,7 @@ export const deleteSubject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
-    await deleteSubjectRow(context.supabase as any, context.userId, data.id);
+    await deleteSubjectRow(context.supabase, context.userId, data.id);
     return { ok: true };
   });
 
@@ -69,7 +69,7 @@ export const getSubjectBreakdown = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const entries = await loadSubjectBreakdown(
-      context.supabase as any,
+      context.supabase,
       context.userId,
       data.fromDate,
       data.toDate,

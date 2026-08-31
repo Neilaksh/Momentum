@@ -1,3 +1,4 @@
+import type { Tables } from "@/integrations/supabase/types";
 import type { Subject } from "./subjects-shared";
 
 export const WEEKDAY_NAMES = [
@@ -13,21 +14,8 @@ export const WEEKDAY_NAMES = [
 export const XP_PER_TASK = 10;
 export const XP_PERFECT_DAY = 50;
 
-export type DayTask = {
-  id: string;
-  task_date: string;
-  title: string;
-  description: string | null;
-  sort_order: number;
-  source: string;
-  routine_task_id: string | null;
-  goal_id: string | null;
-  subject_id: string | null;
-  completed_at: string | null;
-  progress_pct: number;
-  rollover_count: number;
-  is_stale: boolean;
-};
+/** day_tasks row — sourced from the generated Supabase types (single source of truth). */
+export type DayTask = Tables<"day_tasks">;
 
 /**
  * Dedupe key for a goal-linked day_tasks row. The rollover, weekly
@@ -187,8 +175,6 @@ export function pctComplete(tasks: { completed_at: string | null }[]): number {
   return Math.round((done / tasks.length) * 100);
 }
 
-export const DEFAULT_TIME_SLOTS: readonly string[] = [];
-
 export const SAMPLE_TIME_SLOTS = [
   "5:45–6:00 AM",
   "6:00–7:00 AM",
@@ -253,17 +239,6 @@ export const DEFAULT_CATEGORIES = [
   { name: "General", colorKey: "slate" as ColorKey },
 ];
 
-export const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  Fitness: COLOR_PALETTE.emerald,
-  Study: COLOR_PALETTE.cyan,
-  Meals: COLOR_PALETTE.amber,
-  Recreation: COLOR_PALETTE.purple,
-  Unwind: COLOR_PALETTE.indigo,
-  Personal: COLOR_PALETTE.rose,
-  Work: COLOR_PALETTE.blue,
-  General: COLOR_PALETTE.slate,
-};
-
 export type ParsedRoutineTitle = {
   timeSlot: string;
   category: string;
@@ -314,8 +289,10 @@ export function parseRoutineTitle(rawTitle: string): ParsedRoutineTitle {
     }
 
     if (!COLOR_PALETTE[colorKey]) {
-      const fallbackColor = CATEGORY_COLORS[category];
-      colorKey = fallbackColor ? "cyan" : "slate";
+      // Fall back through the category's own palette key (kept mapping from the
+      // removed CATEGORY_COLORS), else slate.
+      const fallbackColorKey = (DEFAULT_CATEGORIES.find((c) => c.name === category)?.colorKey ?? "slate") as ColorKey;
+      colorKey = COLOR_PALETTE[fallbackColorKey] ? fallbackColorKey : "slate";
     }
 
     return {

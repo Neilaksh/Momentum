@@ -45,7 +45,6 @@ import type { Subject } from "@/lib/subjects-shared";
 import {
   COLOR_PALETTE,
   DEFAULT_CATEGORIES,
-  DEFAULT_TIME_SLOTS,
   SAMPLE_TIME_SLOTS,
   SAMPLE_WEEKLY_ROUTINE,
   WEEKDAY_NAMES,

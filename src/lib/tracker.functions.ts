@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import {
   ensureProfile,
   loadHistory,
-  loadDay,
   loadWeek,
   recomputeStats,
   rolloverIncompleteGoalTasks,
@@ -18,7 +19,7 @@ export const getWeek = createServerFn({ method: "POST" })
     z.object({ weekStart: z.string() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    return loadWeek(context.supabase as any, context.userId, data.weekStart);
+    return loadWeek(context.supabase, context.userId, data.weekStart);
   });
 
 export const toggleDayTask = createServerFn({ method: "POST" })
@@ -29,7 +30,7 @@ export const toggleDayTask = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     // Completed-goal tasks are locked: the UI disables their checkboxes, this is
     // the server-side backstop so no client can toggle them afterwards.
-    const { data: taskRow } = await (context.supabase as any)
+    const { data: taskRow } = await context.supabase
       .from("day_tasks")
       .select("goal_id, task_date")
       .eq("id", data.id)
@@ -41,7 +42,7 @@ export const toggleDayTask = createServerFn({ method: "POST" })
       throw new Error("Tasks from past days are locked and cannot be changed.");
     }
     if (taskRow?.goal_id) {
-      const { data: goalRow } = await (context.supabase as any)
+      const { data: goalRow } = await context.supabase
         .from("goals")
         .select("status")
         .eq("id", taskRow.goal_id)
@@ -51,19 +52,21 @@ export const toggleDayTask = createServerFn({ method: "POST" })
         throw new Error("This task belongs to a completed goal and is locked.");
       }
     }
-    const patch: Record<string, unknown> = { completed_at: data.completed ? new Date().toISOString() : null };
+    const patch: TablesUpdate<"day_tasks"> = {
+      completed_at: data.completed ? new Date().toISOString() : null,
+    };
     if (data.completed) {
-      patch["progress_pct"] = 100;
+      patch.progress_pct = 100;
     } else {
       // Un-marking a task manually re-engages it: clear stale / rollover state.
-      patch["is_stale"] = false;
-      patch["rollover_count"] = 0;
+      patch.is_stale = false;
+      patch.rollover_count = 0;
     }
-    await (context.supabase as any)
+    await context.supabase
       .from("day_tasks")
       .update(patch)
       .eq("id", data.id);
-    const profile = await recomputeStats(context.supabase as any, context.userId);
+    const profile = await recomputeStats(context.supabase, context.userId);
     return { profile };
   });
 
@@ -87,7 +90,7 @@ export const addDayTask = createServerFn({ method: "POST" })
     // of inserting a second copy. Protects both the dashboard add-task input
     // and the goals-page direct-task add against double-fires.
     const dedupeWindowStart = new Date(Date.now() - 5_000).toISOString();
-    const { data: existing } = await (context.supabase as any)
+    const { data: existing } = await context.supabase
       .from("day_tasks")
       .select("id")
       .eq("user_id", context.userId)
@@ -98,7 +101,7 @@ export const addDayTask = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
     if (existing) return { task: existing };
-    const { data: row } = await (context.supabase as any)
+    const { data: row } = await context.supabase
       .from("day_tasks")
       .insert({
         user_id: context.userId,
@@ -120,7 +123,7 @@ export const deleteDayTask = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     // Past-day tasks are locked: history is read-only. The UI disables the delete
     // control; this is the server-side backstop so no client can bypass it.
-    const { data: taskRow } = await (context.supabase as any)
+    const { data: taskRow } = await context.supabase
       .from("day_tasks")
       .select("task_date")
       .eq("id", data.id)
@@ -129,30 +132,15 @@ export const deleteDayTask = createServerFn({ method: "POST" })
     if (taskRow?.task_date && taskRow.task_date < toISODate(new Date())) {
       throw new Error("Tasks from past days are locked and cannot be deleted.");
     }
-    await (context.supabase as any).from("day_tasks").delete().eq("id", data.id);
-    const profile = await recomputeStats(context.supabase as any, context.userId);
+    await context.supabase.from("day_tasks").delete().eq("id", data.id);
+    const profile = await recomputeStats(context.supabase, context.userId);
     return { profile };
-  });
-
-export const updateDayTaskDate = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { id: string; date: string }) =>
-      z.object({ id: z.string(), date: z.string() }).parse(input),
-  )
-  .handler(async ({ data, context }) => {
-    await (context.supabase as any)
-      .from("day_tasks")
-      .update({ task_date: data.date, is_stale: false, rollover_count: 0 })
-      .eq("id", data.id)
-      .eq("user_id", context.userId);
-    return { ok: true };
   });
 
 export const getRoutine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data } = await (context.supabase as any)
+    const { data } = await context.supabase
       .from("routine_tasks")
       .select("*")
       .eq("user_id", context.userId)
@@ -161,38 +149,11 @@ export const getRoutine = createServerFn({ method: "POST" })
     return { tasks: data ?? [] };
   });
 
-export const addRoutineTask = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: { weekday: number; title: string; goalId?: string | null; subjectId?: string | null }) =>
-    z
-      .object({
-        weekday: z.number().int().min(0).max(6),
-        title: z.string().min(1).max(200),
-        goalId: z.string().nullable().optional(),
-        subjectId: z.string().nullable().optional(),
-      })
-      .parse(input),
-  )
-  .handler(async ({ data, context }) => {
-    const { data: row } = await (context.supabase as any)
-      .from("routine_tasks")
-      .insert({
-        user_id: context.userId,
-        weekday: data.weekday,
-        title: data.title.trim(),
-        goal_id: data.goalId ?? null,
-        subject_id: data.subjectId ?? null,
-      })
-      .select("*")
-      .maybeSingle();
-    return { task: row };
-  });
-
 export const deleteRoutineTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
-    await (context.supabase as any).from("routine_tasks").delete().eq("id", data.id);
+    await context.supabase.from("routine_tasks").delete().eq("id", data.id);
     return { ok: true };
   });
 
@@ -221,15 +182,15 @@ export const updateRoutineTask = createServerFn({ method: "POST" })
         .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const patch: Record<string, unknown> = {};
-    if (data.title !== undefined) patch["title"] = data.title.trim();
-    if (data.weekday !== undefined) patch["weekday"] = data.weekday;
-    if (data.isActive !== undefined) patch["is_active"] = data.isActive;
-    if (data.goalId !== undefined) patch["goal_id"] = data.goalId;
-    if (data.subjectId !== undefined) patch["subject_id"] = data.subjectId;
-    if (data.sortOrder !== undefined) patch["sort_order"] = data.sortOrder;
+    const patch: TablesUpdate<"routine_tasks"> = {};
+    if (data.title !== undefined) patch.title = data.title.trim();
+    if (data.weekday !== undefined) patch.weekday = data.weekday;
+    if (data.isActive !== undefined) patch.is_active = data.isActive;
+    if (data.goalId !== undefined) patch.goal_id = data.goalId;
+    if (data.subjectId !== undefined) patch.subject_id = data.subjectId;
+    if (data.sortOrder !== undefined) patch.sort_order = data.sortOrder;
 
-    const { data: updated } = await (context.supabase as any)
+    const { data: updated } = await context.supabase
       .from("routine_tasks")
       .update(patch)
       .eq("id", data.id)
@@ -246,7 +207,7 @@ export const toggleRoutineTaskActive = createServerFn({ method: "POST" })
     z.object({ id: z.string(), isActive: z.boolean() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    await (context.supabase as any)
+    await context.supabase
       .from("routine_tasks")
       .update({ is_active: data.isActive })
       .eq("id", data.id)
@@ -294,28 +255,14 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
       sort_order: item.sortOrder ?? 0,
       is_active: item.isActive ?? true,
     }));
-    await (context.supabase as any).from("routine_tasks").insert(rows);
-    return { ok: true };
-  });
-
-export const batchDeleteRoutineTasks = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: { ids: string[] }) =>
-    z.object({ ids: z.array(z.string()).min(1) }).parse(input),
-  )
-  .handler(async ({ data, context }) => {
-    await (context.supabase as any)
-      .from("routine_tasks")
-      .delete()
-      .in("id", data.ids)
-      .eq("user_id", context.userId);
+    await context.supabase.from("routine_tasks").insert(rows);
     return { ok: true };
   });
 
 export const clearAllRoutineTasks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await (context.supabase as any)
+    await context.supabase
       .from("routine_tasks")
       .delete()
       .eq("user_id", context.userId);
@@ -437,7 +384,7 @@ function computeGoalProgress(
  * the goal is active, and the habit keeps logging live everywhere else.
  */
 async function snapshotGoalHabitStats(
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   userId: string,
   goalIds: string[],
 ): Promise<void> {
@@ -447,7 +394,7 @@ async function snapshotGoalHabitStats(
     .select("id")
     .in("id", goalIds)
     .eq("user_id", userId);
-  const goals = (goalRows ?? []) as { id: string }[];
+  const goals = goalRows ?? [];
   if (goals.length === 0) return;
 
   // Many-to-many goal<->habit links for exactly these goals, so a habit shared
@@ -459,7 +406,7 @@ async function snapshotGoalHabitStats(
     .from("goal_habit_links")
     .select("goal_id, habit_id, created_at")
     .in("goal_id", goals.map((g) => g.id));
-  for (const l of (linkRows ?? []) as { goal_id: string; habit_id: string; created_at: string }[]) {
+  for (const l of linkRows ?? []) {
     const byHabit = habitLinksByGoal.get(l.goal_id) ?? new Map<string, string>();
     byHabit.set(l.habit_id, l.created_at);
     habitLinksByGoal.set(l.goal_id, byHabit);
@@ -470,11 +417,7 @@ async function snapshotGoalHabitStats(
     .select("id, title, target_per_week")
     .eq("user_id", userId)
     .eq("is_archived", false);
-  const habits = (habitRows ?? []) as {
-    id: string;
-    title: string;
-    target_per_week: number;
-  }[];
+  const habits = habitRows ?? [];
 
   const logsByHabit = new Map<string, Set<string>>();
   if (habits.length > 0) {
@@ -482,20 +425,14 @@ async function snapshotGoalHabitStats(
       .from("habit_logs")
       .select("habit_id, log_date")
       .in("habit_id", habits.map((h) => h.id));
-    for (const l of (logRows ?? []) as { habit_id: string; log_date: string }[]) {
+    for (const l of logRows ?? []) {
       const set = logsByHabit.get(l.habit_id) ?? new Set<string>();
       set.add(l.log_date);
       logsByHabit.set(l.habit_id, set);
     }
   }
 
-  const rows: {
-    goal_id: string;
-    habit_id: string;
-    weeks_on_target: number;
-    total_weeks: number;
-    hit_rate_pct: number;
-  }[] = [];
+  const rows: TablesInsert<"goal_habit_snapshots">[] = [];
   for (const g of goals) {
     // Same computation the UI displays, so the snapshot matches what the user
     // saw at the moment of completion.
@@ -518,7 +455,7 @@ async function snapshotGoalHabitStats(
 export const getGoals = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
 
     // Automatically rollover uncompleted goal tasks to today
     await rolloverIncompleteGoalTasks(supabase, context.userId);
@@ -529,17 +466,18 @@ export const getGoals = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .order("created_at", { ascending: true });
 
-    const goalRows = (goals ?? []) as any[];
+    const goalRows = goals ?? [];
 
-    // Per-goal day_task completion stats
+    // Per-goal day_task completion stats (full rows — GoalCard renders them and
+    // GoalsResponse on the client types them as complete day_tasks rows).
     const { data: linked } = await supabase
       .from("day_tasks")
-      .select("id, goal_id, completed_at, task_date, title, source, routine_task_id, sort_order, subject_id, rollover_count")
+      .select("*")
       .eq("user_id", context.userId)
       .not("goal_id", "is", null)
       .order("task_date", { ascending: false });
 
-    const linkedRows = (linked ?? []) as any[];
+    const linkedRows = linked ?? [];
 
     // Rollover-superseded rows must not count toward a goal's task total/done.
     // When an uncompleted goal task rolls over, a fresh copy is created on a
@@ -570,7 +508,7 @@ export const getGoals = createServerFn({ method: "POST" })
     // direct/one-off goal tasks only — no recurring-instance special-casing.
     const supersededIds = new Set<string>();
     if (linkedRows.length > 0) {
-      const chains = new Map<string, any[]>();
+      const chains = new Map<string, typeof linkedRows>();
       for (const row of linkedRows) {
         const key = `${row.goal_id}|${(row.title ?? "").trim().toLowerCase()}`;
         const list = chains.get(key) ?? [];
@@ -600,9 +538,10 @@ export const getGoals = createServerFn({ method: "POST" })
     }
 
     const stats: Record<string, { total: number; done: number }> = {};
-    const tasksByGoal: Record<string, any[]> = {};
+    const tasksByGoal: Record<string, typeof linkedRows> = {};
 
     for (const row of linkedRows) {
+      if (!row.goal_id) continue; // query filters goal_id IS NOT NULL; guard for the type
       if (!tasksByGoal[row.goal_id]) tasksByGoal[row.goal_id] = [];
       // The Goal Tasks list keeps every row — frozen originals stay visible as
       // read-only history (they are locked client-side and server-side). Only
@@ -625,8 +564,9 @@ export const getGoals = createServerFn({ method: "POST" })
       .not("goal_id", "is", null)
       .eq("is_active", true);
 
-    const routinesByGoal: Record<string, any[]> = {};
-    for (const rt of (routines ?? []) as any[]) {
+    const routinesByGoal: Record<string, NonNullable<typeof routines>> = {};
+    for (const rt of routines ?? []) {
+      if (!rt.goal_id) continue; // query filters goal_id IS NOT NULL; guard for the type
       if (!routinesByGoal[rt.goal_id]) routinesByGoal[rt.goal_id] = [];
       routinesByGoal[rt.goal_id]!.push(rt);
     }
@@ -639,11 +579,7 @@ export const getGoals = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .eq("is_archived", false);
 
-    const habits = (habitRows ?? []) as {
-      id: string;
-      title: string;
-      target_per_week: number;
-    }[];
+    const habits = habitRows ?? [];
 
     // Many-to-many goal<->habit links: a habit may back several goals, and each
     // (goal, habit) pair computes its own hit-rate starting from that link's
@@ -655,8 +591,8 @@ export const getGoals = createServerFn({ method: "POST" })
       const { data: linkRows } = await supabase
         .from("goal_habit_links")
         .select("goal_id, habit_id, created_at")
-        .in("goal_id", goalRows.map((gr: any) => gr.id));
-      for (const l of (linkRows ?? []) as { goal_id: string; habit_id: string; created_at: string }[]) {
+        .in("goal_id", goalRows.map((gr) => gr.id));
+      for (const l of linkRows ?? []) {
         const byHabit = habitLinksByGoal.get(l.goal_id) ?? new Map<string, string>();
         byHabit.set(l.habit_id, l.created_at);
         habitLinksByGoal.set(l.goal_id, byHabit);
@@ -670,7 +606,7 @@ export const getGoals = createServerFn({ method: "POST" })
         .from("habit_logs")
         .select("habit_id, log_date")
         .in("habit_id", habits.map((h) => h.id));
-      for (const l of (logRows ?? []) as { habit_id: string; log_date: string }[]) {
+      for (const l of logRows ?? []) {
         const set = logsByHabit.get(l.habit_id) ?? new Set<string>();
         set.add(l.log_date);
         logsByHabit.set(l.habit_id, set);
@@ -732,7 +668,7 @@ export const getGoals = createServerFn({ method: "POST" })
         .from("goal_habit_snapshots")
         .select("goal_id, habit_id, weeks_on_target, total_weeks, hit_rate_pct, snapshotted_at")
         .in("goal_id", goalRows.map((g) => g.id));
-      for (const s of (snapRows ?? []) as any[]) {
+      for (const s of snapRows ?? []) {
         if (!snapshotsByGoal[s.goal_id]) snapshotsByGoal[s.goal_id] = [];
         snapshotsByGoal[s.goal_id]!.push({
           habitId: s.habit_id,
@@ -808,7 +744,7 @@ export const saveGoal = createServerFn({ method: "POST" })
         .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
     const payload = {
       title: data.title.trim(),
       description: data.description ?? null,
@@ -831,7 +767,7 @@ export const deleteGoal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
     // Deactivate all linked routine tasks so they stop repeating
     await supabase
       .from("routine_tasks")
@@ -842,57 +778,6 @@ export const deleteGoal = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** Attach a repeating routine task to a goal (all 7 weekdays by default, customizable). */
-export const addGoalRoutineTask = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { goalId: string; title: string; weekdays: number[] }) =>
-      z
-        .object({
-          goalId: z.string(),
-          title: z.string().min(1).max(200),
-          weekdays: z.array(z.number().int().min(0).max(6)).min(1),
-        })
-        .parse(input),
-  )
-  .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
-    const rows = data.weekdays.map((wd) => ({
-      user_id: context.userId,
-      weekday: wd,
-      title: data.title.trim(),
-      goal_id: data.goalId,
-      is_active: true,
-    }));
-    await supabase.from("routine_tasks").insert(rows);
-
-    // No auto-materialization: the Routines tab is a template/reference view only —
-    // routine entries no longer create day_tasks rows (ROUTINE_MATERIALIZATION_ENABLED
-    // is false in tracker.server.ts). Existing day_tasks stay as historical data.
-
-    return { ok: true };
-  });
-
-/** Remove a specific routine task linked to a goal. */
-export const removeGoalRoutineTask = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
-  .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
-    await supabase
-      .from("routine_tasks")
-      .delete()
-      .eq("id", data.id)
-      .eq("user_id", context.userId);
-    await supabase
-      .from("day_tasks")
-      .delete()
-      .eq("routine_task_id", data.id)
-      .eq("user_id", context.userId)
-      .is("completed_at", null);
-    return { ok: true };
-  });
-
 /** Remove a batch of routine tasks linked to a goal (atomic, avoids partial-failure from N parallel calls). */
 export const removeGoalRoutineTasksBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -900,7 +785,7 @@ export const removeGoalRoutineTasksBatch = createServerFn({ method: "POST" })
     z.object({ ids: z.array(z.string()).min(1) }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
     await supabase
       .from("routine_tasks")
       .delete()
@@ -929,9 +814,9 @@ export const updateGoalStatus = createServerFn({ method: "POST" })
         .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
-    const patch: Record<string, unknown> = { status: data.status };
-    if (data.newTargetDate !== undefined) patch["target_date"] = data.newTargetDate;
+    const supabase = context.supabase;
+    const patch: TablesUpdate<"goals"> = { status: data.status };
+    if (data.newTargetDate !== undefined) patch.target_date = data.newTargetDate;
 
     // When marking complete, deactivate linked routine tasks so they stop appearing
     if (data.status === "completed") {
@@ -960,23 +845,16 @@ export const updateGoalStatus = createServerFn({ method: "POST" })
 export const getHistory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
     const profile = await ensureProfile(supabase, context.userId);
     const history = await loadHistory(supabase, context.userId, 12);
     return { profile, ...history };
   });
 
-export const getDay = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: { date: string }) => z.object({ date: z.string() }).parse(input))
-  .handler(async ({ data, context }) => {
-    return loadDay(context.supabase as any, context.userId, data.date);
-  });
-
 export const resetTrackerData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
     const userId = context.userId;
 
     // Delete all user day tasks

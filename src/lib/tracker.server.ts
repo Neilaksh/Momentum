@@ -8,23 +8,22 @@ import {
   parseRoutineTitle,
   toISODate,
   weekDates,
-  type DayTask,
   type Profile,
   type WeekData,
 } from "./tracker-shared";
-import type { Subject } from "./subjects-shared";
+import type { Database, TablesInsert } from "@/integrations/supabase/types";
 
-type DB = SupabaseClient<any, "public", any>;
+type DB = SupabaseClient<Database>;
 
 export async function ensureProfile(supabase: DB, userId: string): Promise<Profile | null> {
   const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
-  if (data) return data as Profile;
+  if (data) return data;
   const { data: created } = await supabase
     .from("profiles")
     .insert({ id: userId })
     .select("*")
     .maybeSingle();
-  return (created as Profile) ?? null;
+  return created ?? null;
 }
 
 /** Key identifying "the same task" across days. */
@@ -57,7 +56,7 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
     .eq("user_id", userId)
     .lte("task_date", todayISO);
 
-  const rows = (data ?? []) as any[];
+  const rows = data ?? [];
   if (rows.length === 0) return 0;
 
   const overdue = rows.filter((r) => !r.completed_at && r.task_date < todayISO && !r.is_stale);
@@ -73,7 +72,7 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
       .eq("user_id", userId)
       .neq("status", "completed")
       .in("id", goalIds);
-    activeGoalIds = new Set((goals ?? []).map((g: any) => g.id));
+    activeGoalIds = new Set((goals ?? []).map((g) => g.id));
   }
 
   // Latest date on which each task key was actually completed.
@@ -109,7 +108,7 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
     if (!newest || (dateById.get(t.id) ?? "") > (dateById.get(newest) ?? "")) newestIdByKey.set(k, t.id);
   }
 
-  const toInsert: Record<string, unknown>[] = [];
+  const toInsert: TablesInsert<"day_tasks">[] = [];
   const toUpdate: { id: string; rollover_count: number; is_stale: boolean; parkToday?: boolean }[] = [];
 
   for (const t of overdue) {
@@ -199,8 +198,8 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
       .select("title, goal_id, routine_task_id")
       .eq("user_id", userId)
       .eq("task_date", todayISO);
-    const freshKeys = new Set(((freshToday ?? []) as any[]).map(taskKey));
-    const pending = toInsert.filter((r) => !freshKeys.has(taskKey(r as any)));
+    const freshKeys = new Set((freshToday ?? []).map(taskKey));
+    const pending = toInsert.filter((r) => !freshKeys.has(taskKey(r)));
     if (pending.length > 0) {
       await supabase.from("day_tasks").insert(pending);
     }
@@ -287,8 +286,8 @@ async function materializeWeekInternal(supabase: DB, userId: string, weekStart: 
 
   const have = new Set(
     (existing ?? [])
-      .filter((r: any) => r.routine_task_id)
-      .map((r: any) => `${r.task_date}|${r.routine_task_id}`),
+      .filter((r) => r.routine_task_id)
+      .map((r) => `${r.task_date}|${r.routine_task_id}`),
   );
 
   // Same-goal dedupe: a goal task may already exist on a date as a rollover copy
@@ -296,12 +295,12 @@ async function materializeWeekInternal(supabase: DB, userId: string, weekStart: 
   // goal + title so we never materialize a second row for the same goal task.
   const haveGoal = new Set(
     (existing ?? [])
-      .filter((r: any) => r.goal_id)
-      .map((r: any) => goalLinkKey(r.task_date, r)),
+      .filter((r) => r.goal_id)
+      .map((r) => goalLinkKey(r.task_date, r)),
   );
 
-  const rows: Record<string, unknown>[] = [];
-  for (const rt of (goalRoutines ?? []) as any[]) {
+  const rows: TablesInsert<"day_tasks">[] = [];
+  for (const rt of goalRoutines ?? []) {
     const date = dates[rt.weekday];
     if (!date) continue;
     if (have.has(`${date}|${rt.id}`)) continue;
@@ -348,7 +347,7 @@ export async function loadWeek(supabase: DB, userId: string, weekStart: string):
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
-  const tasks = (data ?? []) as DayTask[];
+  const tasks = data ?? [];
   const profile = await ensureProfile(supabase, userId);
 
   const { data: subjectRows } = await supabase
@@ -365,7 +364,7 @@ export async function loadWeek(supabase: DB, userId: string, weekStart: string):
       tasks: tasks.filter((t) => t.task_date === date),
     })),
     profile,
-    subjects: (subjectRows ?? []) as Subject[],
+    subjects: subjectRows ?? [],
   };
 }
 
@@ -376,7 +375,7 @@ export async function recomputeStats(supabase: DB, userId: string): Promise<Prof
     .select("task_date, completed_at")
     .eq("user_id", userId);
 
-  const rows = (data ?? []) as { task_date: string; completed_at: string | null }[];
+  const rows = data ?? [];
   const byDate = new Map<string, { total: number; done: number }>();
   for (const r of rows) {
     const entry = byDate.get(r.task_date) ?? { total: 0, done: 0 };
@@ -424,7 +423,7 @@ export async function recomputeStats(supabase: DB, userId: string): Promise<Prof
     .select("*")
     .maybeSingle();
 
-  return (updated as Profile) ?? null;
+  return updated ?? null;
 }
 
 export async function loadHistory(supabase: DB, userId: string, weeks: number) {
@@ -434,7 +433,7 @@ export async function loadHistory(supabase: DB, userId: string, weeks: number) {
     .eq("user_id", userId)
     .order("task_date", { ascending: true });
 
-  const rows = (data ?? []) as { task_date: string; completed_at: string | null }[];
+  const rows = data ?? [];
   const byWeek = new Map<string, { total: number; done: number }>();
   for (const r of rows) {
     const d = parseISODate(r.task_date);
@@ -457,32 +456,4 @@ export async function loadHistory(supabase: DB, userId: string, weeks: number) {
 
   const totalDone = rows.filter((r) => r.completed_at).length;
   return { weeks: list, totalDone, totalTasks: rows.length };
-}
-
-/** Load a single day's tasks (running the carry-forward pass first) plus the profile. */
-export async function loadDay(supabase: DB, userId: string, date: string) {
-  const d = parseISODate(date);
-  const offset = (d.getDay() + 6) % 7;
-  const weekStart = toISODate(new Date(d.getFullYear(), d.getMonth(), d.getDate() - offset));
-  await materializeWeek(supabase, userId, weekStart);
-
-  const { data } = await supabase
-    .from("day_tasks")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("task_date", date)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true });
-
-  const tasks = (data ?? []) as DayTask[];
-  const profile = await ensureProfile(supabase, userId);
-  const done = tasks.filter((t) => t.completed_at).length;
-  return {
-    date,
-    tasks,
-    profile,
-    done,
-    total: tasks.length,
-    pct: tasks.length ? Math.round((done / tasks.length) * 100) : 0,
-  };
 }

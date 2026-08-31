@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Subject, SubjectBreakdownEntry, SubjectUsage } from "./subjects-shared";
+import type { Database, TablesUpdate } from "@/integrations/supabase/types";
 
-type DB = SupabaseClient<any, "public", any>;
+type DB = SupabaseClient<Database>;
 
 export async function listSubjects(supabase: DB, userId: string): Promise<Subject[]> {
   const { data, error } = await supabase
@@ -10,7 +11,7 @@ export async function listSubjects(supabase: DB, userId: string): Promise<Subjec
     .eq("user_id", userId)
     .order("created_at", { ascending: true });
   if (error) throw new Error(`Failed to load subjects: ${error.message}`);
-  return (data ?? []) as Subject[];
+  return data ?? [];
 }
 
 export async function insertSubject(
@@ -25,7 +26,7 @@ export async function insertSubject(
     .select("*")
     .maybeSingle();
   if (error) throw new Error(`Failed to create subject: ${error.message}`);
-  return (data ?? null) as Subject | null;
+  return data ?? null;
 }
 
 export async function updateSubjectRow(
@@ -34,9 +35,9 @@ export async function updateSubjectRow(
   id: string,
   patch: { name?: string; color?: string },
 ): Promise<Subject | null> {
-  const update: Record<string, unknown> = {};
-  if (patch.name !== undefined) update["name"] = patch.name.trim();
-  if (patch.color !== undefined) update["color"] = patch.color;
+  const update: TablesUpdate<"subjects"> = {};
+  if (patch.name !== undefined) update.name = patch.name.trim();
+  if (patch.color !== undefined) update.color = patch.color;
   if (Object.keys(update).length === 0) return null;
   const { data, error } = await supabase
     .from("subjects")
@@ -46,7 +47,7 @@ export async function updateSubjectRow(
     .select("*")
     .maybeSingle();
   if (error) throw new Error(`Failed to update subject: ${error.message}`);
-  return (data ?? null) as Subject | null;
+  return data ?? null;
 }
 
 export async function countSubjectUsage(supabase: DB, userId: string, id: string): Promise<SubjectUsage> {

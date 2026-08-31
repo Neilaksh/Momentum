@@ -17,10 +17,9 @@ import type {
   WeekReviewStreakStatus,
   WeeklyReview,
 } from "./weekly-review-shared";
+import type { Database } from "@/integrations/supabase/types";
 
-type DB = SupabaseClient<any, "public", any>;
-
-type DayTaskRow = { task_date: string; completed_at: string | null };
+type DB = SupabaseClient<Database>;
 
 /**
  * Length of the streak (consecutive days each with ≥1 completed task) as of the
@@ -67,18 +66,11 @@ export async function getWeeklyReview(supabase: DB, userId: string, weekStart: s
     getSubjectBreakdown(supabase, userId, dates[0]!, dates[6]!),
   ]);
 
-  const taskRows = (taskRes.data ?? []) as DayTaskRow[];
-  const habits = (habitRes.data ?? []) as { id: string; title: string; color: string; target_per_week: number }[];
-  const logs = (logRes.data ?? []) as { habit_id: string; log_date: string }[];
-  const goals = (goalRes.data ?? []) as {
-    id: string;
-    title: string;
-    status: string;
-    color: string;
-    created_at: string;
-    updated_at: string;
-  }[];
-  const profile = (profileRes.data ?? null) as { current_streak: number; best_streak: number } | null;
+  const taskRows = taskRes.data ?? [];
+  const habits = habitRes.data ?? [];
+  const logs = logRes.data ?? [];
+  const goals = goalRes.data ?? [];
+  const profile = profileRes.data ?? null;
 
   // --- Per-day completions + XP for the week ---
   const byDate = new Map<string, { total: number; done: number }>();
@@ -206,9 +198,9 @@ export async function listWeeklyReviews(supabase: DB, userId: string): Promise<s
       /* ignore malformed */
     }
   };
-  for (const r of (tasks.data ?? []) as { task_date: string }[]) addWeek(r.task_date);
-  for (const r of (logs.data ?? []) as { log_date: string }[]) addWeek(r.log_date);
-  for (const r of (reviews.data ?? []) as { week_start_date: string }[]) addWeek(r.week_start_date);
+  for (const r of tasks.data ?? []) addWeek(r.task_date);
+  for (const r of logs.data ?? []) addWeek(r.log_date);
+  for (const r of reviews.data ?? []) addWeek(r.week_start_date);
 
   return [...weeks].sort((a, b) => (a < b ? 1 : -1));
 }

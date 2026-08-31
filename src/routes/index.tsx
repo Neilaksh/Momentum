@@ -48,6 +48,7 @@ import {
   toISODate,
   type WeekData,
 } from "@/lib/tracker-shared";
+import type { Database } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -105,7 +106,6 @@ function UnifiedTasksPage() {
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["week"] });
-    void qc.invalidateQueries({ queryKey: ["day"] });
     void qc.invalidateQueries({ queryKey: ["history"] });
     void qc.invalidateQueries({ queryKey: ["goals"] });
   };
@@ -165,7 +165,7 @@ function UnifiedTasksPage() {
 
   const goalsMap = useMemo(() => {
     const map = new Map<string, { id: string; title: string; status?: string | null }>();
-    for (const g of (goalsData?.goals ?? []) as any[]) {
+    for (const g of goalsData?.goals ?? []) {
       map.set(g.id, g);
     }
     return map;
@@ -188,7 +188,7 @@ function UnifiedTasksPage() {
   // Include direct tasks AND goal-linked repeating tasks (only unlinked routine schedule blocks stay in Routines tab)
   const days$ = days.map((d) => ({
     ...d,
-    tasks: d.tasks.filter((t) => (t as any).source !== "routine" || (t as any).goal_id !== null),
+    tasks: d.tasks.filter((t) => t.source !== "routine" || t.goal_id !== null),
   }));
   const allTasks = days$.flatMap((d) => d.tasks);
   const doneCount = allTasks.filter((t) => t.completed_at).length;
@@ -220,7 +220,7 @@ function UnifiedTasksPage() {
   const activeTasks = activeDay.tasks;
   const doneActive = activeTasks.filter((t) => t.completed_at).length;
   const remainingActive = activeTasks.length - doneActive;
-  const routineActiveCount = days.find((d) => d.date === selectedDate)?.tasks.filter((t) => (t as any).source === "routine").length ?? 0;
+  const routineActiveCount = days.find((d) => d.date === selectedDate)?.tasks.filter((t) => t.source === "routine").length ?? 0;
   const oneOffActiveCount = activeTasks.length;
   const isPerfectActive = activeTasks.length > 0 && doneActive === activeTasks.length;
   const activeDayXpEarned = doneActive * XP_PER_TASK + (isPerfectActive ? XP_PERFECT_DAY : 0);
@@ -234,7 +234,7 @@ function UnifiedTasksPage() {
 
   const filteredActiveTasks = useMemo(() => {
     let list = activeTasks;
-    if (activeSubjectFilter) list = list.filter((t) => (t as any).subject_id === activeSubjectFilter);
+    if (activeSubjectFilter) list = list.filter((t) => t.subject_id === activeSubjectFilter);
     if (filter === "pending") return list.filter((t) => !t.completed_at);
     if (filter === "completed") return list.filter((t) => !!t.completed_at);
     return list;
@@ -606,7 +606,7 @@ function UnifiedTasksPage() {
             <ul className="space-y-2">
               {filteredActiveTasks.map((t) => {
                 const goalLocked =
-                  !!(t as any).goal_id && goalsMap.get((t as any).goal_id)?.status === "completed";
+                  !!t.goal_id && goalsMap.get(t.goal_id)?.status === "completed";
                 return (
                 <li
                   key={t.id}
@@ -682,20 +682,20 @@ function UnifiedTasksPage() {
                       </span>
                     )}
 
-                    {(t as any).subject_id && subjectsMap.get((t as any).subject_id) && (
+                    {t.subject_id && subjectsMap.get(t.subject_id) && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                         <span
                           className="h-2 w-2 rounded-full shrink-0"
-                          style={{ background: subjectColorHex(subjectsMap.get((t as any).subject_id)!.color) }}
+                          style={{ background: subjectColorHex(subjectsMap.get(t.subject_id)!.color) }}
                         />
-                        <span className="max-w-[100px] truncate">{subjectsMap.get((t as any).subject_id)!.name}</span>
+                        <span className="max-w-[100px] truncate">{subjectsMap.get(t.subject_id)!.name}</span>
                       </span>
                     )}
 
-                    {(t as any).goal_id && goalsMap.get((t as any).goal_id) && (
+                    {t.goal_id && goalsMap.get(t.goal_id) && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
                         <Target className="h-2.5 w-2.5" />
-                        <span className="max-w-[120px] truncate">{goalsMap.get((t as any).goal_id)?.title}</span>
+                        <span className="max-w-[120px] truncate">{goalsMap.get(t.goal_id)?.title}</span>
                       </span>
                     )}
 
@@ -836,7 +836,7 @@ function DayCard({
   isToday: boolean;
   isPast?: boolean;
   isSelected: boolean;
-  tasks: { id: string; title: string; completed_at: string | null; source: string; is_stale?: boolean; rollover_count?: number }[];
+  tasks: Database["public"]["Tables"]["day_tasks"]["Row"][];
   onSelectDay: () => void;
 }) {
 

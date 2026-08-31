@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { loadHabits } from "./habits.server";
 
 export const getHabits = createServerFn({ method: "POST" })
@@ -9,7 +10,7 @@ export const getHabits = createServerFn({ method: "POST" })
     z.object({ weekStart: z.string() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    return loadHabits(context.supabase as any, context.userId, data.weekStart);
+    return loadHabits(context.supabase, context.userId, data.weekStart);
   });
 
 export const addHabit = createServerFn({ method: "POST" })
@@ -20,7 +21,7 @@ export const addHabit = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    await (context.supabase as any).from("habits").insert({
+    await context.supabase.from("habits").insert({
       user_id: context.userId,
       title: data.title.trim(),
       target_per_week: data.targetPerWeek,
@@ -32,7 +33,7 @@ export const deleteHabit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
-    await (context.supabase as any).from("habits").delete().eq("id", data.id);
+    await context.supabase.from("habits").delete().eq("id", data.id);
     return { ok: true };
   });
 
@@ -49,14 +50,14 @@ export const updateHabit = createServerFn({ method: "POST" })
         .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
-    const patch: Record<string, unknown> = {};
+    const supabase = context.supabase;
+    const patch: TablesUpdate<"habits"> = {};
     if (data.title !== undefined) {
       // Goal membership lives in goal_habit_links now, so titles never carry a
       // "[goal:<uuid>]" prefix — strip the legacy one if still present.
-      patch["title"] = data.title.trim().replace(/^\[goal:[^\]]+\]\s*/, "");
+      patch.title = data.title.trim().replace(/^\[goal:[^\]]+\]\s*/, "");
     }
-    if (data.targetPerWeek !== undefined) patch["target_per_week"] = data.targetPerWeek;
+    if (data.targetPerWeek !== undefined) patch.target_per_week = data.targetPerWeek;
     if (Object.keys(patch).length > 0) {
       await supabase.from("habits").update(patch).eq("id", data.id).eq("user_id", context.userId);
     }
@@ -69,7 +70,7 @@ export const toggleHabitDay = createServerFn({ method: "POST" })
     z.object({ habitId: z.string(), date: z.string(), done: z.boolean() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
     if (data.done) {
       await supabase
         .from("habit_logs")
@@ -94,7 +95,7 @@ export const linkHabitToGoal = createServerFn({ method: "POST" })
       z.object({ habitId: z.string(), goalId: z.string() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
     // Many-to-many: one habit may be linked to several goals. Goal ownership is
     // enforced by RLS on goal_habit_links (rows are scoped through the owning
     // goal's user_id); the habit itself must belong to the caller.
@@ -121,7 +122,7 @@ export const unlinkHabitFromGoal = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     // Remove just this (goal, habit) pair — other goals sharing the habit are
     // unaffected.
-    await (context.supabase as any)
+    await context.supabase
       .from("goal_habit_links")
       .delete()
       .eq("goal_id", data.goalId)
