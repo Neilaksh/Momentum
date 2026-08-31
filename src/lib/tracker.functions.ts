@@ -534,22 +534,87 @@ export const getGoals = createServerFn({ method: "POST" })
     // Per-goal day_task completion stats
     const { data: linked } = await supabase
       .from("day_tasks")
-      .select("id, goal_id, completed_at, task_date, title, source, routine_task_id, sort_order, subject_id")
+      .select("id, goal_id, completed_at, task_date, title, source, routine_task_id, sort_order, subject_id, rollover_count")
       .eq("user_id", context.userId)
       .not("goal_id", "is", null)
       .order("task_date", { ascending: false });
 
+    const linkedRows = (linked ?? []) as any[];
+
+    // Rollover-superseded rows must not count toward a goal's task total/done.
+    // When an uncompleted goal task rolls over, a fresh copy is created on a
+    // later day while the previous instance stays frozen on its own day as a
+    // read-only historical record — and only the newest copy can ever be
+    // completed (older rows are locked). Counting the whole chain inflates the
+    // denominator, so a goal whose task rolled over even once could never
+    // reach 100%.
+    //
+    // A row R is superseded (and excluded from the counts) when another row C
+    // of the same chain — same user_id, goal_id and normalized title — exists
+    // on a LATER task_date such that:
+    //   1. C.rollover_count === R.rollover_count + 1, i.e. a later copy
+    //      advanced the chain by exactly one more rollover, or
+    //   2. C.rollover_count === R.rollover_count with R.rollover_count >= 1.
+    //      The rollover pass stamps the source row AND the fresh copy with the
+    //      same count, so a frozen source and its newer copy can share one
+    //      count; the later row is the copy and the earlier one is superseded.
+    //      The >= 1 guard keeps two independently-created tasks that happen to
+    //      share a title and never rolled (both stay at 0) as separate, with
+    //      both counting.
+    //   3. R is the oldest (earliest task_date) row of a multi-row chain whose
+    //      rollover_count >= 1 — the chain's original. Once any later copy
+    //      exists the original is frozen history, and after the chain hits the
+    //      stale limit it can even carry the highest count.
+    // Only the newest copy of each rollover chain contributes to total/done.
+    // Routines no longer auto-materialize into day_tasks, so these chains are
+    // direct/one-off goal tasks only — no recurring-instance special-casing.
+    const supersededIds = new Set<string>();
+    if (linkedRows.length > 0) {
+      const chains = new Map<string, any[]>();
+      for (const row of linkedRows) {
+        const key = `${row.goal_id}|${(row.title ?? "").trim().toLowerCase()}`;
+        const list = chains.get(key) ?? [];
+        list.push(row);
+        chains.set(key, list);
+      }
+      for (const list of chains.values()) {
+        if (list.length > 1) {
+          let oldest = list[0]!;
+          for (const row of list) {
+            if ((row.task_date ?? "") < (oldest.task_date ?? "")) oldest = row;
+          }
+          if ((oldest.rollover_count ?? 0) >= 1) supersededIds.add(oldest.id);
+        }
+        for (const r of list) {
+          const rCount = r.rollover_count ?? 0;
+          for (const c of list) {
+            if (c.id === r.id || !(c.task_date > r.task_date)) continue;
+            const cCount = c.rollover_count ?? 0;
+            if (cCount === rCount + 1 || (cCount === rCount && rCount >= 1)) {
+              supersededIds.add(r.id);
+              break;
+            }
+          }
+        }
+      }
+    }
+
     const stats: Record<string, { total: number; done: number }> = {};
     const tasksByGoal: Record<string, any[]> = {};
 
-    for (const row of (linked ?? []) as any[]) {
+    for (const row of linkedRows) {
+      if (!tasksByGoal[row.goal_id]) tasksByGoal[row.goal_id] = [];
+      // The Goal Tasks list keeps every row — frozen originals stay visible as
+      // read-only history (they are locked client-side and server-side). Only
+      // the percentage/count math below excludes superseded rollover copies.
+      tasksByGoal[row.goal_id]!.push(row);
+
+      if (supersededIds.has(row.id)) continue;
+
       const e = stats[row.goal_id] ?? { total: 0, done: 0 };
       e.total += 1;
       if (row.completed_at) e.done += 1;
       stats[row.goal_id] = e;
-
-      if (!tasksByGoal[row.goal_id]) tasksByGoal[row.goal_id] = [];
-      tasksByGoal[row.goal_id]!.push(row);
     }
 
     // Fetch linked routine tasks for each goal
