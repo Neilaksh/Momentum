@@ -532,7 +532,13 @@ function GoalCard({
   const overall = progress?.overall ?? null;
   const taskScore = progress?.taskScore ?? null;
   const habitScore = progress?.habitScore ?? null;
-  const barPct = isCompleted ? 100 : overall ?? 0;
+  // Single source of truth for every % shown on this card: progress.overall.
+  // For a completed goal getGoals already recomputes overall from the frozen
+  // per-habit snapshots (the "Frozen" treatment), so hardcoding 100% here
+  // made the header badge / ring fill disagree with the ring's numeric label
+  // whenever that recomputed value is < 100 (e.g. a habit linked after
+  // completion whose live hit-rate is below 100%).
+  const barPct = overall ?? 0;
 
   const today = new Date().toISOString().slice(0, 10);
   const daysUntilDue = goal.target_date
@@ -598,7 +604,7 @@ function GoalCard({
                   isCompleted ? "text-primary" : isOverdue ? "text-destructive" : "text-primary"
                 }`}
               >
-                {barPct}%
+                {overall === null ? "—" : `${barPct}%`}
               </span>
 
               {/* Delete with confirm */}
