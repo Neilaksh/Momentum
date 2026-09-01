@@ -780,7 +780,7 @@ function UnifiedTasksPage() {
                             ? "Past day — tasks are read-only"
                             : "Rename task"
                       }
-                      className={`opacity-0 transition-opacity group-hover:opacity-100 p-1 text-muted-foreground ${
+                      className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
                         goalLocked || isActiveDayPast ? "cursor-not-allowed" : "hover:text-primary"
                       }`}
                     >
@@ -796,7 +796,7 @@ function UnifiedTasksPage() {
                           : `Delete ${t.title}`
                       }
                       title={isActiveDayPast ? "Past day — tasks are read-only" : undefined}
-                      className={`opacity-0 transition-opacity group-hover:opacity-100 p-1 text-muted-foreground ${
+                      className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
                         isActiveDayPast ? "cursor-not-allowed" : "hover:text-destructive"
                       }`}
                     >

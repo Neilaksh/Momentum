@@ -27,7 +27,10 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
             <span className="text-sm font-semibold tracking-wider uppercase">Momentum</span>
           </Link>
 
-          <nav className="flex items-center gap-1 text-sm">
+          {/* Mobile: full-width, non-wrapping, horizontally scrollable pill row
+              (scrollbar hidden, bleeding to the screen edges). Desktop (md+):
+              original inline layout, unchanged. */}
+          <nav className="order-last -mx-4 flex w-full flex-nowrap items-center gap-1 overflow-x-auto px-4 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6 md:order-none md:mx-0 md:w-auto md:px-0 md:overflow-visible">
             {NAV.map((item) => (
               <Link
                 key={item.to}

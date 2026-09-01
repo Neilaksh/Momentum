@@ -116,7 +116,16 @@ const STORAGE_CUSTOM_SLOTS_KEY = "momentum_custom_routine_slots";
 const STORAGE_CUSTOM_CATS_KEY = "momentum_custom_routine_categories";
 
 function RoutinesPage() {
+  // Default to Day View on narrow (mobile) viewports: the 7-Day Matrix needs
+  // ~950px of horizontal scroll and hover-only edit controls there. Users can
+  // still switch to Matrix via the tab switcher. Runs after mount so SSR
+  // markup stays consistent (no hydration mismatch).
   const [viewMode, setViewMode] = useState<ViewMode>("matrix");
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setViewMode("day");
+    }
+  }, []);
   const [selectedDay, setSelectedDay] = useState<number>(0); // 0=Mon, ..., 6=Sun
   const [editMode, setEditMode] = useState(false); // grid "view" (default) vs "edit"
   
@@ -804,7 +813,7 @@ function RoutinesPage() {
                 {/* Header Row */}
                 <thead>
                   <tr className="border-b border-border bg-secondary/70 backdrop-blur">
-                    <th className="sticky left-0 z-20 w-44 border-r border-border bg-secondary p-3 font-semibold uppercase tracking-wider text-muted-foreground text-center">
+                    <th className="sticky left-0 z-20 w-32 md:w-44 border-r border-border bg-secondary p-3 font-semibold uppercase tracking-wider text-muted-foreground text-center">
                       Time Slot
                     </th>
                     {WEEKDAY_NAMES.map((dayName, idx) => {
@@ -854,13 +863,13 @@ function RoutinesPage() {
                     {allTimeSlots.map((timeSlot) => (
                       <tr key={timeSlot} className="hover:bg-secondary/20 transition-colors">
                         {/* Time Column with hover delete button */}
-                        <td className="sticky left-0 z-10 w-44 border-r border-border bg-card/95 py-2.5 px-2 font-mono font-medium text-[11px] text-center text-muted-foreground group/time">
+                        <td className="sticky left-0 z-10 w-32 md:w-44 border-r border-border bg-card/95 py-2.5 px-2 font-mono font-medium text-[11px] text-center text-muted-foreground group/time">
                           <div className="flex items-center justify-center gap-1">
                             <span className="whitespace-nowrap">{timeSlot.replace(/\s*-\s*/g, "–")}</span>
                             {editMode && (
                               <button
                                 onClick={() => handleDeleteTimeSlotRow(timeSlot)}
-                                className="hidden group-hover/time:inline-flex text-muted-foreground hover:text-destructive p-0.5 transition-colors"
+                                className="inline-flex md:hidden md:group-hover/time:inline-flex text-muted-foreground hover:text-destructive p-1.5 -m-1 md:p-0 md:m-0 transition-colors"
                                 title={`Delete time slot "${timeSlot}"`}
                               >
                                 <Trash2 className="h-3 w-3" />
@@ -916,14 +925,14 @@ function RoutinesPage() {
 
                                       {/* Action icons on item hover (edit mode only) */}
                                       {editMode && (
-                                        <div className="hidden group-hover/item:flex items-center gap-1">
+                                        <div className="flex md:hidden md:group-hover/item:flex items-center gap-1">
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               toggleMutation.mutate({ id: task.id, isActive: !task.is_active });
                                             }}
                                             title={task.is_active ? "Deactivate" : "Activate"}
-                                            className="text-muted-foreground hover:text-foreground"
+                                            className="text-muted-foreground hover:text-foreground p-1.5 -m-1 md:p-0 md:m-0"
                                           >
                                             <Check className={`h-3 w-3 ${task.is_active ? "text-emerald-400" : ""}`} />
                                           </button>
@@ -933,7 +942,7 @@ function RoutinesPage() {
                                               deleteMutation.mutate(task.id);
                                             }}
                                             title="Delete slot"
-                                            className="text-muted-foreground hover:text-destructive"
+                                            className="text-muted-foreground hover:text-destructive p-1.5 -m-1 md:p-0 md:m-0"
                                           >
                                             <Trash2 className="h-3 w-3" />
                                           </button>
@@ -965,7 +974,7 @@ function RoutinesPage() {
                               {editMode && (
                                 <button
                                   onClick={() => openAddModal(dayIdx, timeSlot)}
-                                  className="w-full hidden group-hover:flex items-center justify-center rounded border border-dashed border-border/60 py-1 text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-all"
+                                  className="w-full flex md:hidden md:group-hover:flex items-center justify-center rounded border border-dashed border-border/60 py-2 text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-all"
                                 >
                                   <Plus className="h-3 w-3 mr-0.5" /> Add
                                 </button>
