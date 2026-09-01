@@ -520,12 +520,12 @@ function HabitsPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search habits..."
-              className="h-8 w-full rounded-md border border-border bg-secondary/50 pl-8 pr-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-11 md:h-8 w-full rounded-md border border-border bg-secondary/50 pl-8 pr-10 md:pr-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2 text-muted-foreground hover:text-foreground"
+                className="absolute right-1 md:right-2 text-muted-foreground hover:text-foreground p-2.5 -m-2.5 md:p-0 md:m-0"
                 aria-label="Clear search"
               >
                 <X className="h-3.5 w-3.5" />
@@ -696,7 +696,7 @@ function HabitsPage() {
                               : "border-border/80 bg-secondary/30 text-muted-foreground hover:border-primary hover:text-foreground"
                           } ${isTodayCheck && !done ? "ring-2 ring-primary/60 border-primary" : ""}`}
                         >
-                          <span className="text-[9px] uppercase tracking-wider font-bold">
+                          <span className="text-[10px] uppercase tracking-wider font-bold">
                             {WEEKDAY_NAMES[i]!.slice(0, 2)}
                           </span>
                           <span className="num text-xs font-semibold">

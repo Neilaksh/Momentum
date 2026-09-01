@@ -522,7 +522,7 @@ function UnifiedTasksPage() {
                     {WEEKDAY_NAMES[i]!.slice(0, 3)}
                   </span>
                   {isDayToday && (
-                    <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
+                    <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                       Today
                     </span>
                   )}
@@ -555,7 +555,7 @@ function UnifiedTasksPage() {
       </div>
 
       {/* Focused Day Task Management Panel */}
-      <section ref={focusPanelRef} className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <section ref={focusPanelRef} className="mt-6 scroll-mt-20 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
           <div>
             <div className="flex items-center gap-2">

@@ -604,14 +604,14 @@ function HabitDurationControl({
                   setDraft(String(durationDays));
                   setEditing(true);
                 }}
-                className="text-[9px] font-medium text-muted-foreground hover:text-foreground px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
+                className="text-[11px] font-medium text-muted-foreground hover:text-foreground px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
                 aria-label="Edit tracking duration"
               >
                 Edit
               </button>
               <button
                 onClick={() => onSet(null)}
-                className="text-[9px] font-medium text-muted-foreground hover:text-destructive px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
+                className="text-[11px] font-medium text-muted-foreground hover:text-destructive px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
                 aria-label="Clear tracking duration"
               >
                 Clear
@@ -628,7 +628,7 @@ function HabitDurationControl({
             setDraft("");
             setEditing(true);
           }}
-          className="mt-0.5 text-[9px] font-medium text-muted-foreground/70 hover:text-foreground px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
+          className="mt-0.5 text-[11px] font-medium text-muted-foreground/70 hover:text-foreground px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
           aria-label="Set tracking duration"
         >
           + Set duration
@@ -657,13 +657,13 @@ function HabitDurationControl({
           onSet(trimmed === "" ? null : Number.parseInt(trimmed, 10));
           setEditing(false);
         }}
-        className="rounded-md border border-primary/30 bg-primary/10 px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 text-[9px] font-semibold text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+        className="rounded-md border border-primary/30 bg-primary/10 px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 text-[11px] font-semibold text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
       >
         Save
       </button>
       <button
         onClick={() => setEditing(false)}
-        className="text-[9px] font-medium text-muted-foreground hover:text-foreground px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
+        className="text-[11px] font-medium text-muted-foreground hover:text-foreground px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
       >
         Cancel
       </button>

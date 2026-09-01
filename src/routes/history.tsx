@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { AlertTriangle, BookOpen, CalendarRange, ChevronRight, Flame, RefreshCw, Trash2, Trophy, Zap } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -128,6 +128,17 @@ function HistoryPage() {
   const fetchReviewList = useServerFn(listWeeklyReviews);
   const [reviewWeek, setReviewWeek] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  // Mobile (below md:): thinned XAxis labels and narrower YAxis so charts
+  // render cleanly on a ~375px viewport. Runs after mount + fires on resize so
+  // SSR markup stays consistent (no hydration mismatch).
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
   const { data: reviewListData } = useQuery({
     queryKey: ["weekly-reviews"],
     queryFn: () => fetchReviewList({ data: undefined }) as Promise<{ weekStarts: string[] }>,
@@ -166,7 +177,7 @@ function HistoryPage() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
                 <CartesianGrid vertical={false} stroke="var(--border)" />
-                <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
+                <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={11} interval={isMobile ? 2 : 0} stroke="var(--muted-foreground)" />
                 <YAxis domain={[0, 100]} tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
                 <Tooltip
                   contentStyle={{
@@ -227,7 +238,7 @@ function HistoryPage() {
                   <YAxis
                     type="category"
                     dataKey="name"
-                    width={110}
+                    width={isMobile ? 70 : 110}
                     tickLine={false}
                     axisLine={false}
                     fontSize={11}

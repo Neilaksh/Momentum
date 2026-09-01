@@ -716,7 +716,7 @@ function RoutinesPage() {
         </div>
 
         {/* View Switches & Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-3">
+        <div className="flex flex-nowrap items-center gap-4 overflow-x-auto border-b border-border/60 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:justify-between">
           <div className="flex items-center gap-1 rounded-full bg-secondary/80 p-1 text-xs">
             <button
               onClick={() => setViewMode("matrix")}
@@ -876,7 +876,7 @@ function RoutinesPage() {
                               </button>
                             )}
                           </div>
-                          <div className="mt-0.5 text-[8px] text-muted-foreground/40 font-sans">
+                          <div className="mt-0.5 text-[10px] text-muted-foreground/40 font-sans">
                             {calculateSlotDurationMinutes(timeSlot)}m
                           </div>
                         </td>
@@ -951,7 +951,7 @@ function RoutinesPage() {
                                     </div>
 
                                     {/* Link Badges */}
-                                    <div className="flex flex-wrap items-center gap-1 text-[9px] mt-0.5">
+                                    <div className="flex flex-wrap items-center gap-1 text-[11px] mt-0.5">
                                       {linkedGoal && (
                                         <span className="inline-flex items-center gap-0.5 text-cyan-400 bg-cyan-500/10 px-1 py-0.5 rounded border border-cyan-500/20">
                                           <Target className="h-2 w-2" />
