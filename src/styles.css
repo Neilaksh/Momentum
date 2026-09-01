@@ -110,6 +110,13 @@
 
   html {
     color-scheme: dark;
+    /* Clip any stray horizontal overflow at the viewport instead of
+       letting it widen the page into horizontal scroll/zoom-out on mobile.
+       `overflow-x: clip` (not `hidden`) clips at the nearest scroll container
+       without creating a new one, so intentionally-scrolling areas (the nav
+       pill row, Routines matrix/day-pill bar, view-switcher) keep scrolling
+       inside their own `overflow-x-auto` boxes. */
+    overflow-x: clip;
   }
 
   body {
