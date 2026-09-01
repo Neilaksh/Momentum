@@ -66,6 +66,7 @@ import { parseHabitTitle, type HabitsData } from "@/lib/habits-shared";
 import { getWeek } from "@/lib/tracker.functions";
 import {
   addDays,
+  buildRolloverChains,
   formatDayDate,
   parseISODate,
   parseRoutineTitle,
@@ -128,93 +129,21 @@ function computeStatus(goal: Goal): "active" | "completed" | "overdue" {
 /**
  * Display-only rollover-chain collapsing for the Goal Tasks list.
  *
- * Reuses the same chain-identification rules as the server's superseded
- * detection in getGoals (same goal_id + normalized title, chained by
- * rollover_count):
- *   1. a later copy with rollover_count === count + 1 supersedes the row, or
- *   2. a later copy with the SAME count >= 1 supersedes it (the rollover pass
- *      stamps the source row and its fresh copy with one count), or
- *   3. the oldest row of a multi-row chain with rollover_count >= 1 is the
- *      chain's original — it chains forward to the next later row even when
- *      the counts drifted past the exact +1/same pattern (stale-limit jumps).
- *
- * A chain renders as ONE row: the original (its original task_date, which
- * never changes), with the chain's current completion status mirrored onto
- * it. The original's rollover_count is >= 1 (the rollover pass stamps the
- * source row), so the existing "Completed late" badge shows whenever the
- * chain has been completed. This is display-only: the underlying day_tasks
- * rows, rollover logic, and the goal progress counting math are untouched,
- * and the Tasks page keeps rendering the actual active copy.
+ * Chains come from the shared buildRolloverChains() (same rules as the
+ * server's superseded detection). Each multi-row chain renders as ONE row:
+ * the original (its original task_date, which never changes), with the
+ * chain's current completion status mirrored onto it. The original's
+ * rollover_count is >= 1 (the rollover pass stamps the source row), so the
+ * existing "Completed late" badge shows whenever the chain has been
+ * completed. This is display-only: the underlying day_tasks rows, rollover
+ * logic, and the goal progress counting math are untouched, and the Tasks
+ * page keeps rendering the actual active copy.
  */
 function collapseRolloverChains(tasks: DayTask[]): DayTask[] {
   if (tasks.length < 2) return tasks;
 
-  // Group candidates by (goal_id, normalized title) — same key the server uses.
-  const groups = new Map<string, DayTask[]>();
-  for (const t of tasks) {
-    const key = `${t.goal_id ?? ""}|${(t.title ?? "").trim().toLowerCase()}`;
-    const list = groups.get(key) ?? [];
-    list.push(t);
-    groups.set(key, list);
-  }
-
-  // Union-find so rule-linked rows merge into whole chains.
-  const parent = new Map<string, string>();
-  for (const t of tasks) parent.set(t.id, t.id);
-  const find = (id: string): string => {
-    const p = parent.get(id) ?? id;
-    if (p === id) return id;
-    const root = find(p);
-    parent.set(id, root);
-    return root;
-  };
-  const union = (a: string, b: string) => {
-    const ra = find(a);
-    const rb = find(b);
-    if (ra !== rb) parent.set(ra, rb);
-  };
-
-  for (const list of groups.values()) {
-    if (list.length < 2) continue;
-    const sorted = [...list].sort((a, b) => a.task_date.localeCompare(b.task_date));
-    for (let i = 0; i < sorted.length; i++) {
-      const r = sorted[i]!;
-      const rCount = r.rollover_count ?? 0;
-      let linked = false;
-      // Rules 1 & 2 — identical to the server's superseded detection. Only
-      // the earliest qualifying later copy is the chain successor.
-      for (let j = i + 1; j < sorted.length; j++) {
-        const c = sorted[j]!;
-        const cCount = c.rollover_count ?? 0;
-        if (cCount === rCount + 1 || (cCount === rCount && rCount >= 1)) {
-          union(r.id, c.id);
-          linked = true;
-          break;
-        }
-      }
-      // Rule 3 — only the group's OLDEST row is the chain original (same as the
-      // server's superseded detection): it still collapses forward when no copy
-      // matches the exact count pattern (stale-limit count jumps). Later rows
-      // with a >= 1 count but no successor are NOT chain-linked, so a new
-      // independent task sharing the title stays its own row.
-      if (!linked && i === 0 && rCount >= 1 && sorted.length > 1) {
-        union(r.id, sorted[1]!.id);
-      }
-    }
-  }
-
-  // Collect chain members by root; multi-member chains collapse to their
-  // oldest row (the original) with the chain's completion status mirrored on.
-  const chains = new Map<string, DayTask[]>();
-  for (const t of tasks) {
-    const root = find(t.id);
-    const list = chains.get(root) ?? [];
-    list.push(t);
-    chains.set(root, list);
-  }
-
   const out: DayTask[] = [];
-  for (const members of chains.values()) {
+  for (const members of buildRolloverChains(tasks)) {
     if (members.length === 1) {
       out.push(members[0]!);
       continue;

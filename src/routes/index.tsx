@@ -50,6 +50,7 @@ import {
   XP_PER_TASK,
   XP_PERFECT_DAY,
   addDays,
+  buildRolloverChains,
   formatDayDate,
   parseISODate,
   parseRoutineTitle,
@@ -233,6 +234,19 @@ function UnifiedTasksPage() {
   const allTasks = days$.flatMap((d) => d.tasks);
   const doneCount = allTasks.filter((t) => t.completed_at).length;
   const weekPct = pctComplete(allTasks);
+
+  // Display-only: ids of tasks whose rollover chain contains a completed copy.
+  // A frozen original showing "Due" on the week board upgrades its badge to
+  // "Completed late" once its active copy has been completed elsewhere. Purely
+  // a badge swap — day counts/percentages use t.completed_at and are unchanged,
+  // the frozen row stays read-only, and the completed copy's own day renders
+  // exactly as it already does.
+  const chainCompletedIds = new Set<string>();
+  for (const chain of buildRolloverChains(allTasks)) {
+    if (chain.length > 1 && chain.some((t) => t.completed_at)) {
+      for (const t of chain) chainCompletedIds.add(t.id);
+    }
+  }
 
   // Selected Day resolution
   const activeDay = useMemo(() => {
@@ -874,6 +888,7 @@ function UnifiedTasksPage() {
                 isPast={day.date < todayISO}
                 isSelected={isSelected}
                 tasks={day.tasks}
+                chainCompletedIds={chainCompletedIds}
                 onSelectDay={() => {
                   setSelectedDate(day.date);
                   setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
@@ -935,6 +950,7 @@ function DayCard({
   isPast,
   isSelected,
   tasks,
+  chainCompletedIds,
   onSelectDay,
 }: {
   name: string;
@@ -943,6 +959,9 @@ function DayCard({
   isPast?: boolean;
   isSelected: boolean;
   tasks: Database["public"]["Tables"]["day_tasks"]["Row"][];
+  // Ids of tasks whose rollover chain contains a completed copy (display-only
+  // badge signal — does not affect this card's counts or percentages).
+  chainCompletedIds: Set<string>;
   onSelectDay: () => void;
 }) {
 
@@ -1025,6 +1044,14 @@ function DayCard({
                   t.is_stale ? (
                     <span className="shrink-0 rounded-full bg-amber-500/15 border border-amber-600/40 dark:border-amber-400/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                       Stale
+                    </span>
+                  ) : chainCompletedIds.has(t.id) ? (
+                    // Frozen original whose rollover copy was completed elsewhere:
+                    // swap "Due" for the existing "Completed late" badge. Display
+                    // only — the row stays read-only and this day's stats are
+                    // computed from t.completed_at, which is untouched.
+                    <span className="shrink-0 rounded-full bg-secondary/70 border border-border/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Completed late
                     </span>
                   ) : (
                     <span className="shrink-0 rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">

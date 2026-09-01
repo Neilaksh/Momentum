@@ -31,6 +31,88 @@ export function goalLinkKey(
   return `goal|${date}|${t.goal_id ?? ""}|${(t.title ?? "").trim().toLowerCase()}`;
 }
 
+/**
+ * Partition day_tasks into rollover chains — the display-only chain identity
+ * shared by the Goal Tasks list collapse and the week board's "Completed late"
+ * badge. Uses the same rules as the server's superseded detection in getGoals
+ * (tracker.functions.ts):
+ *   1. a later copy with rollover_count === count + 1 supersedes the row, or
+ *   2. a later copy with the SAME count >= 1 supersedes it (the rollover pass
+ *      stamps the source row and its fresh copy with one count), or
+ *   3. the OLDEST row of a multi-row group with rollover_count >= 1 is the
+ *      chain's original — it chains forward to the next later row even when
+ *      the counts drifted past the exact +1/same pattern (stale-limit jumps).
+ *
+ * Rows are keyed by (goal_id, normalized title) like the server, and rules
+ * 1 & 2 only ever link a row to the earliest qualifying LATER copy, so two
+ * independently-created same-title tasks that never rolled (both count 0)
+ * stay separate chains. Every input row appears in exactly one returned
+ * chain (singleton chains included), so callers can render one row per chain
+ * or read per-chain status (e.g. "any copy completed?").
+ */
+export function buildRolloverChains(tasks: DayTask[]): DayTask[][] {
+  const groups = new Map<string, DayTask[]>();
+  for (const t of tasks) {
+    const key = `${t.goal_id ?? ""}|${(t.title ?? "").trim().toLowerCase()}`;
+    const list = groups.get(key) ?? [];
+    list.push(t);
+    groups.set(key, list);
+  }
+
+  // Union-find so rule-linked rows merge into whole chains.
+  const parent = new Map<string, string>();
+  for (const t of tasks) parent.set(t.id, t.id);
+  const find = (id: string): string => {
+    const p = parent.get(id) ?? id;
+    if (p === id) return id;
+    const root = find(p);
+    parent.set(id, root);
+    return root;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const sorted = [...list].sort((a, b) => a.task_date.localeCompare(b.task_date));
+    for (let i = 0; i < sorted.length; i++) {
+      const r = sorted[i]!;
+      const rCount = r.rollover_count ?? 0;
+      let linked = false;
+      // Rules 1 & 2 — identical to the server's superseded detection.
+      for (let j = i + 1; j < sorted.length; j++) {
+        const c = sorted[j]!;
+        const cCount = c.rollover_count ?? 0;
+        if (cCount === rCount + 1 || (cCount === rCount && rCount >= 1)) {
+          union(r.id, c.id);
+          linked = true;
+          break;
+        }
+      }
+      // Rule 3 — only the group's OLDEST row is the chain original: it still
+      // collapses forward when no copy matches the exact count pattern
+      // (stale-limit count jumps). Later rows with a >= 1 count but no
+      // successor are NOT chain-linked, so a new independent task sharing the
+      // title stays its own chain.
+      if (!linked && i === 0 && rCount >= 1 && sorted.length > 1) {
+        union(r.id, sorted[1]!.id);
+      }
+    }
+  }
+
+  const chains = new Map<string, DayTask[]>();
+  for (const t of tasks) {
+    const root = find(t.id);
+    const list = chains.get(root) ?? [];
+    list.push(t);
+    chains.set(root, list);
+  }
+  return [...chains.values()];
+}
+
 export type RoutineTask = {
   id: string;
   weekday: number;
