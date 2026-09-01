@@ -256,7 +256,7 @@ function HabitsPage() {
             onClick={() => setWeekStart(toISODate(startOfWeek(new Date())))}
             className="h-9 text-xs font-medium"
           >
-            This week
+            This Week
           </Button>
           <Button
             variant="outline"
@@ -431,7 +431,7 @@ function HabitsPage() {
           <select
             value={target}
             onChange={(e) => setTarget(Number(e.target.value))}
-            className="h-10 rounded-lg border border-border bg-secondary/60 px-3 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="h-10 rounded-lg border border-border bg-secondary/50 px-3 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             aria-label="Habit frequency target"
           >
             <option value={7}>Every day (7× / week)</option>
@@ -508,7 +508,7 @@ function HabitsPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search habits..."
-              className="h-8 w-full rounded-md border border-border bg-card pl-8 pr-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-8 w-full rounded-md border border-border bg-secondary/50 pl-8 pr-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
             {searchQuery && (
               <button
@@ -527,7 +527,7 @@ function HabitsPage() {
       {isLoading ? (
         <p className="mt-10 text-center text-sm text-muted-foreground">Loading habits…</p>
       ) : stats.length === 0 ? (
-        <div className="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/80 bg-card/40 p-12 text-center">
+        <div className="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border p-10 text-center">
           <Target className="h-10 w-10 text-muted-foreground opacity-50" />
           <h3 className="mt-4 text-base font-semibold">No habits tracked yet</h3>
           <p className="mt-1 text-xs text-muted-foreground max-w-sm">
@@ -535,7 +535,7 @@ function HabitsPage() {
           </p>
         </div>
       ) : filteredStats.length === 0 ? (
-        <div className="mt-8 rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+        <div className="mt-8 rounded-2xl border border-dashed border-border p-10 text-center text-xs text-muted-foreground">
           No habits found matching your filter or search.
         </div>
       ) : (
@@ -568,7 +568,7 @@ function HabitsPage() {
                           <select
                             value={editTarget}
                             onChange={(e) => setEditTarget(Number(e.target.value))}
-                            className="h-8 rounded-md border border-border bg-secondary px-2 text-xs"
+                            className="h-8 rounded-md border border-border bg-secondary/50 px-2 text-xs"
                           >
                             {[1, 2, 3, 4, 5, 6, 7].map((n) => (
                               <option key={n} value={n}>
@@ -636,7 +636,7 @@ function HabitsPage() {
                         }
                         className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all ${
                           isDoneToday
-                            ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20 hover:opacity-90"
+                            ? "border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-300"
                             : "border border-border/80 bg-secondary/50 text-muted-foreground hover:border-primary hover:text-foreground"
                         }`}
                         aria-label={isDoneToday ? "Unmark today" : "Check in today"}
@@ -660,7 +660,7 @@ function HabitsPage() {
                         aria-label={`Delete ${s.habit.title}`}
                         className="text-muted-foreground hover:text-destructive p-1 transition-colors"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
@@ -684,7 +684,7 @@ function HabitsPage() {
                               : "border-border/80 bg-secondary/30 text-muted-foreground hover:border-primary hover:text-foreground"
                           } ${isTodayCheck && !done ? "ring-2 ring-primary/60 border-primary" : ""}`}
                         >
-                          <span className="text-[9px] uppercase font-bold">
+                          <span className="text-[9px] uppercase tracking-wider font-bold">
                             {WEEKDAY_NAMES[i]!.slice(0, 2)}
                           </span>
                           <span className="num text-xs font-semibold">

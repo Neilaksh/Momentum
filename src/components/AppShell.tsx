@@ -24,7 +24,7 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-primary" />
-            <span className="text-sm font-semibold tracking-[0.2em] uppercase">Momentum</span>
+            <span className="text-sm font-semibold tracking-wider uppercase">Momentum</span>
           </Link>
 
           <nav className="flex items-center gap-1 text-sm">

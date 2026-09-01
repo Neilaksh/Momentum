@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Flame,
   LinkIcon,
+  Pencil,
   Plus,
   RefreshCw,
   Repeat,
@@ -33,9 +34,28 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   addDayTask,
   deleteGoal,
   getGoals,
+  renameGoal,
   removeGoalRoutineTasksBatch,
   saveGoal,
   toggleDayTask,
@@ -171,6 +191,16 @@ function GoalsPage() {
     onError: () => toast.error("Couldn't delete goal."),
   });
 
+  const renameFn = useServerFn(renameGoal);
+  const rename = useMutation({
+    mutationFn: (v: { id: string; title: string }) => renameFn({ data: v }),
+    onSuccess: (_res, v) => {
+      invalidate();
+      toast.success(`Goal renamed to “${v.title.trim()}”`);
+    },
+    onError: () => toast.error("Couldn't rename goal — try again."),
+  });
+
   const removeRoutineBatch = useMutation({
     mutationFn: (v: { ids: string[] }) => removeRoutineBatchFn({ data: v }),
     onSuccess: () => invalidate(),
@@ -290,7 +320,7 @@ function GoalsPage() {
             });
           }}
         >
-          <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+          <h2 className="text-sm font-semibold tracking-wider uppercase text-muted-foreground">
             Create New Goal
           </h2>
           <div className="space-y-2">
@@ -360,7 +390,7 @@ function GoalsPage() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
-                <h2 className="text-sm font-semibold text-destructive uppercase tracking-wider">
+                <h2 className="text-xs font-semibold text-destructive uppercase tracking-wider">
                   Overdue ({overdueGoals.length})
                 </h2>
               </div>
@@ -381,6 +411,7 @@ function GoalsPage() {
                     goalHabitIds={new Set(habitIdsByGoal[g.id] ?? [])}
                     habitDurations={habitDurationsByGoal[g.id] ?? {}}
                     onDelete={() => remove.mutate({ id: g.id })}
+                    onRename={(title) => rename.mutate({ id: g.id, title })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
@@ -402,7 +433,7 @@ function GoalsPage() {
               {overdueGoals.length > 0 && (
                 <div className="flex items-center gap-2 mb-3 mt-6">
                   <Zap className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+                  <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                     Active ({activeGoals.length})
                   </h2>
                 </div>
@@ -424,6 +455,7 @@ function GoalsPage() {
                     goalHabitIds={new Set(habitIdsByGoal[g.id] ?? [])}
                     habitDurations={habitDurationsByGoal[g.id] ?? {}}
                     onDelete={() => remove.mutate({ id: g.id })}
+                    onRename={(title) => rename.mutate({ id: g.id, title })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
                     onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
@@ -444,7 +476,7 @@ function GoalsPage() {
             <div className="mt-6">
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Completed ({completedGoals.length})
                 </h2>
               </div>
@@ -465,6 +497,7 @@ function GoalsPage() {
                     goalHabitIds={new Set(habitIdsByGoal[g.id] ?? [])}
                     habitDurations={habitDurationsByGoal[g.id] ?? {}}
                     onDelete={() => remove.mutate({ id: g.id })}
+                    onRename={() => {}}
                     onReopen={() => markStatus.mutate({ id: g.id, status: "active" })}
                     onMarkComplete={() => {}}
                     onExtendDate={() => {}}
@@ -520,7 +553,7 @@ function HabitDurationControl({
       return (
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <span
-            className="inline-flex items-center gap-1 rounded-full border border-sky-500/20 bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-medium text-sky-400"
+            className="inline-flex items-center gap-1 rounded-full border border-sky-500/20 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-400"
             title="Tracking duration for this goal"
           >
             <CalendarClock className="h-2.5 w-2.5" />
@@ -612,6 +645,7 @@ function GoalCard({
   allHabitStats,
   habitSnapshots,
   onDelete,
+  onRename,
   onMarkComplete,
   onReopen,
   onExtendDate,
@@ -636,6 +670,7 @@ function GoalCard({
   allHabitStats: HabitsData["stats"];
   habitSnapshots: GoalHabitSnapshot[];
   onDelete: () => void;
+  onRename: (title: string) => void;
   onMarkComplete: () => void;
   onReopen?: () => void;
   onExtendDate: (d: string) => void;
@@ -652,6 +687,18 @@ function GoalCard({
   const [showLinkHabitDropdown, setShowLinkHabitDropdown] = useState(false);
   const [showExtendPanel, setShowExtendPanel] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+
+  const submitRename = () => {
+    const title = renameDraft.trim();
+    if (!title || title === goal.title.trim()) {
+      setShowRenameModal(false);
+      return;
+    }
+    onRename(title);
+    setShowRenameModal(false);
+  };
   const [inlineTask, setInlineTask] = useState("");
   const [inlineSubjectId, setInlineSubjectId] = useState<string | null>(null);
   const [showSchedulePanel, setShowSchedulePanel] = useState(false);
@@ -716,7 +763,7 @@ function GoalCard({
       <div className="flex items-start gap-3">
         <div
           className={`mt-1 shrink-0 ${
-            isCompleted ? "text-primary" : isOverdue ? "text-destructive" : "text-primary"
+            isCompleted ? "text-emerald-400" : isOverdue ? "text-destructive" : "text-primary"
           }`}
         >
           {isCompleted ? (
@@ -731,7 +778,29 @@ function GoalCard({
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h3 className="font-semibold tracking-tight text-base">{goal.title}</h3>
+              <div className="flex items-center gap-1">
+                <h3 className="font-semibold tracking-tight text-base">{goal.title}</h3>
+                <button
+                  disabled={isCompleted}
+                  onClick={() => {
+                    setRenameDraft(goal.title);
+                    setShowRenameModal(true);
+                  }}
+                  aria-label={
+                    isCompleted
+                      ? "Completed goals are locked and cannot be renamed"
+                      : `Rename goal ${goal.title}`
+                  }
+                  title={isCompleted ? "Completed goals are locked" : "Rename goal"}
+                  className={`p-1 transition-colors ${
+                    isCompleted
+                      ? "cursor-not-allowed text-muted-foreground/40"
+                      : "text-muted-foreground hover:text-primary"
+                  }`}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </div>
               {goal.description && (
                 <p className="mt-0.5 text-sm text-muted-foreground">{goal.description}</p>
               )}
@@ -747,34 +816,13 @@ function GoalCard({
               </span>
 
               {/* Delete with confirm */}
-              {showDeleteConfirm ? (
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-destructive font-medium">Delete?</span>
-                  <button
-                    onClick={() => {
-                      onDelete();
-                      setShowDeleteConfirm(false);
-                    }}
-                    className="rounded-md bg-destructive px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-destructive/90 transition-colors"
-                  >
-                    Yes
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="rounded-md bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    No
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  aria-label={`Delete ${goal.title}`}
-                  className="text-muted-foreground hover:text-destructive p-1 transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                aria-label={`Delete ${goal.title}`}
+                className="text-muted-foreground hover:text-destructive p-1 transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
@@ -864,7 +912,7 @@ function GoalCard({
               <div className="mt-2.5 space-y-1.5">
                 {taskScore !== null && (
                   <div className="flex items-center gap-2">
-                    <span className="w-12 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span className="w-12 shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
                       Tasks
                     </span>
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
@@ -880,7 +928,7 @@ function GoalCard({
                 )}
                 {habitScore !== null && (
                   <div className="flex items-center gap-2">
-                    <span className="w-12 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span className="w-12 shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
                       Habits
                     </span>
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
@@ -1080,17 +1128,17 @@ function GoalCard({
                       {formatDayDate(t.task_date)}
                     </span>
                     {!isDone && t.task_date < today && (
-                      <span className="rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[9px] font-bold uppercase text-destructive">
+                      <span className="rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
                         Due
                       </span>
                     )}
                     {isToday && !isDone && (
-                      <span className="rounded-full bg-primary/20 px-1.5 py-0.2 text-[9px] font-bold text-primary">
+                      <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                         Today
                       </span>
                     )}
                     {isDone && t.rollover_count > 0 && (
-                      <span className="rounded-full bg-secondary/70 border border-border/70 px-1.5 py-0.5 text-[9px] font-bold uppercase text-muted-foreground">
+                      <span className="rounded-full bg-secondary/70 border border-border/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         Completed late
                       </span>
                     )}
@@ -1204,11 +1252,24 @@ function GoalCard({
                   const habitOnTrack = durationLimited && lh
                     ? lh.daysLogged === lh.durationDays
                     : (lh?.weeksMet ?? 0) === (lh?.weeksTotal ?? -1);
-                  const pctWeek = s.habit.target_per_week > 0
-                    ? Math.min(100, Math.round((s.weekDone / s.habit.target_per_week) * 100))
-                    : 0;
-                  const weekDone = s.weekDone;
                   const weekTarget = s.habit.target_per_week;
+                  // "X/Y this wk" must start counting from the day this habit was
+                  // linked to THIS goal (goal_habit_links.created_at), matching the
+                  // hit-rate calc in computeHabitProgress. s.weekDone is the habit's
+                  // raw all-time weekly count and would include pre-link logs, so
+                  // rebuild it from the current week's doneDates, keeping only dates
+                  // on/after the link date. created_at is NOT NULL (see the schema),
+                  // and this map is built from the same goal_habit_links source the
+                  // hit-rate uses, so linkStart is always populated — we intentionally
+                  // never fall back to the raw s.weekDone, which is what caused the
+                  // "1/7 bar but 0% / 2/7 bar but 14%" contradiction.
+                  const linkStart = (habitDurations[s.habit.id]?.createdAt ?? "").slice(0, 10);
+                  const weekDone = linkStart
+                    ? s.doneDates.filter((d) => d >= linkStart).length
+                    : 0;
+                  const pctWeek = weekTarget > 0
+                    ? Math.min(100, Math.round((weekDone / weekTarget) * 100))
+                    : 0;
                   return (
                     <div key={s.habit.id} className="flex items-center gap-2 rounded-lg bg-amber-500/5 border border-amber-500/10 px-2.5 py-2">
                       <div className="flex-1 min-w-0">
@@ -1243,7 +1304,7 @@ function GoalCard({
                               : `${lh.hitRate}% hit rate · ${lh.weeksMet}/${lh.weeksTotal} wks on target`}
                             {snap && (
                               <span
-                                className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-sky-400"
+                                className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-400"
                                 title={`Frozen when the goal completed (${new Date(snap.snapshottedAt).toLocaleDateString()})`}
                               >
                                 <Snowflake className="h-2.5 w-2.5" />
@@ -1524,6 +1585,70 @@ function GoalCard({
           </div>
         </div>
       )}
+
+      {/* Delete confirmation (destructive, gated behind explicit confirm) */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this goal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{goal.title}", its linked tasks, and any routine links.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onDelete();
+                setShowDeleteConfirm(false);
+              }}
+              className="bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
+            >
+              Delete Goal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Rename-goal modal (pencil icon on the goal title) */}
+      <Dialog open={showRenameModal} onOpenChange={setShowRenameModal}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename goal</DialogTitle>
+            <DialogDescription>
+              This changes the goal's title everywhere it appears. Its history and progress stay
+              connected.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameDraft}
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitRename();
+              }
+            }}
+            placeholder="Goal title"
+            aria-label="Goal title"
+            autoFocus
+            className="h-9 text-sm"
+          />
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setShowRenameModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={submitRename}
+              disabled={!renameDraft.trim() || renameDraft.trim() === goal.title.trim()}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </article>
   );
 }

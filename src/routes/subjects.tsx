@@ -180,7 +180,7 @@ function SubjectsPage() {
             create.mutate({ name: name.trim(), color });
           }}
         >
-          <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+          <h2 className="text-sm font-semibold tracking-wider uppercase text-muted-foreground">
             Create New Subject
           </h2>
           <div className="space-y-2">
@@ -257,7 +257,7 @@ function SubjectsPage() {
                   key={s.id}
                   className="space-y-4 rounded-2xl border border-primary/40 bg-card p-5 shadow-sm"
                 >
-                  <h3 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                  <h3 className="text-sm font-semibold tracking-wider uppercase text-muted-foreground">
                     Edit Subject
                   </h3>
                   <div className="space-y-2">

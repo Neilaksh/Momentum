@@ -615,15 +615,15 @@ function RoutinesPage() {
   return (
     <AppShell profile={weekData?.profile ?? null}>
       <div className="space-y-6">
-        {/* Page Banner Header */}
-        <div className="flex flex-col gap-4 rounded-2xl border border-border/80 bg-card/60 p-6 backdrop-blur sm:flex-row sm:items-center sm:justify-between shadow-lg">
+        {/* Header */}
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary border border-primary/20">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-primary">
                 <Sparkles className="h-3.5 w-3.5" /> Routine Matrix & System
               </span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight uppercase sm:text-3xl">
+            <h1 className="text-3xl font-semibold tracking-tight">
               My Daily Routine <span className="text-muted-foreground">— Weekly Schedule</span>
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -944,14 +944,14 @@ function RoutinesPage() {
                                     {/* Link Badges */}
                                     <div className="flex flex-wrap items-center gap-1 text-[9px] mt-0.5">
                                       {linkedGoal && (
-                                        <span className="inline-flex items-center gap-0.5 text-cyan-400 bg-cyan-500/10 px-1 py-0.2 rounded border border-cyan-500/20">
+                                        <span className="inline-flex items-center gap-0.5 text-cyan-400 bg-cyan-500/10 px-1 py-0.5 rounded border border-cyan-500/20">
                                           <Target className="h-2 w-2" />
                                           <span className="truncate max-w-[80px]">{linkedGoal.title}</span>
                                         </span>
                                       )}
 
                                       {linkedHabit && (
-                                        <span className="inline-flex items-center gap-0.5 text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">
+                                        <span className="inline-flex items-center gap-0.5 text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
                                           <Repeat className="h-2 w-2" />
                                           <span className="truncate max-w-[80px]">{parseHabitTitle(linkedHabit.habit.title).displayTitle}</span>
                                         </span>
@@ -1023,10 +1023,16 @@ function RoutinesPage() {
                   return (
                     <div
                       key={task.id}
-                      className={`flex flex-col justify-between rounded-xl border p-4 transition-all hover:shadow-lg ${color.bg} ${color.border} ${
+                      className={`relative flex flex-col justify-between rounded-xl border border-border/70 bg-secondary/40 p-4 transition-all hover:shadow-lg ${
                         !task.is_active ? "opacity-50" : ""
                       }`}
                     >
+                      {/* Category colour accent: thin left stripe carries the
+                          category's colour; the card itself stays neutral. */}
+                      <span
+                        aria-hidden
+                        className={`absolute left-0.5 top-1 bottom-1 w-[3px] rounded-full bg-current ${color.text}`}
+                      />
                       <div className="space-y-2.5">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2.5">
@@ -1039,7 +1045,7 @@ function RoutinesPage() {
 
                           <button
                             onClick={() => toggleMutation.mutate({ id: task.id, isActive: !task.is_active })}
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
                               task.is_active
                                 ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
                                 : "bg-muted text-muted-foreground"
@@ -1091,7 +1097,7 @@ function RoutinesPage() {
                               onClick={() => deleteMutation.mutate(task.id)}
                               className="text-muted-foreground hover:text-destructive transition-colors p-1"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
                         )}
@@ -1109,7 +1115,7 @@ function RoutinesPage() {
             {/* Category Allocation Distribution Bar */}
             <div className="rounded-xl border border-border bg-card p-5 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-primary" /> Category Time Allocation
                 </h3>
                 <span className="num text-xs text-muted-foreground font-semibold">
@@ -1165,7 +1171,7 @@ function RoutinesPage() {
             <div className="grid gap-6 md:grid-cols-2">
               {/* Daily Schedule Density */}
               <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                <h3 className="font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-purple-400" /> Day-by-Day Load Density
                 </h3>
                 <div className="space-y-2">
@@ -1193,7 +1199,7 @@ function RoutinesPage() {
               <div className="space-y-6">
                 {/* Goal Allocation */}
                 <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                  <h3 className="font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                     <Target className="h-4 w-4 text-cyan-400" /> Linked Goals Allocation
                   </h3>
                   {analytics.goalAllocations.length === 0 ? (
@@ -1217,7 +1223,7 @@ function RoutinesPage() {
 
                 {/* Habit Synergy */}
                 <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                  <h3 className="font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                     <Repeat className="h-4 w-4 text-amber-400" /> Habit Target Alignment
                   </h3>
                   {analytics.habitAllocations.length === 0 ? (
@@ -1232,7 +1238,7 @@ function RoutinesPage() {
                               Scheduled in routine: {ha.scheduledDays}x / Target: {ha.target}x/week
                             </div>
                           </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                             ha.isMet ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" : "bg-amber-500/20 text-amber-400 border border-amber-500/40"
                           }`}>
                             {ha.isMet ? "Target Covered" : "Needs More Slots"}
@@ -1358,7 +1364,7 @@ function RoutinesPage() {
                   <select
                     value={formCategory}
                     onChange={(e) => handleCategoryChange(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
                     {categories.map((cat) => (
                       <option key={cat.name} value={cat.name}>
@@ -1384,7 +1390,7 @@ function RoutinesPage() {
                   <select
                     value={formTimeSlot}
                     onChange={(e) => setFormTimeSlot(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background p-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
                     {allTimeSlots.map((slot) => (
                       <option key={slot} value={slot}>
@@ -1464,7 +1470,7 @@ function RoutinesPage() {
                   <select
                     value={formGoalId ?? ""}
                     onChange={(e) => setFormGoalId(e.target.value || null)}
-                    className="w-full rounded-lg border border-border bg-background p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
                     <option value="">-- No Goal --</option>
                     {goals
@@ -1484,7 +1490,7 @@ function RoutinesPage() {
                   <select
                     value={formHabitId ?? ""}
                     onChange={(e) => handleHabitSelect(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
                     <option value="">-- No Habit --</option>
                     {habitStats.map((h) => (
@@ -1504,7 +1510,7 @@ function RoutinesPage() {
                 <select
                   value={formSubjectId ?? ""}
                   onChange={(e) => setFormSubjectId(e.target.value || null)}
-                  className="w-full rounded-lg border border-border bg-background p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="">-- No Subject --</option>
                   {subjects.map((s) => (

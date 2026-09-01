@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StatCard } from "@/components/StatCard";
 import { getWeeklyReview, saveWeeklyReflection } from "@/lib/weekly-review.functions";
 import { subjectColorHex } from "@/lib/subjects-shared";
 import { formatDayDate } from "@/lib/tracker-shared";
@@ -36,28 +37,7 @@ const STREAK_LABEL: Record<string, string> = {
   none: "No activity",
 };
 
-function StatCard({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-center gap-2 text-primary">
-        {icon}
-        <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">{label}</p>
-      </div>
-      <p className="num mt-2 text-3xl font-semibold">{value}</p>
-      <p className="text-xs text-muted-foreground">{sub}</p>
-    </div>
-  );
-}
+
 
 export function WeeklyReviewView({
   weekStart,
@@ -96,7 +76,7 @@ export function WeeklyReviewView({
         <>
           <div className="flex items-center gap-2 text-primary">
             <CalendarRange className="h-4 w-4" />
-            <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">
+            <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
               Week of {formatDayDate(review.weekStart)} – {formatDayDate(review.weekEnd)}
             </p>
           </div>
@@ -112,7 +92,7 @@ export function WeeklyReviewView({
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Daily completions */}
             <section className="rounded-2xl border border-border bg-card p-5">
-              <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">
+              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
                 Daily completions · Mon – Sun
               </p>
               <div className="mt-3 h-48">
@@ -138,7 +118,7 @@ export function WeeklyReviewView({
 
             {/* Habits */}
             <section className="rounded-2xl border border-border bg-card p-5">
-              <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">Habits</p>
+              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Habits</p>
               {review.habits.length === 0 ? (
                 <p className="mt-3 text-xs text-muted-foreground">No habits tracked this week.</p>
               ) : (
@@ -163,7 +143,7 @@ export function WeeklyReviewView({
           <section className="rounded-2xl border border-border bg-card p-5">
             <div className="flex items-center gap-2 text-primary">
               <Target className="h-4 w-4" />
-              <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">Goals</p>
+              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Goals</p>
             </div>
             {review.goals.length === 0 ? (
               <p className="mt-3 text-xs text-muted-foreground">
@@ -176,11 +156,11 @@ export function WeeklyReviewView({
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: subjectColorHex(g.color) }} />
                     <span className="min-w-0 flex-1 truncate text-xs font-medium">{g.title}</span>
                     {g.isNewlyCompleted ? (
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-primary">Completed</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Completed</span>
                     ) : g.isNewlyCreated ? (
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Created</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Created</span>
                     ) : (
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         {g.status === "overdue" ? "Overdue" : g.status === "active" ? "Updated" : g.status}
                       </span>
                     )}
@@ -194,7 +174,7 @@ export function WeeklyReviewView({
           <section className="rounded-2xl border border-border bg-card p-5">
             <div className="flex items-center gap-2 text-primary">
               <BookOpen className="h-4 w-4" />
-              <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">By Subject</p>
+              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">By Subject</p>
             </div>
             {review.subjects.length === 0 ? (
               <p className="mt-3 text-xs text-muted-foreground">
@@ -233,7 +213,7 @@ export function WeeklyReviewView({
 
           {/* Reflection */}
           <section className="rounded-2xl border border-border bg-card p-5">
-            <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">
+            <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
               Reflection / intention for next week
             </p>
             <div className="mt-3 flex items-center gap-2">

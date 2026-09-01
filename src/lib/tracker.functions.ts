@@ -70,6 +70,76 @@ export const toggleDayTask = createServerFn({ method: "POST" })
     return { profile };
   });
 
+export const renameDayTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; title: string }) =>
+    z.object({ id: z.string().uuid(), title: z.string().min(1).max(300) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+
+    // Normalize exactly like taskKey does (tracker.server.ts) so accidental
+    // whitespace/case drift can never create a phantom second identity.
+    const newTitle = data.title.trim();
+    if (!newTitle) throw new Error("Task title cannot be empty.");
+
+    const { data: taskRow } = await supabase
+      .from("day_tasks")
+      .select("id, title, goal_id, routine_task_id, task_date")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!taskRow) throw new Error("Task not found.");
+
+    // Past-day tasks are locked: history is read-only. The UI hides the edit
+    // control; this is the server-side backstop so no client can bypass it.
+    // (Mirrors toggleDayTask / deleteDayTask.)
+    if (taskRow.task_date && taskRow.task_date < toISODate(new Date())) {
+      throw new Error("Tasks from past days are locked and cannot be changed.");
+    }
+
+    // Completed-goal tasks are locked as well — their frozen rollover history
+    // must never be retitled. (Mirrors toggleDayTask.)
+    if (taskRow.goal_id) {
+      const { data: goalRow } = await supabase
+        .from("goals")
+        .select("status")
+        .eq("id", taskRow.goal_id)
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if (goalRow?.status === "completed") {
+        throw new Error("This task belongs to a completed goal and is locked.");
+      }
+    }
+
+    // Chain-wide rename: task identity for rollover/dedup is
+    // title.trim().toLowerCase() | goal_id | routine_task_id. Renaming only the
+    // visible row would fork that identity — the uncompleted ancestors under the
+    // old title would roll forward as a "new" duplicate task, split the goal
+    // progress chain (goal_id|title grouping) and double the stale budget. So
+    // every row sharing the current key is renamed together, preserving the
+    // chain under the new title.
+    const oldKeyTitle = (taskRow.title ?? "").trim().toLowerCase();
+    let chainQuery = supabase.from("day_tasks").select("id, title").eq("user_id", context.userId);
+    chainQuery = taskRow.goal_id
+      ? chainQuery.eq("goal_id", taskRow.goal_id)
+      : chainQuery.is("goal_id", null);
+    chainQuery = taskRow.routine_task_id
+      ? chainQuery.eq("routine_task_id", taskRow.routine_task_id)
+      : chainQuery.is("routine_task_id", null);
+    const { data: keyRows, error: keyErr } = await chainQuery;
+    if (keyErr) throw new Error(keyErr.message);
+    const chainIds = (keyRows ?? [])
+      .filter((r) => (r.title ?? "").trim().toLowerCase() === oldKeyTitle)
+      .map((r) => r.id);
+
+    if (chainIds.length > 0) {
+      const { error } = await supabase.from("day_tasks").update({ title: newTitle }).in("id", chainIds);
+      if (error) throw new Error(error.message);
+    }
+    return { renamed: chainIds.length };
+  });
+
 export const addDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { date: string; title: string; goalId?: string | null; subjectId?: string | null }) =>
@@ -320,6 +390,7 @@ function computeHabitProgress(
 
   // ---- Unlimited: weekly-bucket mode (unchanged) ----
   const weekStarts: string[] = [];
+  const createdISO = toISODate(created);
   let cur = startOfWeek(created);
   let end = startOfWeek(new Date());
   // Optional bounded window: track for duration_days days starting from the
@@ -354,6 +425,12 @@ function computeHabitProgress(
         // Bounded window: logs outside [created, created + duration_days) do
         // not count toward this goal's tracking of the habit.
         if (windowRange && (d < windowRange[0] || d > windowRange[1])) continue;
+        // Never count a log before the link's created_at date. The first
+        // calendar week in weekly-bucket mode starts at the week containing
+        // created_at, which can precede the link — without this guard pre-link
+        // logs in that same week would count (day-count mode already filters
+        // to [created, created + duration_days) so it is unaffected).
+        if (d < createdISO) continue;
         if (d >= ws && d <= weekEnd) count += 1;
         if (count >= habit.target_per_week) break;
       }
@@ -853,6 +930,39 @@ export const saveGoal = createServerFn({ method: "POST" })
       .select("id")
       .maybeSingle();
     return { ok: true, goalId: newGoal?.id ?? null };
+  });
+
+/**
+ * Rename a goal's title. A goal's identity is its id — nothing in the rollover,
+ * dedupe or progress logic keys off goals.title (only day-task/routine-task
+ * titles are identity-bearing, via taskKey / goalLinkKey) — so a simple single
+ * row update is safe. Completed goals are locked, consistent with
+ * toggleDayTask / renameDayTask / the UI's completed-goal treatment.
+ */
+export const renameGoal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; title: string }) =>
+    z.object({ id: z.string().uuid(), title: z.string().min(1).max(200) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+    const newTitle = data.title.trim();
+    if (!newTitle) throw new Error("Goal title cannot be empty.");
+
+    const { data: goalRow } = await supabase
+      .from("goals")
+      .select("id, status")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!goalRow) throw new Error("Goal not found.");
+    if (goalRow.status === "completed") {
+      throw new Error("Completed goals are locked and cannot be renamed.");
+    }
+
+    const { error } = await supabase.from("goals").update({ title: newTitle }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const deleteGoal = createServerFn({ method: "POST" })

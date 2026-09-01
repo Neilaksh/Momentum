@@ -74,7 +74,7 @@ function AuthPage() {
       <div className="w-full max-w-sm">
         <Link to="/" className="mb-8 flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-primary" />
-          <span className="text-sm font-semibold tracking-[0.2em] uppercase text-muted-foreground">
+          <span className="text-sm font-semibold tracking-wider uppercase text-muted-foreground">
             Momentum
           </span>
         </Link>

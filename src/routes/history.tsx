@@ -20,7 +20,18 @@ import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
 import { ProgressRing } from "@/components/ProgressRing";
 import { WeeklyReviewDialog } from "@/components/WeeklyReviewDialog";
+import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { getHistory, resetTrackerData } from "@/lib/tracker.functions";
 import { getSubjectBreakdown } from "@/lib/subjects.functions";
 import { subjectColorHex, type SubjectBreakdownEntry } from "@/lib/subjects-shared";
@@ -150,7 +161,7 @@ function HistoryPage() {
 
       {chart.length > 1 ? (
         <section className="mt-6 h-56 rounded-2xl border border-border bg-card p-5">
-          <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">Completion rate</p>
+          <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Completion rate</p>
           <div className="mt-3 h-40">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
@@ -180,13 +191,13 @@ function HistoryPage() {
       <section className="mt-6 rounded-2xl border border-border bg-card p-5">
         <div className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-primary" />
-          <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">
+          <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
             By Subject · Last 30 days
           </p>
         </div>
 
         {subjectEntries.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-dashed border-border p-8 text-center">
+          <div className="mt-4 rounded-2xl border border-dashed border-border p-10 text-center">
             <BookOpen className="mx-auto h-8 w-8 text-muted-foreground opacity-40" />
             <p className="mt-2 text-sm font-medium">No subject activity yet</p>
             <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
@@ -272,7 +283,7 @@ function HistoryPage() {
       <section className="mt-6 rounded-2xl border border-border bg-card p-5">
         <div className="flex items-center gap-2">
           <CalendarRange className="h-4 w-4 text-primary" />
-          <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">Weekly Reviews</p>
+          <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Weekly Reviews</p>
         </div>
         {reviewWeeks.length === 0 ? (
           <p className="mt-3 text-xs text-muted-foreground">
@@ -333,41 +344,44 @@ function HistoryPage() {
             </p>
           </div>
 
-          {!showConfirmReset ? (
-            <Button
-              variant="destructive"
-              onClick={() => setShowConfirmReset(true)}
-              className="gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>Delete All Tracker Data</span>
-            </Button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowConfirmReset(false)}
-                disabled={resetMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => resetMutation.mutate()}
-                disabled={resetMutation.isPending}
-                className="gap-2"
-              >
-                {resetMutation.isPending ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                <span>Yes, Delete Everything</span>
-              </Button>
-            </div>
-          )}
+          <Button
+            variant="destructive"
+            onClick={() => setShowConfirmReset(true)}
+            className="gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Delete All Tracker Data</span>
+          </Button>
         </div>
       </section>
+
+      {/* Delete-all confirmation (destructive, gated behind explicit confirm) */}
+      <AlertDialog open={showConfirmReset} onOpenChange={setShowConfirmReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete all tracker data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all your daily tasks, habits, check-in history, goals, and reset your
+              XP, level, and streaks back to zero. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => resetMutation.mutate()}
+              disabled={resetMutation.isPending}
+              className="bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
+            >
+              {resetMutation.isPending ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Yes, Delete Everything
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Weekly Review dialog — opened from the list above */}
       <WeeklyReviewDialog weekStart={reviewWeek} open={reviewOpen} onOpenChange={setReviewOpen} />
@@ -375,25 +389,4 @@ function HistoryPage() {
   );
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-center gap-2 text-primary">
-        {icon}
-        <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">{label}</p>
-      </div>
-      <p className="num mt-2 text-3xl font-semibold">{value}</p>
-      <p className="text-xs text-muted-foreground">{sub}</p>
-    </div>
-  );
-}
+

@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2020",
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "outDir": "../temp-sim",
+    "baseUrl": "..",
+    "paths": { "@/*": ["src/*"] },
+    "strict": false
+  },
+  "include": ["simulate-rollover-rename.ts", "../src/lib/tracker.server.ts", "../src/lib/tracker-shared.ts"]
+}

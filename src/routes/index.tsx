@@ -3,12 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState, useEffect, useRef } from "react";
 import {
+  AlertTriangle,
   Award,
   Calendar as CalendarIcon,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Circle,
+  Pencil,
   Plus,
   Sparkles,
   Target,
@@ -32,7 +34,15 @@ import { ProgressRing } from "@/components/ProgressRing";
 import { PieStat } from "@/components/PieStat";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { addDayTask, deleteDayTask, getGoals, getWeek, toggleDayTask } from "@/lib/tracker.functions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { addDayTask, deleteDayTask, getGoals, getWeek, renameDayTask, toggleDayTask } from "@/lib/tracker.functions";
 import { getSubjects } from "@/lib/subjects.functions";
 import { subjectColorHex, type Subject } from "@/lib/subjects-shared";
 import {
@@ -156,6 +166,36 @@ function UnifiedTasksPage() {
     onSuccess: invalidate,
     onError: () => toast.error("Couldn't delete task — try again."),
   });
+
+  // Inline title editing (pencil icon → small modal). The server fn renames the
+  // whole rollover chain, not just the visible row.
+  const [renamingTask, setRenamingTask] = useState<{ id: string; title: string } | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const renameFn = useServerFn(renameDayTask);
+  const renameTask = useMutation({
+    mutationFn: (v: { id: string; title: string }) => renameFn({ data: v }),
+    onSuccess: (_res, v) => {
+      invalidate();
+      setRenamingTask(null);
+      toast.success(`Renamed to “${v.title.trim()}”`);
+    },
+    onError: () => toast.error("Couldn't rename task — try again."),
+  });
+
+  const startRenaming = (t: { id: string; title: string }) => {
+    setRenamingTask({ id: t.id, title: t.title });
+    setRenameDraft(t.title);
+  };
+
+  const submitRename = () => {
+    if (!renamingTask) return;
+    const title = renameDraft.trim();
+    if (!title || title === renamingTask.title.trim()) {
+      setRenamingTask(null);
+      return;
+    }
+    renameTask.mutate({ id: renamingTask.id, title });
+  };
 
   const fetchGoals = useServerFn(getGoals);
   const { data: goalsData } = useQuery({
@@ -316,7 +356,7 @@ function UnifiedTasksPage() {
         <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6 shadow-sm">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+              <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
                 {isActiveDayToday ? "Today's Pie Chart" : `${activeWeekdayName}'s Pie Chart`}
               </span>
               {isPerfectActive && (
@@ -367,7 +407,7 @@ function UnifiedTasksPage() {
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-4">
               <div>
-                <p className="text-xs tracking-[0.18em] uppercase text-muted-foreground">
+                <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
                   Week Overall Progress
                 </p>
                 <p className="num mt-1 text-2xl font-semibold">
@@ -437,7 +477,7 @@ function UnifiedTasksPage() {
       {/* 7-Day Switcher Tabs Bar */}
       <div className="mt-8">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+          <h2 className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
             Select Day to Focus
           </h2>
           <span className="text-xs text-muted-foreground">
@@ -468,7 +508,7 @@ function UnifiedTasksPage() {
                     {WEEKDAY_NAMES[i]!.slice(0, 3)}
                   </span>
                   {isDayToday && (
-                    <span className="rounded-full bg-primary/20 px-1.5 py-0.2 text-[9px] font-bold uppercase text-primary">
+                    <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
                       Today
                     </span>
                   )}
@@ -640,14 +680,14 @@ function UnifiedTasksPage() {
                         goalLocked || isActiveDayPast
                           ? "cursor-not-allowed border-border/60 bg-secondary/40 text-muted-foreground opacity-60"
                           : t.completed_at
-                            ? "border-primary bg-primary text-primary-foreground"
+                            ? "border-emerald-500/40 bg-emerald-500/20"
                             : "border-border hover:border-primary"
                       }`}
                     >
                       {t.completed_at && (
                         <svg
                           viewBox="0 0 12 12"
-                          className="h-3.5 w-3.5 stroke-primary-foreground"
+                          className="h-3.5 w-3.5 stroke-emerald-400"
                           fill="none"
                           strokeWidth={2.5}
                         >
@@ -666,11 +706,13 @@ function UnifiedTasksPage() {
 
                     {!t.completed_at && activeDay.date < todayISO && (
                       t.is_stale ? (
-                        <span className="rounded-full bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-500">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-600/40 dark:border-amber-400/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                          <AlertTriangle className="h-3 w-3" />
                           Stale
                         </span>
                       ) : (
-                        <span className="rounded-full bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
+                          <AlertTriangle className="h-3 w-3" />
                           Due
                         </span>
                       )
@@ -698,6 +740,30 @@ function UnifiedTasksPage() {
                         <span className="max-w-[120px] truncate">{goalsMap.get(t.goal_id)?.title}</span>
                       </span>
                     )}
+
+                    <button
+                      disabled={goalLocked || isActiveDayPast}
+                      onClick={() => startRenaming(t)}
+                      aria-label={
+                        goalLocked
+                          ? `${t.title} cannot be renamed because its goal is completed`
+                          : isActiveDayPast
+                            ? `Past day — ${t.title} cannot be renamed`
+                            : `Rename ${t.title}`
+                      }
+                      title={
+                        goalLocked
+                          ? "Goal completed — task locked"
+                          : isActiveDayPast
+                            ? "Past day — tasks are read-only"
+                            : "Rename task"
+                      }
+                      className={`opacity-0 transition-opacity group-hover:opacity-100 p-1 text-muted-foreground ${
+                        goalLocked || isActiveDayPast ? "cursor-not-allowed" : "hover:text-primary"
+                      }`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
 
                     <button
                       disabled={isActiveDayPast}
@@ -818,6 +884,46 @@ function UnifiedTasksPage() {
           })}
         </div>
       </section>
+
+      {/* Rename-task modal (pencil icon on a task row) */}
+      <Dialog
+        open={renamingTask !== null}
+        onOpenChange={(open) => {
+          if (!open) setRenamingTask(null);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename task</DialogTitle>
+            <DialogDescription>
+              Renaming updates every copy of this task (including rolled-over copies) so its history
+              and streak tracking stay connected.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameDraft}
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitRename();
+              }
+            }}
+            placeholder="Task title"
+            aria-label="Task title"
+            autoFocus
+            className="h-9 text-sm"
+          />
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setRenamingTask(null)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={submitRename} disabled={!renameDraft.trim() || renameTask.isPending}>
+              {renameTask.isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
@@ -903,7 +1009,7 @@ function DayCard({
               <div className="flex items-start gap-2">
                 <div className="mt-0.5 shrink-0">
                   {t.completed_at ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                   ) : (
                     <Circle className="h-3.5 w-3.5 text-muted-foreground/60" />
                   )}
@@ -917,17 +1023,17 @@ function DayCard({
                 </span>
                 {isPast && !t.completed_at && (
                   t.is_stale ? (
-                    <span className="shrink-0 rounded-full bg-amber-500/15 border border-amber-500/40 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-500">
+                    <span className="shrink-0 rounded-full bg-amber-500/15 border border-amber-600/40 dark:border-amber-400/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                       Stale
                     </span>
                   ) : (
-                    <span className="shrink-0 rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[9px] font-bold uppercase text-destructive">
+                    <span className="shrink-0 rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
                       Due
                     </span>
                   )
                 )}
                 {t.completed_at && (t.rollover_count ?? 0) > 0 && (
-                  <span className="shrink-0 rounded-full bg-secondary/70 border border-border/70 px-1.5 py-0.5 text-[9px] font-bold uppercase text-muted-foreground">
+                  <span className="shrink-0 rounded-full bg-secondary/70 border border-border/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     Completed late
                   </span>
                 )}

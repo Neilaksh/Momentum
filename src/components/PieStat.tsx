@@ -98,7 +98,7 @@ export function PieStat({
           </span>
         </div>
       </div>
-      <p className="mt-2 text-xs font-semibold tracking-[0.14em] uppercase text-muted-foreground text-center">
+      <p className="mt-2 text-xs font-semibold tracking-wider uppercase text-muted-foreground text-center">
         {label}
       </p>
       {caption && <p className="num mt-0.5 text-xs text-muted-foreground text-center max-w-[200px]">{caption}</p>}
