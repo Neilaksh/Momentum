@@ -724,6 +724,14 @@ function UnifiedTasksPage() {
                           <AlertTriangle className="h-3 w-3" />
                           Stale
                         </span>
+                      ) : chainCompletedIds.has(t.id) ? (
+                        // Frozen original whose rollover copy was completed
+                        // elsewhere: swap "Due" for the existing "Completed late"
+                        // badge. Display only — the row stays read-only and this
+                        // panel's stats read t.completed_at, which is untouched.
+                        <span className="rounded-full bg-secondary/70 border border-border/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Completed late
+                        </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
                           <AlertTriangle className="h-3 w-3" />
