@@ -604,14 +604,14 @@ function HabitDurationControl({
                   setDraft(String(durationDays));
                   setEditing(true);
                 }}
-                className="text-[9px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                className="text-[9px] font-medium text-muted-foreground hover:text-foreground px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
                 aria-label="Edit tracking duration"
               >
                 Edit
               </button>
               <button
                 onClick={() => onSet(null)}
-                className="text-[9px] font-medium text-muted-foreground hover:text-destructive transition-colors"
+                className="text-[9px] font-medium text-muted-foreground hover:text-destructive px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
                 aria-label="Clear tracking duration"
               >
                 Clear
@@ -628,7 +628,7 @@ function HabitDurationControl({
             setDraft("");
             setEditing(true);
           }}
-          className="mt-0.5 text-[9px] font-medium text-muted-foreground/70 hover:text-foreground transition-colors"
+          className="mt-0.5 text-[9px] font-medium text-muted-foreground/70 hover:text-foreground px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
           aria-label="Set tracking duration"
         >
           + Set duration
@@ -657,13 +657,13 @@ function HabitDurationControl({
           onSet(trimmed === "" ? null : Number.parseInt(trimmed, 10));
           setEditing(false);
         }}
-        className="rounded-md border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+        className="rounded-md border border-primary/30 bg-primary/10 px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 text-[9px] font-semibold text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
       >
         Save
       </button>
       <button
         onClick={() => setEditing(false)}
-        className="text-[9px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+        className="text-[9px] font-medium text-muted-foreground hover:text-foreground px-2.5 py-2 -mx-1 -my-1 md:px-1.5 md:py-0.5 md:mx-0 md:my-0 transition-colors"
       >
         Cancel
       </button>
@@ -833,7 +833,7 @@ function GoalCard({
                       : `Rename goal ${goal.title}`
                   }
                   title={isCompleted ? "Completed goals are locked" : "Rename goal"}
-                  className={`p-1 transition-colors ${
+                  className={`p-3 -m-2 md:p-1 md:m-0 transition-colors ${
                     isCompleted
                       ? "cursor-not-allowed text-muted-foreground/40"
                       : "text-muted-foreground hover:text-primary"
@@ -860,7 +860,7 @@ function GoalCard({
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 aria-label={`Delete ${goal.title}`}
-                className="text-muted-foreground hover:text-destructive p-1 transition-colors"
+                className="text-muted-foreground hover:text-destructive p-3 -m-2 md:p-1 md:m-0 transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -1245,7 +1245,7 @@ function GoalCard({
               {!isCompleted && unlinkedHabits.length > 0 && (
                 <button
                   onClick={() => setShowLinkHabitDropdown((v) => !v)}
-                  className="flex items-center gap-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1 text-[10px] font-semibold text-amber-400 hover:bg-amber-500/20 transition-colors"
+                  className="flex items-center gap-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 -mx-1 -my-1 md:px-2 md:py-1 md:mx-0 md:my-0 text-[10px] font-semibold text-amber-400 hover:bg-amber-500/20 transition-colors"
                 >
                   <LinkIcon className="h-3 w-3" />
                   {showLinkHabitDropdown ? "Cancel" : "Link Habit"}

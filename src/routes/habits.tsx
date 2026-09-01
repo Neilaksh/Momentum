@@ -27,6 +27,16 @@ import { PieStat } from "@/components/PieStat";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   addHabit,
   deleteHabit,
   getHabits,
@@ -88,6 +98,7 @@ function HabitsPage() {
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editTarget, setEditTarget] = useState(7);
+  const [confirmDeleteHabitId, setConfirmDeleteHabitId] = useState<string | null>(null);
 
   const qc = useQueryClient();
   const todayISO = toISODate(new Date());
@@ -175,6 +186,7 @@ function HabitsPage() {
     mutationFn: (id: string) => delFn({ data: { id } }),
     onSuccess: () => {
       invalidate();
+      setConfirmDeleteHabitId(null);
       toast.info("Habit deleted");
     },
   });
@@ -649,16 +661,16 @@ function HabitsPage() {
                         <button
                           onClick={() => startEditing(s)}
                           aria-label={`Edit ${s.habit.title}`}
-                          className="text-muted-foreground hover:text-foreground p-1 transition-colors"
+                          className="text-muted-foreground hover:text-foreground p-3 -m-2 md:p-1 md:m-0 transition-colors"
                         >
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
                       )}
 
                       <button
-                        onClick={() => remove.mutate(s.habit.id)}
+                        onClick={() => setConfirmDeleteHabitId(s.habit.id)}
                         aria-label={`Delete ${s.habit.title}`}
-                        className="text-muted-foreground hover:text-destructive p-1 transition-colors"
+                        className="text-muted-foreground hover:text-destructive p-3 -m-2 md:p-1 md:m-0 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -736,6 +748,36 @@ function HabitsPage() {
           })}
         </div>
       )}
+
+      {/* Delete-habit confirmation (destructive, gated behind explicit confirm) */}
+      <AlertDialog
+        open={confirmDeleteHabitId !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteHabitId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this habit?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete &ldquo;
+              {stats.find((h) => h.habit.id === confirmDeleteHabitId)?.habit.title ?? "this habit"}
+              &rdquo; and its entire check-in history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmDeleteHabitId) remove.mutate(confirmDeleteHabitId);
+              }}
+              className="bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
+            >
+              Delete Habit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }

@@ -314,7 +314,7 @@ function SubjectsPage() {
                       setEditColor(s.color);
                       setBlockedDelete(null);
                     }}
-                    className="rounded-lg bg-secondary/50 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    className="rounded-lg bg-secondary/50 px-3.5 py-2.5 -mx-1 -my-1 md:px-3 md:py-1.5 md:mx-0 md:my-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                   >
                     Edit
                   </button>
@@ -325,14 +325,14 @@ function SubjectsPage() {
                       <button
                         type="button"
                         onClick={() => remove.mutate({ id: s.id })}
-                        className="rounded-md bg-destructive px-2 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-destructive/90"
+                        className="rounded-md bg-destructive px-3 py-2 -mx-1 -my-1 md:px-2 md:py-0.5 md:mx-0 md:my-0 text-[11px] font-semibold text-white transition-colors hover:bg-destructive/90"
                       >
                         Yes
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteId(null)}
-                        className="rounded-md bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        className="rounded-md bg-secondary px-3 py-2 -mx-1 -my-1 md:px-2 md:py-0.5 md:mx-0 md:my-0 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
                       >
                         No
                       </button>
@@ -342,7 +342,7 @@ function SubjectsPage() {
                       type="button"
                       onClick={() => void requestDelete(s)}
                       aria-label={`Delete ${s.name}`}
-                      className="p-1 text-muted-foreground transition-colors hover:text-destructive"
+                      className="p-3 -m-2 md:p-1 md:m-0 text-muted-foreground transition-colors hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -390,7 +390,7 @@ function ColorPicker({
             aria-label={`Pick ${c.label}`}
             aria-pressed={value === c.key}
             onClick={() => onChange(c.key)}
-            className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all ${
+            className={`flex h-8 w-8 items-center justify-center rounded-full border-2 p-1.5 -m-1.5 md:p-0 md:m-0 transition-all ${
               value === c.key ? "scale-110 border-foreground" : "border-transparent hover:scale-105"
             }`}
             style={{ background: c.hex }}

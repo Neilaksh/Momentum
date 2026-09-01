@@ -690,24 +690,30 @@ function UnifiedTasksPage() {
                             ? "Past day — tasks are read-only"
                             : undefined
                       }
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
-                        goalLocked || isActiveDayPast
-                          ? "cursor-not-allowed border-border/60 bg-secondary/40 text-muted-foreground opacity-60"
-                          : t.completed_at
-                            ? "border-emerald-500/40 bg-emerald-500/20"
-                            : "border-border hover:border-primary"
+                      className={`flex shrink-0 items-center justify-center rounded-md p-2 -m-2 md:p-0 md:m-0 transition-all ${
+                        goalLocked || isActiveDayPast ? "cursor-not-allowed" : ""
                       }`}
                     >
-                      {t.completed_at && (
-                        <svg
-                          viewBox="0 0 12 12"
-                          className="h-3.5 w-3.5 stroke-emerald-400"
-                          fill="none"
-                          strokeWidth={2.5}
-                        >
-                          <path d="M2.5 6.3l2.4 2.4 4.6-5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
+                      <span
+                        className={`flex h-6 w-6 items-center justify-center rounded-md border transition-all ${
+                          goalLocked || isActiveDayPast
+                            ? "border-border/60 bg-secondary/40 text-muted-foreground opacity-60"
+                            : t.completed_at
+                              ? "border-emerald-500/40 bg-emerald-500/20"
+                              : "border-border hover:border-primary"
+                        }`}
+                      >
+                        {t.completed_at && (
+                          <svg
+                            viewBox="0 0 12 12"
+                            className="h-3.5 w-3.5 stroke-emerald-400"
+                            fill="none"
+                            strokeWidth={2.5}
+                          >
+                            <path d="M2.5 6.3l2.4 2.4 4.6-5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
                     </button>
 
                     <span

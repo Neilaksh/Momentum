@@ -1266,7 +1266,7 @@ function RoutinesPage() {
       {/* Routine Add / Edit Dialog Overlay */}
       {isDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 my-8">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 my-8">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
@@ -1356,7 +1356,7 @@ function RoutinesPage() {
               </div>
 
               {/* Category & Time Slot */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1471,7 +1471,7 @@ function RoutinesPage() {
               )}
 
               {/* Link to Goal & Habit */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
                     Link to Goal
@@ -1556,7 +1556,7 @@ function RoutinesPage() {
       {/* Add Custom Time Slot Modal */}
       {isAddSlotOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h3 className="font-bold text-base flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary" /> Create Custom Time Slot
@@ -1615,7 +1615,7 @@ function RoutinesPage() {
       {/* Add Custom Category Modal */}
       {isAddCategoryOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h3 className="font-bold text-base flex items-center gap-2">
                 <Tag className="h-4 w-4 text-cyan-400" /> Create Custom Category
