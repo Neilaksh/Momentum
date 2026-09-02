@@ -144,6 +144,13 @@ export type CustomCategory = {
 const STORAGE_CUSTOM_SLOTS_KEY = "momentum_custom_routine_slots";
 const STORAGE_CUSTOM_CATS_KEY = "momentum_custom_routine_categories";
 
+// Category that slots are reassigned to when their custom category is deleted.
+// "General" is the app-wide catch-all fallback (parseRoutineTitle defaults an
+// unknown/missing category to it, and formatRoutineTitle defaults to it), so a
+// deleted custom category's slots render consistently with that existing
+// behavior — no dangling category name.
+const FALLBACK_CATEGORY_NAME = "General";
+
 function RoutinesPage() {
   // Default to Day View on narrow (mobile) viewports: the 7-Day Matrix needs
   // ~950px of horizontal scroll and hover-only edit controls there. Users can
@@ -186,6 +193,8 @@ function RoutinesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAddSlotOpen, setIsAddSlotOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  // Category name queued for destructive deletion (confirmation gated).
+  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState<string | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<RoutineTask | null>(null);
@@ -629,6 +638,75 @@ function RoutinesPage() {
     toast.success(`Category "${name}" created!`);
     setIsAddCategoryOpen(false);
     setNewCatName("");
+  };
+
+  // Whether a category is one of the app's built-in defaults. Built-ins can never
+  // be deleted; only user-created custom categories can.
+  const isBuiltinCategory = (name: string) =>
+    DEFAULT_CATEGORIES.some((c) => c.name.toLowerCase() === name.toLowerCase());
+
+  // Custom categories = everything in state that isn't a built-in default.
+  const customCategories = useMemo(
+    () => categories.filter((c) => !isBuiltinCategory(c.name)),
+    [categories],
+  );
+
+  // Slots currently assigned to a given category (by name, parsed from their title).
+  const slotIdsByCategory = useMemo(() => {
+    const map = new Map<string, { id: string; title: string; weekday: number }[]>();
+    for (const t of tasks) {
+      const cat = parseRoutineTitle(t.title).category;
+      const list = map.get(cat) ?? [];
+      list.push({ id: t.id, title: t.title, weekday: t.weekday });
+      map.set(cat, list);
+    }
+    return map;
+  }, [tasks]);
+
+  // Reassign a slot to the universal "General" fallback by rebuilding its title.
+  // formatRoutineTitle takes the CLEAN title and the emoji separately (the emoji
+  // lives both in the bracket and prefixes the display title), so pass
+  // cleanTitle + emoji explicitly to avoid double-prefixing.
+  const reassignSlotToFallback = (title: string): string => {
+    const p = parseRoutineTitle(title);
+    return formatRoutineTitle(
+      p.cleanTitle,
+      p.timeSlot,
+      FALLBACK_CATEGORY_NAME,
+      p.emoji,
+      p.colorKey,
+      p.habitId,
+      p.taskId,
+    );
+  };
+
+  // Delete a custom category, reassigning its slots to the fallback category.
+  const handleDeleteCategory = (catName: string) => {
+    setConfirmDeleteCategory(catName); // gate behind AlertDialog confirmation
+  };
+
+  const confirmDeleteCategoryAction = () => {
+    if (!confirmDeleteCategory) return;
+    const catName = confirmDeleteCategory;
+
+    // Reassign every slot currently using this category to the fallback.
+    const affected = slotIdsByCategory.get(catName) ?? [];
+    for (const slot of affected) {
+      updateMutation.mutate({
+        id: slot.id,
+        title: reassignSlotToFallback(slot.title),
+        weekday: slot.weekday,
+      });
+    }
+
+    // Remove the category (also persists via the categories effect).
+    setCategories((prev) => prev.filter((c) => c.name !== catName));
+    setConfirmDeleteCategory(null);
+    toast.success(
+      affected.length > 0
+        ? `Deleted "${catName}" — ${affected.length} routine slot${affected.length === 1 ? "" : "s"} moved to "${FALLBACK_CATEGORY_NAME}".`
+        : `Deleted custom category "${catName}".`,
+    );
   };
 
   const handleDeleteTimeSlotRow = (slotToDelete: string) => {
@@ -1844,6 +1922,51 @@ function RoutinesPage() {
                 />
               </div>
 
+              {/* Manage existing custom categories: delete any user-created one.
+                  Built-in defaults are never listed/deletable here. */}
+              {customCategories.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Manage Custom Categories
+                  </label>
+                  <ul className="space-y-1.5">
+                    {customCategories.map((cat) => {
+                      const usedBy = (slotIdsByCategory.get(cat.name) ?? []).length;
+                      const color = COLOR_PALETTE[cat.colorKey] ?? COLOR_PALETTE.slate;
+                      return (
+                        <li
+                          key={cat.name}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-secondary/30 px-3 py-2 text-xs"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span
+                              className={`h-2.5 w-2.5 shrink-0 rounded-full ${color.bg} ${color.border}`}
+                            />
+                            <span className="truncate font-medium text-foreground">{cat.name}</span>
+                            <span className="shrink-0 text-muted-foreground">
+                              {usedBy > 0 ? `${usedBy} slot${usedBy === 1 ? "" : "s"}` : "unused"}
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCategory(cat.name)}
+                            title={`Delete "${cat.name}"`}
+                            aria-label={`Delete category ${cat.name}`}
+                            className="p-3 -m-2 md:p-1 md:m-0 text-muted-foreground transition-colors hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Built-in categories can't be deleted. Deleting a custom category reassigns its
+                    routine slots to "{FALLBACK_CATEGORY_NAME}".
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
                   Color Theme
@@ -1886,6 +2009,40 @@ function RoutinesPage() {
           </div>
         </div>
       )}
+
+      {/* Delete-category confirmation (destructive, gated): affects every routine
+          slot using the category, which get reassigned to the fallback. */}
+      <AlertDialog
+        open={confirmDeleteCategory !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteCategory(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete category "{confirmDeleteCategory}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const count = confirmDeleteCategory
+                  ? (slotIdsByCategory.get(confirmDeleteCategory) ?? []).length
+                  : 0;
+                return count > 0
+                  ? `This category is used by ${count} routine slot${count === 1 ? "" : "s"}. Deleting it will reassign those slots to "${FALLBACK_CATEGORY_NAME}".`
+                  : `This category is not used by any routine slots. It will just be removed.`;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteCategoryAction}
+              className="bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
+            >
+              Delete Category
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
