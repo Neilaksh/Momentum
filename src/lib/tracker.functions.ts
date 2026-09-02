@@ -10,7 +10,16 @@ import {
   recomputeStats,
   rolloverIncompleteGoalTasks,
 } from "./tracker.server";
-import { addDays, parseISODate, startOfWeek, toISODate, type GoalHabitSnapshot, type GoalHabitStat, type GoalProgress } from "./tracker-shared";
+import {
+  addDays,
+  getSupersededRolloverIds,
+  parseISODate,
+  startOfWeek,
+  toISODate,
+  type GoalHabitSnapshot,
+  type GoalHabitStat,
+  type GoalProgress,
+} from "./tracker-shared";
 import { parseHabitTitle } from "./habits-shared";
 
 export const getWeek = createServerFn({ method: "POST" })
@@ -62,10 +71,7 @@ export const toggleDayTask = createServerFn({ method: "POST" })
       patch.is_stale = false;
       patch.rollover_count = 0;
     }
-    await context.supabase
-      .from("day_tasks")
-      .update(patch)
-      .eq("id", data.id);
+    await context.supabase.from("day_tasks").update(patch).eq("id", data.id);
     const profile = await recomputeStats(context.supabase, context.userId);
     return { profile };
   });
@@ -134,7 +140,10 @@ export const renameDayTask = createServerFn({ method: "POST" })
       .map((r) => r.id);
 
     if (chainIds.length > 0) {
-      const { error } = await supabase.from("day_tasks").update({ title: newTitle }).in("id", chainIds);
+      const { error } = await supabase
+        .from("day_tasks")
+        .update({ title: newTitle })
+        .in("id", chainIds);
       if (error) throw new Error(error.message);
     }
     return { renamed: chainIds.length };
@@ -142,15 +151,16 @@ export const renameDayTask = createServerFn({ method: "POST" })
 
 export const addDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { date: string; title: string; goalId?: string | null; subjectId?: string | null }) =>
-    z
-      .object({
-        date: z.string(),
-        title: z.string().min(1).max(200),
-        goalId: z.string().nullable().optional(),
-        subjectId: z.string().nullable().optional(),
-      })
-      .parse(input),
+  .inputValidator(
+    (input: { date: string; title: string; goalId?: string | null; subjectId?: string | null }) =>
+      z
+        .object({
+          date: z.string(),
+          title: z.string().min(1).max(200),
+          goalId: z.string().nullable().optional(),
+          subjectId: z.string().nullable().optional(),
+        })
+        .parse(input),
   )
   .handler(async ({ data, context }) => {
     const title = data.title.trim();
@@ -332,13 +342,9 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
 export const clearAllRoutineTasks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await context.supabase
-      .from("routine_tasks")
-      .delete()
-      .eq("user_id", context.userId);
+    await context.supabase.from("routine_tasks").delete().eq("user_id", context.userId);
     return { ok: true };
   });
-
 
 /**
  * Progress for a habit linked to a goal, windowed from that specific link's
@@ -441,7 +447,7 @@ function computeHabitProgress(
       partial = Math.min(count / habit.target_per_week, 1);
     }
   }
-  const hitRate = weeksTotal > 0 ? Math.round((weeksMet + partial) / weeksTotal * 100) : 0;
+  const hitRate = weeksTotal > 0 ? Math.round(((weeksMet + partial) / weeksTotal) * 100) : 0;
   return {
     habitId: habit.id,
     title: parseHabitTitle(habit.title).displayTitle || habit.title,
@@ -546,7 +552,10 @@ async function snapshotGoalHabitStats(
   const { data: linkRows } = await supabase
     .from("goal_habit_links")
     .select("goal_id, habit_id, created_at, duration_days")
-    .in("goal_id", goals.map((g) => g.id));
+    .in(
+      "goal_id",
+      goals.map((g) => g.id),
+    );
   for (const l of linkRows ?? []) {
     const byHabit = habitLinksByGoal.get(l.goal_id) ?? new Map<string, HabitLinkWindow>();
     byHabit.set(l.habit_id, { createdAt: l.created_at, durationDays: l.duration_days });
@@ -565,7 +574,10 @@ async function snapshotGoalHabitStats(
     const { data: logRows } = await supabase
       .from("habit_logs")
       .select("habit_id, log_date")
-      .in("habit_id", habits.map((h) => h.id));
+      .in(
+        "habit_id",
+        habits.map((h) => h.id),
+      );
     for (const l of logRows ?? []) {
       const set = logsByHabit.get(l.habit_id) ?? new Set<string>();
       set.add(l.log_date);
@@ -577,7 +589,12 @@ async function snapshotGoalHabitStats(
   for (const g of goals) {
     // Same computation the UI displays, so the snapshot matches what the user
     // saw at the moment of completion.
-    const progress = computeGoalProgress({ total: 0, done: 0 }, habits, logsByHabit, habitLinksByGoal.get(g.id) ?? new Map<string, HabitLinkWindow>());
+    const progress = computeGoalProgress(
+      { total: 0, done: 0 },
+      habits,
+      logsByHabit,
+      habitLinksByGoal.get(g.id) ?? new Map<string, HabitLinkWindow>(),
+    );
     for (const lh of progress.linkedHabits) {
       rows.push({
         goal_id: g.id,
@@ -620,63 +637,15 @@ export const getGoals = createServerFn({ method: "POST" })
 
     const linkedRows = linked ?? [];
 
-    // Rollover-superseded rows must not count toward a goal's task total/done.
-    // When an uncompleted goal task rolls over, a fresh copy is created on a
-    // later day while the previous instance stays frozen on its own day as a
-    // read-only historical record — and only the newest copy can ever be
-    // completed (older rows are locked). Counting the whole chain inflates the
-    // denominator, so a goal whose task rolled over even once could never
-    // reach 100%.
-    //
-    // A row R is superseded (and excluded from the counts) when another row C
-    // of the same chain — same user_id, goal_id and normalized title — exists
-    // on a LATER task_date such that:
-    //   1. C.rollover_count === R.rollover_count + 1, i.e. a later copy
-    //      advanced the chain by exactly one more rollover, or
-    //   2. C.rollover_count === R.rollover_count with R.rollover_count >= 1.
-    //      The rollover pass stamps the source row AND the fresh copy with the
-    //      same count, so a frozen source and its newer copy can share one
-    //      count; the later row is the copy and the earlier one is superseded.
-    //      The >= 1 guard keeps two independently-created tasks that happen to
-    //      share a title and never rolled (both stay at 0) as separate, with
-    //      both counting.
-    //   3. R is the oldest (earliest task_date) row of a multi-row chain whose
-    //      rollover_count >= 1 — the chain's original. Once any later copy
-    //      exists the original is frozen history, and after the chain hits the
-    //      stale limit it can even carry the highest count.
-    // Only the newest copy of each rollover chain contributes to total/done.
-    // Routines no longer auto-materialize into day_tasks, so these chains are
-    // direct/one-off goal tasks only — no recurring-instance special-casing.
-    const supersededIds = new Set<string>();
-    if (linkedRows.length > 0) {
-      const chains = new Map<string, typeof linkedRows>();
-      for (const row of linkedRows) {
-        const key = `${row.goal_id}|${(row.title ?? "").trim().toLowerCase()}`;
-        const list = chains.get(key) ?? [];
-        list.push(row);
-        chains.set(key, list);
-      }
-      for (const list of chains.values()) {
-        if (list.length > 1) {
-          let oldest = list[0]!;
-          for (const row of list) {
-            if ((row.task_date ?? "") < (oldest.task_date ?? "")) oldest = row;
-          }
-          if ((oldest.rollover_count ?? 0) >= 1) supersededIds.add(oldest.id);
-        }
-        for (const r of list) {
-          const rCount = r.rollover_count ?? 0;
-          for (const c of list) {
-            if (c.id === r.id || !(c.task_date > r.task_date)) continue;
-            const cCount = c.rollover_count ?? 0;
-            if (cCount === rCount + 1 || (cCount === rCount && rCount >= 1)) {
-              supersededIds.add(r.id);
-              break;
-            }
-          }
-        }
-      }
-    }
+    // Rollover-superseded rows must not count toward a goal's task total/done:
+    // only the newest copy of each rollover chain contributes, so a chain that
+    // rolled N times counts as ONE task, not N. Detection lives in the shared
+    // getSupersededRolloverIds — the exact same chain-linking the client uses
+    // for the "Completed late" badge and the Goal Tasks list collapse,
+    // including the completion bridge that reconnects chains whose identity
+    // was broken by manual re-creation (rollover_count reset to 0) — so the
+    // server's counting and the client's display can never disagree.
+    const supersededIds = getSupersededRolloverIds(linkedRows);
 
     const stats: Record<string, { total: number; done: number }> = {};
     const tasksByGoal: Record<string, typeof linkedRows> = {};
@@ -733,7 +702,10 @@ export const getGoals = createServerFn({ method: "POST" })
       const { data: linkRows } = await supabase
         .from("goal_habit_links")
         .select("goal_id, habit_id, created_at, duration_days")
-        .in("goal_id", goalRows.map((gr) => gr.id));
+        .in(
+          "goal_id",
+          goalRows.map((gr) => gr.id),
+        );
       for (const l of linkRows ?? []) {
         const byHabit = habitLinksByGoal.get(l.goal_id) ?? new Map<string, HabitLinkWindow>();
         byHabit.set(l.habit_id, { createdAt: l.created_at, durationDays: l.duration_days });
@@ -758,7 +730,10 @@ export const getGoals = createServerFn({ method: "POST" })
       const { data: logRows } = await supabase
         .from("habit_logs")
         .select("habit_id, log_date")
-        .in("habit_id", habits.map((h) => h.id));
+        .in(
+          "habit_id",
+          habits.map((h) => h.id),
+        );
       for (const l of logRows ?? []) {
         const set = logsByHabit.get(l.habit_id) ?? new Set<string>();
         set.add(l.log_date);
@@ -820,7 +795,10 @@ export const getGoals = createServerFn({ method: "POST" })
       const { data: snapRows } = await supabase
         .from("goal_habit_snapshots")
         .select("goal_id, habit_id, weeks_on_target, total_weeks, hit_rate_pct, snapshotted_at")
-        .in("goal_id", goalRows.map((g) => g.id));
+        .in(
+          "goal_id",
+          goalRows.map((g) => g.id),
+        );
       for (const s of snapRows ?? []) {
         if (!snapshotsByGoal[s.goal_id]) snapshotsByGoal[s.goal_id] = [];
         snapshotsByGoal[s.goal_id]!.push({
@@ -859,9 +837,7 @@ export const getGoals = createServerFn({ method: "POST" })
         };
         // Duration-limited links store daysLogged/durationDays in the snapshot's
         // weeks_on_target/total_weeks; restore the day count for the display.
-        return lh.durationDays != null
-          ? { ...restored, daysLogged: s.weeksOnTarget }
-          : restored;
+        return lh.durationDays != null ? { ...restored, daysLogged: s.weeksOnTarget } : restored;
       });
       const habitScore =
         linkedHabits.length > 0
@@ -988,11 +964,7 @@ export const removeGoalRoutineTasksBatch = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
-    await supabase
-      .from("routine_tasks")
-      .delete()
-      .in("id", data.ids)
-      .eq("user_id", context.userId);
+    await supabase.from("routine_tasks").delete().in("id", data.ids).eq("user_id", context.userId);
     await supabase
       .from("day_tasks")
       .delete()
@@ -1005,15 +977,14 @@ export const removeGoalRoutineTasksBatch = createServerFn({ method: "POST" })
 /** Update goal status: complete | active | overdue. Optionally extend target date. */
 export const updateGoalStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { id: string; status: string; newTargetDate?: string | null }) =>
-      z
-        .object({
-          id: z.string(),
-          status: z.enum(["active", "completed", "overdue"]),
-          newTargetDate: z.string().nullable().optional(),
-        })
-        .parse(input),
+  .inputValidator((input: { id: string; status: string; newTargetDate?: string | null }) =>
+    z
+      .object({
+        id: z.string(),
+        status: z.enum(["active", "completed", "overdue"]),
+        newTargetDate: z.string().nullable().optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
@@ -1042,7 +1013,6 @@ export const updateGoalStatus = createServerFn({ method: "POST" })
     await supabase.from("goals").update(patch).eq("id", data.id).eq("user_id", context.userId);
     return { ok: true };
   });
-
 
 export const getHistory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

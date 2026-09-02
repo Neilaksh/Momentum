@@ -101,6 +101,32 @@ export function buildRolloverChains(tasks: DayTask[]): DayTask[][] {
         union(r.id, sorted[1]!.id);
       }
     }
+
+    // Completion bridge — manual re-creation resets rollover_count to 0, so a
+    // chain can end without its completed copy (real-world pattern 2/0/0:
+    // engine-stamped original, then hand re-added rows the engine never
+    // stamped). If the chain's newest row is uncompleted and a LATER
+    // same-key row is completed, bridge the chain's newest row to that
+    // completed row so the whole thing identifies as one chain again.
+    // Gated on the chain already being multi-row (formed by the count rules
+    // above — e.g. via the oldest-row rule) so genuinely independent
+    // same-title tasks — singleton rows with no chain history — never merge.
+    const byRoot = new Map<string, DayTask[]>();
+    for (const t of sorted) {
+      const root = find(t.id);
+      const members = byRoot.get(root) ?? [];
+      members.push(t);
+      byRoot.set(root, members);
+    }
+    for (const members of byRoot.values()) {
+      if (members.length < 2) continue;
+      const newest = members.reduce((a, b) => (b.task_date > a.task_date ? b : a));
+      if (newest.completed_at) continue;
+      const target = sorted.find(
+        (t) => t.task_date > newest.task_date && !!t.completed_at && find(t.id) !== find(newest.id),
+      );
+      if (target) union(newest.id, target.id);
+    }
   }
 
   const chains = new Map<string, DayTask[]>();
@@ -111,6 +137,24 @@ export function buildRolloverChains(tasks: DayTask[]): DayTask[][] {
     chains.set(root, list);
   }
   return [...chains.values()];
+}
+
+/**
+ * Ids of rollover rows that are superseded: every row of a multi-row chain
+ * EXCEPT the chain's newest (live) copy. Only the newest copy of each chain
+ * contributes to a goal's total/done — frozen history does not. Shares
+ * buildRolloverChains' linking (including the completion bridge) so the
+ * server's goal-counting math and the client's badge/chain-collapse can never
+ * disagree with each other.
+ */
+export function getSupersededRolloverIds(tasks: DayTask[]): Set<string> {
+  const superseded = new Set<string>();
+  for (const chain of buildRolloverChains(tasks)) {
+    if (chain.length < 2) continue;
+    const newest = chain.reduce((a, b) => (b.task_date > a.task_date ? b : a));
+    for (const t of chain) if (t.id !== newest.id) superseded.add(t.id);
+  }
+  return superseded;
 }
 
 export type RoutineTask = {
@@ -260,7 +304,12 @@ export function xpForLevel(level: number): number {
   return Math.pow(Math.max(0, level - 1), 2) * 100;
 }
 
-export function levelProgress(xp: number): { level: number; into: number; span: number; pct: number } {
+export function levelProgress(xp: number): {
+  level: number;
+  into: number;
+  span: number;
+  pct: number;
+} {
   const level = levelFromXp(xp);
   const base = xpForLevel(level);
   const next = xpForLevel(level + 1);
@@ -314,17 +363,70 @@ export type ColorKey =
   | "orange"
   | "slate";
 
-export const COLOR_PALETTE: Record<ColorKey, { bg: string; text: string; border: string; label: string }> = {
-  emerald: { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30", label: "Emerald" },
-  cyan: { bg: "bg-cyan-500/15", text: "text-cyan-400", border: "border-cyan-500/30", label: "Cyan" },
-  amber: { bg: "bg-amber-500/15", text: "text-amber-400", border: "border-amber-500/30", label: "Amber" },
-  purple: { bg: "bg-purple-500/15", text: "text-purple-400", border: "border-purple-500/30", label: "Purple" },
-  indigo: { bg: "bg-indigo-500/15", text: "text-indigo-400", border: "border-indigo-500/30", label: "Indigo" },
-  rose: { bg: "bg-rose-500/15", text: "text-rose-400", border: "border-rose-500/30", label: "Rose" },
-  blue: { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/30", label: "Blue" },
-  fuchsia: { bg: "bg-fuchsia-500/15", text: "text-fuchsia-400", border: "border-fuchsia-500/30", label: "Fuchsia" },
-  teal: { bg: "bg-teal-500/15", text: "text-teal-400", border: "border-teal-500/30", label: "Teal" },
-  orange: { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/30", label: "Orange" },
+export const COLOR_PALETTE: Record<
+  ColorKey,
+  { bg: string; text: string; border: string; label: string }
+> = {
+  emerald: {
+    bg: "bg-emerald-500/15",
+    text: "text-emerald-400",
+    border: "border-emerald-500/30",
+    label: "Emerald",
+  },
+  cyan: {
+    bg: "bg-cyan-500/15",
+    text: "text-cyan-400",
+    border: "border-cyan-500/30",
+    label: "Cyan",
+  },
+  amber: {
+    bg: "bg-amber-500/15",
+    text: "text-amber-400",
+    border: "border-amber-500/30",
+    label: "Amber",
+  },
+  purple: {
+    bg: "bg-purple-500/15",
+    text: "text-purple-400",
+    border: "border-purple-500/30",
+    label: "Purple",
+  },
+  indigo: {
+    bg: "bg-indigo-500/15",
+    text: "text-indigo-400",
+    border: "border-indigo-500/30",
+    label: "Indigo",
+  },
+  rose: {
+    bg: "bg-rose-500/15",
+    text: "text-rose-400",
+    border: "border-rose-500/30",
+    label: "Rose",
+  },
+  blue: {
+    bg: "bg-blue-500/15",
+    text: "text-blue-400",
+    border: "border-blue-500/30",
+    label: "Blue",
+  },
+  fuchsia: {
+    bg: "bg-fuchsia-500/15",
+    text: "text-fuchsia-400",
+    border: "border-fuchsia-500/30",
+    label: "Fuchsia",
+  },
+  teal: {
+    bg: "bg-teal-500/15",
+    text: "text-teal-400",
+    border: "border-teal-500/30",
+    label: "Teal",
+  },
+  orange: {
+    bg: "bg-orange-500/15",
+    text: "text-orange-400",
+    border: "border-orange-500/30",
+    label: "Orange",
+  },
   slate: { bg: "bg-secondary", text: "text-foreground", border: "border-border", label: "Slate" },
 };
 
@@ -380,7 +482,9 @@ export function parseRoutineTitle(rawTitle: string): ParsedRoutineTitle {
     let cleanTitle = (match[2] || "").trim();
 
     // Check if cleanTitle has its own leading emoji
-    const leadingEmojiMatch = cleanTitle.match(/^(\p{Extended_Pictographic}|\u2705|\u2728|\u2b50)\s*(.*)$/u);
+    const leadingEmojiMatch = cleanTitle.match(
+      /^(\p{Extended_Pictographic}|\u2705|\u2728|\u2b50)\s*(.*)$/u,
+    );
     if (leadingEmojiMatch) {
       if (!emoji || emoji === "📌" || emoji === "🎯") {
         emoji = leadingEmojiMatch[1]!;
@@ -391,7 +495,8 @@ export function parseRoutineTitle(rawTitle: string): ParsedRoutineTitle {
     if (!COLOR_PALETTE[colorKey]) {
       // Fall back through the category's own palette key (kept mapping from the
       // removed CATEGORY_COLORS), else slate.
-      const fallbackColorKey = (DEFAULT_CATEGORIES.find((c) => c.name === category)?.colorKey ?? "slate") as ColorKey;
+      const fallbackColorKey = (DEFAULT_CATEGORIES.find((c) => c.name === category)?.colorKey ??
+        "slate") as ColorKey;
       colorKey = COLOR_PALETTE[fallbackColorKey] ? fallbackColorKey : "slate";
     }
 
@@ -452,7 +557,14 @@ export function formatRoutineTitle(
   const hId = habitId ?? "none";
   const tId = taskId ?? "none";
 
-  if (!timeSlot && category === "General" && emo === "📌" && colorKey === "slate" && !habitId && !taskId) {
+  if (
+    !timeSlot &&
+    category === "General" &&
+    emo === "📌" &&
+    colorKey === "slate" &&
+    !habitId &&
+    !taskId
+  ) {
     return trimmed;
   }
   return `[${timeSlot}|${category}|${emo}|${colorKey}|${hId}|${tId}] ${trimmed}`;
@@ -492,7 +604,11 @@ export function calculateSlotDurationMinutes(timeSlot: string): number {
   };
 
   const endPart = parts[1] ?? "";
-  const endAmPm = endPart.toUpperCase().includes("PM") ? "PM" : endPart.toUpperCase().includes("AM") ? "AM" : undefined;
+  const endAmPm = endPart.toUpperCase().includes("PM")
+    ? "PM"
+    : endPart.toUpperCase().includes("AM")
+      ? "AM"
+      : undefined;
 
   const startMins = parseTimePart(parts[0] ?? "", endAmPm);
   const endMins = parseTimePart(endPart, endAmPm);
@@ -506,7 +622,6 @@ export function calculateSlotDurationMinutes(timeSlot: string): number {
   return 30;
 }
 
-
 /** Sample Routine Schedule matching reference spreadsheet */
 export const SAMPLE_WEEKLY_ROUTINE: Array<{
   weekdays: number[]; // 0=Mon, 1=Tue, ..., 6=Sun
@@ -516,42 +631,263 @@ export const SAMPLE_WEEKLY_ROUTINE: Array<{
   category: string;
   colorKey?: ColorKey;
 }> = [
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "5:45–6:00 AM", title: "Wake Up & Hydrate", emoji: "🌅", category: "Personal" },
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "6:00–7:00 AM", title: "Exercise", emoji: "🏋️", category: "Fitness" },
-  { weekdays: [2, 3, 4, 5, 6], timeSlot: "6:45–7:00 AM", title: "Getting ready for swimming", emoji: "🏄", category: "Fitness" },
-  { weekdays: [0, 1], timeSlot: "7:00–7:30 AM", title: "Freshen Up", emoji: "🚿", category: "Personal" },
-  { weekdays: [2, 3, 4, 5, 6], timeSlot: "7:00–7:30 AM", title: "Swimming Class", emoji: "🏊", category: "Fitness" },
-  { weekdays: [0, 1], timeSlot: "7:30–8:00 AM", title: "Breakfast", emoji: "🍳", category: "Meals" },
-  { weekdays: [2, 3, 4, 5, 6], timeSlot: "7:30–8:00 AM", title: "Swimming Class", emoji: "🏊", category: "Fitness" },
-  { weekdays: [0, 1], timeSlot: "8:00–8:30 AM", title: "Study Block 1", emoji: "📚", category: "Study" },
-  { weekdays: [2, 3, 4, 5, 6], timeSlot: "8:00–8:30 AM", title: "Swimming Class", emoji: "🏊", category: "Fitness" },
-  { weekdays: [0, 1], timeSlot: "8:30–9:00 AM", title: "Study Block 1", emoji: "📚", category: "Study" },
-  { weekdays: [2, 3, 4, 5, 6], timeSlot: "8:30–9:00 AM", title: "Freshen Up After Swim", emoji: "🚿", category: "Personal" },
-  { weekdays: [0, 1], timeSlot: "9:00–9:30 AM", title: "Study Block 1", emoji: "📚", category: "Study" },
-  { weekdays: [2, 3, 4, 5, 6], timeSlot: "9:00–9:30 AM", title: "Breakfast", emoji: "🍳", category: "Meals" },
-  { weekdays: [0, 1, 2, 3, 4], timeSlot: "9:30–10:00 AM", title: "Study Block 1", emoji: "📚", category: "Study" },
-  { weekdays: [5], timeSlot: "9:30–10:00 AM", title: "Study Block 1", emoji: "📚", category: "Study" },
-  { weekdays: [6], timeSlot: "9:30–10:00 AM", title: "Leisure Reading", emoji: "📖", category: "Recreation" },
-  { weekdays: [0, 1], timeSlot: "10:00–10:30 AM", title: "Short Break", emoji: "☕", category: "Unwind" },
-  { weekdays: [2, 3, 4], timeSlot: "10:00–10:30 AM", title: "Study Block 1", emoji: "📚", category: "Study" },
-  { weekdays: [5], timeSlot: "10:00–10:30 AM", title: "Study Block 1", emoji: "📚", category: "Study" },
-  { weekdays: [6], timeSlot: "10:00–10:30 AM", title: "Hobby / Project", emoji: "🎨", category: "Recreation" },
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "10:30–12:30 PM", title: "Study Block 2", emoji: "💻", category: "Study" },
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "12:30–1:00 PM", title: "Quality Time", emoji: "🌺", category: "Personal" },
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "1:00–2:00 PM", title: "Lunch & Rest", emoji: "🍱", category: "Meals" },
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "3:00–4:00 PM", title: "Study Block 3", emoji: "💻", category: "Study" },
-  { weekdays: [0, 1, 2, 3, 4], timeSlot: "4:00–5:30 PM", title: "Gaming / Recreation", emoji: "🎮", category: "Recreation" },
-  { weekdays: [5, 6], timeSlot: "4:00–5:30 PM", title: "Outing / Social Time", emoji: "🏄", category: "Recreation" },
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "5:30–6:00 PM", title: "Unwind / Meditation", emoji: "🧘", category: "Unwind" },
-  { weekdays: [0, 1, 2, 3, 5], timeSlot: "6:00–6:30 PM", title: "Evening Study", emoji: "📚", category: "Study" },
-  { weekdays: [4, 6], timeSlot: "6:00–6:30 PM", title: "Get Ready for Karate", emoji: "🥋", category: "Fitness" },
-  { weekdays: [0, 1, 2, 3, 5], timeSlot: "6:30–8:00 PM", title: "Evening Study", emoji: "📚", category: "Study" },
-  { weekdays: [4, 6], timeSlot: "6:30–8:00 PM", title: "Karate Class", emoji: "🥋", category: "Fitness" },
-  { weekdays: [4, 6], timeSlot: "8:00–8:30 PM", title: "Free Time / Relax", emoji: "🎮", category: "Recreation" },
-  { weekdays: [0, 1, 2, 3, 5], timeSlot: "8:00–8:30 PM", title: "Evening Study", emoji: "📚", category: "Study" },
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "8:30–9:00 PM", title: "Dinner", emoji: "🍲", category: "Meals" },
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "9:00–10:00 PM", title: "Gaming / Free Time", emoji: "🎮", category: "Recreation" },
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "10:00–10:20 PM", title: "Wind Down", emoji: "🌙", category: "Unwind" },
-  { weekdays: [0, 1, 2, 3, 4, 5, 6], timeSlot: "10:30 PM", title: "Sleep", emoji: "😴", category: "Unwind" },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "5:45–6:00 AM",
+    title: "Wake Up & Hydrate",
+    emoji: "🌅",
+    category: "Personal",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "6:00–7:00 AM",
+    title: "Exercise",
+    emoji: "🏋️",
+    category: "Fitness",
+  },
+  {
+    weekdays: [2, 3, 4, 5, 6],
+    timeSlot: "6:45–7:00 AM",
+    title: "Getting ready for swimming",
+    emoji: "🏄",
+    category: "Fitness",
+  },
+  {
+    weekdays: [0, 1],
+    timeSlot: "7:00–7:30 AM",
+    title: "Freshen Up",
+    emoji: "🚿",
+    category: "Personal",
+  },
+  {
+    weekdays: [2, 3, 4, 5, 6],
+    timeSlot: "7:00–7:30 AM",
+    title: "Swimming Class",
+    emoji: "🏊",
+    category: "Fitness",
+  },
+  {
+    weekdays: [0, 1],
+    timeSlot: "7:30–8:00 AM",
+    title: "Breakfast",
+    emoji: "🍳",
+    category: "Meals",
+  },
+  {
+    weekdays: [2, 3, 4, 5, 6],
+    timeSlot: "7:30–8:00 AM",
+    title: "Swimming Class",
+    emoji: "🏊",
+    category: "Fitness",
+  },
+  {
+    weekdays: [0, 1],
+    timeSlot: "8:00–8:30 AM",
+    title: "Study Block 1",
+    emoji: "📚",
+    category: "Study",
+  },
+  {
+    weekdays: [2, 3, 4, 5, 6],
+    timeSlot: "8:00–8:30 AM",
+    title: "Swimming Class",
+    emoji: "🏊",
+    category: "Fitness",
+  },
+  {
+    weekdays: [0, 1],
+    timeSlot: "8:30–9:00 AM",
+    title: "Study Block 1",
+    emoji: "📚",
+    category: "Study",
+  },
+  {
+    weekdays: [2, 3, 4, 5, 6],
+    timeSlot: "8:30–9:00 AM",
+    title: "Freshen Up After Swim",
+    emoji: "🚿",
+    category: "Personal",
+  },
+  {
+    weekdays: [0, 1],
+    timeSlot: "9:00–9:30 AM",
+    title: "Study Block 1",
+    emoji: "📚",
+    category: "Study",
+  },
+  {
+    weekdays: [2, 3, 4, 5, 6],
+    timeSlot: "9:00–9:30 AM",
+    title: "Breakfast",
+    emoji: "🍳",
+    category: "Meals",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4],
+    timeSlot: "9:30–10:00 AM",
+    title: "Study Block 1",
+    emoji: "📚",
+    category: "Study",
+  },
+  {
+    weekdays: [5],
+    timeSlot: "9:30–10:00 AM",
+    title: "Study Block 1",
+    emoji: "📚",
+    category: "Study",
+  },
+  {
+    weekdays: [6],
+    timeSlot: "9:30–10:00 AM",
+    title: "Leisure Reading",
+    emoji: "📖",
+    category: "Recreation",
+  },
+  {
+    weekdays: [0, 1],
+    timeSlot: "10:00–10:30 AM",
+    title: "Short Break",
+    emoji: "☕",
+    category: "Unwind",
+  },
+  {
+    weekdays: [2, 3, 4],
+    timeSlot: "10:00–10:30 AM",
+    title: "Study Block 1",
+    emoji: "📚",
+    category: "Study",
+  },
+  {
+    weekdays: [5],
+    timeSlot: "10:00–10:30 AM",
+    title: "Study Block 1",
+    emoji: "📚",
+    category: "Study",
+  },
+  {
+    weekdays: [6],
+    timeSlot: "10:00–10:30 AM",
+    title: "Hobby / Project",
+    emoji: "🎨",
+    category: "Recreation",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "10:30–12:30 PM",
+    title: "Study Block 2",
+    emoji: "💻",
+    category: "Study",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "12:30–1:00 PM",
+    title: "Quality Time",
+    emoji: "🌺",
+    category: "Personal",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "1:00–2:00 PM",
+    title: "Lunch & Rest",
+    emoji: "🍱",
+    category: "Meals",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "3:00–4:00 PM",
+    title: "Study Block 3",
+    emoji: "💻",
+    category: "Study",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4],
+    timeSlot: "4:00–5:30 PM",
+    title: "Gaming / Recreation",
+    emoji: "🎮",
+    category: "Recreation",
+  },
+  {
+    weekdays: [5, 6],
+    timeSlot: "4:00–5:30 PM",
+    title: "Outing / Social Time",
+    emoji: "🏄",
+    category: "Recreation",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "5:30–6:00 PM",
+    title: "Unwind / Meditation",
+    emoji: "🧘",
+    category: "Unwind",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 5],
+    timeSlot: "6:00–6:30 PM",
+    title: "Evening Study",
+    emoji: "📚",
+    category: "Study",
+  },
+  {
+    weekdays: [4, 6],
+    timeSlot: "6:00–6:30 PM",
+    title: "Get Ready for Karate",
+    emoji: "🥋",
+    category: "Fitness",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 5],
+    timeSlot: "6:30–8:00 PM",
+    title: "Evening Study",
+    emoji: "📚",
+    category: "Study",
+  },
+  {
+    weekdays: [4, 6],
+    timeSlot: "6:30–8:00 PM",
+    title: "Karate Class",
+    emoji: "🥋",
+    category: "Fitness",
+  },
+  {
+    weekdays: [4, 6],
+    timeSlot: "8:00–8:30 PM",
+    title: "Free Time / Relax",
+    emoji: "🎮",
+    category: "Recreation",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 5],
+    timeSlot: "8:00–8:30 PM",
+    title: "Evening Study",
+    emoji: "📚",
+    category: "Study",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "8:30–9:00 PM",
+    title: "Dinner",
+    emoji: "🍲",
+    category: "Meals",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "9:00–10:00 PM",
+    title: "Gaming / Free Time",
+    emoji: "🎮",
+    category: "Recreation",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "10:00–10:20 PM",
+    title: "Wind Down",
+    emoji: "🌙",
+    category: "Unwind",
+  },
+  {
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    timeSlot: "10:30 PM",
+    title: "Sleep",
+    emoji: "😴",
+    category: "Unwind",
+  },
 ];
-
