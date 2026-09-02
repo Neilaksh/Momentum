@@ -12,8 +12,10 @@ import {
 } from "./tracker.server";
 import {
   addDays,
+  formatTaskDescription as formatTaskDescriptionServer,
   getSupersededRolloverIds,
   parseISODate,
+  parseTaskDescription as parseTaskDescriptionServer,
   startOfWeek,
   toISODate,
   type GoalHabitSnapshot,
@@ -149,6 +151,59 @@ export const renameDayTask = createServerFn({ method: "POST" })
     return { renamed: chainIds.length };
   });
 
+export const updateDayTaskDescription = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; description: string | null; estMinutes?: number | null }) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        description: z.string().max(2000).nullable(),
+        estMinutes: z.number().int().min(1).max(1440).nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+    const { data: taskRow } = await supabase
+      .from("day_tasks")
+      .select("id, goal_id, task_date, description")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!taskRow) throw new Error("Task not found.");
+
+    if (taskRow.task_date && taskRow.task_date < toISODate(new Date())) {
+      throw new Error("Tasks from past days are locked and cannot be changed.");
+    }
+
+    if (taskRow.goal_id) {
+      const { data: goalRow } = await supabase
+        .from("goals")
+        .select("status")
+        .eq("id", taskRow.goal_id)
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if (goalRow?.status === "completed") {
+        throw new Error("This task belongs to a completed goal and is locked.");
+      }
+    }
+
+    // Re-serialise: keep existing estMinutes if caller didn't change it,
+    // or use the new value if explicitly passed.
+    const { estMinutes: existingEst } = parseTaskDescriptionServer(taskRow.description);
+    const newEst = data.estMinutes !== undefined ? data.estMinutes : existingEst;
+    const newDescription = formatTaskDescriptionServer(data.description ?? "", newEst);
+
+    const { error } = await supabase
+      .from("day_tasks")
+      .update({ description: newDescription })
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return { success: true };
+  });
+
+
 export const addDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
@@ -216,6 +271,260 @@ export const deleteDayTask = createServerFn({ method: "POST" })
     const profile = await recomputeStats(context.supabase, context.userId);
     return { profile };
   });
+
+export const completeDayTasksBulk = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { date: string }) =>
+    z.object({ date: z.string() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+    if (data.date < toISODate(new Date())) {
+      throw new Error("Tasks from past days are locked and cannot be modified.");
+    }
+
+    const { data: uncompleted, error: fetchErr } = await supabase
+      .from("day_tasks")
+      .select("id, goal_id")
+      .eq("user_id", context.userId)
+      .eq("task_date", data.date)
+      .is("completed_at", null);
+
+    if (fetchErr) throw new Error(fetchErr.message);
+    if (!uncompleted || uncompleted.length === 0) {
+      return { completedCount: 0, profile: null };
+    }
+
+    const goalIds = Array.from(new Set(uncompleted.map((t) => t.goal_id).filter(Boolean))) as string[];
+    const lockedGoalIds = new Set<string>();
+    if (goalIds.length > 0) {
+      const { data: goalRows } = await supabase
+        .from("goals")
+        .select("id, status")
+        .in("id", goalIds)
+        .eq("user_id", context.userId);
+      for (const g of goalRows ?? []) {
+        if (g.status === "completed") lockedGoalIds.add(g.id);
+      }
+    }
+
+    const eligibleIds = uncompleted
+      .filter((t) => !t.goal_id || !lockedGoalIds.has(t.goal_id))
+      .map((t) => t.id);
+
+    if (eligibleIds.length > 0) {
+      const nowISO = new Date().toISOString();
+      const { error: updateErr } = await supabase
+        .from("day_tasks")
+        .update({ completed_at: nowISO, progress_pct: 100 })
+        .in("id", eligibleIds)
+        .eq("user_id", context.userId);
+      if (updateErr) throw new Error(updateErr.message);
+    }
+
+    const profile = await recomputeStats(supabase, context.userId);
+    return { completedCount: eligibleIds.length, profile };
+  });
+
+export const reorderDayTasks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { date: string; orderedIds: string[] }) =>
+      z
+        .object({
+          date: z.string(),
+          orderedIds: z.array(z.string().uuid()),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+    if (data.date < toISODate(new Date())) {
+      throw new Error("Tasks from past days are locked.");
+    }
+    if (data.orderedIds.length === 0) return { ok: true };
+
+    await Promise.all(
+      data.orderedIds.map((id, idx) =>
+        supabase
+          .from("day_tasks")
+          .update({ sort_order: (idx + 1) * 10 })
+          .eq("id", id)
+          .eq("user_id", context.userId),
+      ),
+    );
+
+    return { ok: true };
+  });
+
+export const rescheduleDayTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { id: string; targetDate: string }) =>
+      z
+        .object({
+          id: z.string().uuid(),
+          targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+    const { data: task, error: fetchErr } = await supabase
+      .from("day_tasks")
+      .select("*")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+
+    if (fetchErr) throw new Error(fetchErr.message);
+    if (!task) throw new Error("Task not found.");
+    if (task.task_date < toISODate(new Date())) {
+      throw new Error("Tasks from past days are locked.");
+    }
+    if (task.goal_id) {
+      const { data: goal } = await supabase
+        .from("goals")
+        .select("status")
+        .eq("id", task.goal_id)
+        .maybeSingle();
+      if (goal?.status === "completed") {
+        throw new Error("This task is linked to a completed goal and cannot be rescheduled.");
+      }
+    }
+
+    // Clean up any antecedent uncompleted copies in the same chain so no dangling
+    // duplicates remain across past/present days.
+    let chainQuery = supabase
+      .from("day_tasks")
+      .select("id")
+      .eq("user_id", context.userId)
+      .eq("title", task.title)
+      .is("completed_at", null)
+      .neq("id", task.id);
+
+    if (task.goal_id) {
+      chainQuery = chainQuery.eq("goal_id", task.goal_id);
+    } else {
+      chainQuery = chainQuery.is("goal_id", null);
+    }
+
+    if (task.routine_task_id) {
+      chainQuery = chainQuery.eq("routine_task_id", task.routine_task_id);
+    }
+
+    const { data: relatedUncompleted } = await chainQuery;
+    if (relatedUncompleted && relatedUncompleted.length > 0) {
+      const idsToDelete = relatedUncompleted.map((r) => r.id);
+      await supabase.from("day_tasks").delete().in("id", idsToDelete);
+    }
+
+    // Move the whole task to the target date and reset rollover counters so
+    // rollover starts fresh from the new date.
+    const { error: updateErr } = await supabase
+      .from("day_tasks")
+      .update({
+        task_date: data.targetDate,
+        rollover_count: 0,
+        is_stale: false,
+      })
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
+
+    if (updateErr) throw new Error(updateErr.message);
+    await recomputeStats(supabase, context.userId);
+    return { ok: true, newDate: data.targetDate };
+  });
+
+/**
+ * Read-only: returns per-ISO-week task stats (done / total) for all day_tasks
+ * linked to a specific goal. Used to render the Goal History Trail mini chart.
+ * Rollover copies all retain the same goal_id so they are naturally included.
+ */
+export const getGoalWeeklyProgress = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { goalId: string }) =>
+    z.object({ goalId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: rows } = await context.supabase
+      .from("day_tasks")
+      .select("task_date, completed_at")
+      .eq("user_id", context.userId)
+      .eq("goal_id", data.goalId)
+      .order("task_date", { ascending: true });
+
+    if (!rows || rows.length === 0) return { weeks: [] as { weekStart: string; done: number; total: number }[] };
+
+    // Group by Monday-week (same startOfWeek logic: Monday = day 0)
+    const weekMap = new Map<string, { done: number; total: number }>();
+    for (const row of rows) {
+      const d = new Date(row.task_date + "T00:00:00");
+      const day = (d.getDay() + 6) % 7; // Mon=0
+      const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
+      const weekKey = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, "0")}-${String(mon.getDate()).padStart(2, "0")}`;
+      const cur = weekMap.get(weekKey) ?? { done: 0, total: 0 };
+      cur.total += 1;
+      if (row.completed_at) cur.done += 1;
+      weekMap.set(weekKey, cur);
+    }
+
+    const weeks = Array.from(weekMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([weekStart, stats]) => ({ weekStart, ...stats }));
+
+    return { weeks };
+  });
+
+export const copyWeekdayRoutines = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { sourceWeekday: number; targetWeekday: number; overwriteTarget?: boolean }) =>
+      z
+        .object({
+          sourceWeekday: z.number().int().min(0).max(6),
+          targetWeekday: z.number().int().min(0).max(6),
+          overwriteTarget: z.boolean().optional(),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+    const { data: sourceTasks, error: srcErr } = await supabase
+      .from("routine_tasks")
+      .select("*")
+      .eq("user_id", context.userId)
+      .eq("weekday", data.sourceWeekday);
+
+    if (srcErr) throw new Error(srcErr.message);
+    if (!sourceTasks || sourceTasks.length === 0) {
+      return { copiedCount: 0 };
+    }
+
+    if (data.overwriteTarget) {
+      await supabase
+        .from("routine_tasks")
+        .delete()
+        .eq("user_id", context.userId)
+        .eq("weekday", data.targetWeekday);
+    }
+
+    const clones = sourceTasks.map((t, i) => ({
+      user_id: context.userId,
+      weekday: data.targetWeekday,
+      title: t.title,
+      sort_order: (i + 1) * 10,
+      goal_id: t.goal_id,
+      subject_id: t.subject_id,
+      is_active: t.is_active,
+    }));
+
+    const { error: insErr } = await supabase.from("routine_tasks").insert(clones);
+    if (insErr) throw new Error(insErr.message);
+
+    return { copiedCount: clones.length };
+  });
+
 
 export const getRoutine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

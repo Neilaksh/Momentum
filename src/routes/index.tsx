@@ -4,12 +4,20 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState, useEffect, useRef } from "react";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Award,
   Calendar as CalendarIcon,
+  CalendarClock,
+  Check,
+  CheckCheck,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Circle,
+  FileText,
   Pencil,
   Plus,
   Sparkles,
@@ -34,6 +42,8 @@ import { ProgressRing } from "@/components/ProgressRing";
 import { PieStat } from "@/components/PieStat";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -42,7 +52,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { addDayTask, deleteDayTask, getGoals, getWeek, renameDayTask, toggleDayTask } from "@/lib/tracker.functions";
+import {
+  addDayTask,
+  completeDayTasksBulk,
+  deleteDayTask,
+  getGoals,
+  getWeek,
+  renameDayTask,
+  reorderDayTasks,
+  rescheduleDayTask,
+  toggleDayTask,
+  updateDayTaskDescription,
+} from "@/lib/tracker.functions";
 import { getSubjects } from "@/lib/subjects.functions";
 import { subjectColorHex, type Subject } from "@/lib/subjects-shared";
 import {
@@ -52,8 +73,11 @@ import {
   addDays,
   buildRolloverChains,
   formatDayDate,
+  formatMinutes,
+  formatTaskDescription,
   parseISODate,
   parseRoutineTitle,
+  parseTaskDescription,
   pctComplete,
   startOfWeek,
   toISODate,
@@ -62,6 +86,9 @@ import {
 import type { Database } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    subjectId: typeof search.subjectId === "string" ? search.subjectId : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Tasks — Daily & Weekly Task Tracker with Day Pie Chart" },
@@ -91,24 +118,36 @@ type TaskFilter = "all" | "pending" | "completed";
 const addTaskKey = (date: string, title: string) => `${date}::${title}`;
 
 function UnifiedTasksPage() {
+  const searchParams = Route.useSearch();
   const [weekStart, setWeekStart] = useState(() => toISODate(startOfWeek(new Date())));
   const todayISO = toISODate(new Date());
   const [selectedDate, setSelectedDate] = useState(() => todayISO);
   const [draft, setDraft] = useState("");
-  const [draftSubjectId, setDraftSubjectId] = useState<string | null>(null);
+  const [draftSubjectId, setDraftSubjectId] = useState<string | null>(searchParams.subjectId ?? null);
   const [filter, setFilter] = useState<TaskFilter>("all");
-  const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
+  const [subjectFilter, setSubjectFilter] = useState<string | null>(searchParams.subjectId ?? null);
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [estDrafts, setEstDrafts] = useState<Record<string, string>>({});
   const focusPanelRef = useRef<HTMLElement>(null);
   // (date, title) pairs of add-task requests currently in flight, so a
   // double-click / double-Enter can never create duplicate rows.
   const addInflightKeys = useRef<Set<string>>(new Set());
   const qc = useQueryClient();
 
+  useEffect(() => {
+    if (searchParams.subjectId) {
+      setDraftSubjectId(searchParams.subjectId);
+      setSubjectFilter(searchParams.subjectId);
+    }
+  }, [searchParams.subjectId]);
+
   const fetchWeek = useServerFn(getWeek);
   const fetchSubjectsFn = useServerFn(getSubjects);
   const toggleFn = useServerFn(toggleDayTask);
   const addFn = useServerFn(addDayTask);
   const delFn = useServerFn(deleteDayTask);
+  const updateDescFn = useServerFn(updateDayTaskDescription);
 
   const { data, isLoading } = useQuery({
     queryKey: ["week", weekStart],
@@ -182,6 +221,67 @@ function UnifiedTasksPage() {
     },
     onError: () => toast.error("Couldn't rename task — try again."),
   });
+
+  const updateDescription = useMutation({
+    mutationFn: (v: { id: string; description: string | null; estMinutes?: number | null }) =>
+      updateDescFn({ data: v }),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Note saved");
+    },
+    onError: () => toast.error("Couldn't save note — try again."),
+  });
+
+  const completeBulkFn = useServerFn(completeDayTasksBulk);
+  const completeBulk = useMutation({
+    mutationFn: (v: { date: string }) => completeBulkFn({ data: v }),
+    onSuccess: (res) => {
+      invalidate();
+      toast.success(
+        res?.completedCount
+          ? `Completed ${res.completedCount} task${res.completedCount !== 1 ? "s" : ""}!`
+          : "All tasks completed!",
+      );
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Couldn't complete tasks."),
+  });
+
+  const reorderFn = useServerFn(reorderDayTasks);
+  const reorderTask = useMutation({
+    mutationFn: (v: { date: string; orderedIds: string[] }) => reorderFn({ data: v }),
+    onSuccess: () => {
+      invalidate();
+    },
+    onError: () => toast.error("Couldn't reorder tasks."),
+  });
+
+  const rescheduleFn = useServerFn(rescheduleDayTask);
+  const rescheduleTask = useMutation({
+    mutationFn: (v: { id: string; targetDate: string }) => rescheduleFn({ data: v }),
+    onSuccess: (_, vars) => {
+      invalidate();
+      void qc.invalidateQueries({ queryKey: ["goals"] });
+      toast.success(`Rescheduled to ${formatDayDate(vars.targetDate)}`);
+    },
+    onError: (err: any) =>
+      toast.error(err?.message || "Couldn't reschedule task."),
+  });
+
+  const toggleNote = (t: { id: string; description: string | null }) => {
+    setExpandedNotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(t.id)) {
+        next.delete(t.id);
+      } else {
+        next.add(t.id);
+        setNoteDrafts((d) => ({ ...d, [t.id]: parseTaskDescription(t.description).note }));
+        const existingEst = parseTaskDescription(t.description).estMinutes;
+        setEstDrafts((d) => ({ ...d, [t.id]: existingEst != null ? String(existingEst) : "" }));
+      }
+      return next;
+    });
+  };
 
   const startRenaming = (t: { id: string; title: string }) => {
     setRenamingTask({ id: t.id, title: t.title });
@@ -288,6 +388,11 @@ function UnifiedTasksPage() {
   const activeTasks = activeDay.tasks;
   const doneActive = activeTasks.filter((t) => t.completed_at).length;
   const remainingActive = activeTasks.length - doneActive;
+  // Sum estimated minutes across all active-day tasks that have an estimate
+  const totalEstMinutes = activeTasks.reduce((sum, t) => {
+    const { estMinutes } = parseTaskDescription(t.description);
+    return sum + (estMinutes ?? 0);
+  }, 0);
   const routineActiveCount = days.find((d) => d.date === selectedDate)?.tasks.filter((t) => t.source === "routine").length ?? 0;
   const oneOffActiveCount = activeTasks.length;
   const isPerfectActive = activeTasks.length > 0 && doneActive === activeTasks.length;
@@ -301,12 +406,31 @@ function UnifiedTasksPage() {
   const isActiveDayPast = activeDay.date < todayISO;
 
   const filteredActiveTasks = useMemo(() => {
-    let list = activeTasks;
+    let list = [...activeTasks];
+    list.sort((a, b) => {
+      const orderA = a.sort_order ?? 0;
+      const orderB = b.sort_order ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.created_at.localeCompare(b.created_at);
+    });
     if (activeSubjectFilter) list = list.filter((t) => t.subject_id === activeSubjectFilter);
     if (filter === "pending") return list.filter((t) => !t.completed_at);
     if (filter === "completed") return list.filter((t) => !!t.completed_at);
     return list;
   }, [activeTasks, filter, activeSubjectFilter]);
+
+  const moveTask = (taskId: string, direction: "up" | "down") => {
+    const list = [...filteredActiveTasks];
+    const index = list.findIndex((t) => t.id === taskId);
+    if (index === -1) return;
+    if (direction === "up" && index === 0) return;
+    if (direction === "down" && index === list.length - 1) return;
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    const temp = list[index];
+    list[index] = list[targetIndex];
+    list[targetIndex] = temp;
+    reorderTask.mutate({ date: selectedDate, orderedIds: list.map((t) => t.id) });
+  };
 
   const chartData = useMemo(
     () =>
@@ -579,41 +703,62 @@ function UnifiedTasksPage() {
             </div>
             <p className="num text-xs text-muted-foreground mt-0.5">
               {formatDayDate(activeDay.date)} · {doneActive} of {activeTasks.length} completed ({activeTasks.length ? Math.round((doneActive / activeTasks.length) * 100) : 0}%)
+              {totalEstMinutes > 0 && (
+                <span className="ml-2 inline-flex items-center gap-1 text-primary/80">
+                  · ⏱ ~{formatMinutes(totalEstMinutes)} planned
+                </span>
+              )}
             </p>
           </div>
 
-          {/* Filter tabs */}
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 p-1 text-xs">
-            <button
-              onClick={() => setFilter("all")}
-              className={`rounded-md px-2.5 py-1 transition-colors ${
-                filter === "all"
-                  ? "bg-card font-medium text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              All ({activeTasks.length})
-            </button>
-            <button
-              onClick={() => setFilter("pending")}
-              className={`rounded-md px-2.5 py-1 transition-colors ${
-                filter === "pending"
-                  ? "bg-card font-medium text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Pending ({remainingActive})
-            </button>
-            <button
-              onClick={() => setFilter("completed")}
-              className={`rounded-md px-2.5 py-1 transition-colors ${
-                filter === "completed"
-                  ? "bg-card font-medium text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Done ({doneActive})
-            </button>
+          {/* Action buttons & Filter tabs */}
+          <div className="flex flex-wrap items-center gap-2">
+            {!isActiveDayPast && remainingActive > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => completeBulk.mutate({ date: selectedDate })}
+                disabled={completeBulk.isPending}
+                className="h-8 gap-1.5 text-xs text-primary border-primary/30 hover:bg-primary/10 transition-colors"
+                title="Mark all uncompleted tasks for this day as completed"
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                Complete All ({remainingActive})
+              </Button>
+            )}
+
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 p-1 text-xs">
+              <button
+                onClick={() => setFilter("all")}
+                className={`rounded-md px-2.5 py-1 transition-colors ${
+                  filter === "all"
+                    ? "bg-card font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                All ({activeTasks.length})
+              </button>
+              <button
+                onClick={() => setFilter("pending")}
+                className={`rounded-md px-2.5 py-1 transition-colors ${
+                  filter === "pending"
+                    ? "bg-card font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Pending ({remainingActive})
+              </button>
+              <button
+                onClick={() => setFilter("completed")}
+                className={`rounded-md px-2.5 py-1 transition-colors ${
+                  filter === "completed"
+                    ? "bg-card font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Done ({doneActive})
+              </button>
+            </div>
           </div>
         </div>
 
@@ -783,6 +928,117 @@ function UnifiedTasksPage() {
                       </span>
                     )}
 
+                    {!isActiveDayPast && filteredActiveTasks.length > 1 && (
+                      <div className="flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <button
+                          disabled={filteredActiveTasks.findIndex((x) => x.id === t.id) === 0}
+                          onClick={() => moveTask(t.id, "up")}
+                          aria-label={`Move ${t.title} up`}
+                          title="Move task up"
+                          className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          disabled={
+                            filteredActiveTasks.findIndex((x) => x.id === t.id) ===
+                            filteredActiveTasks.length - 1
+                          }
+                          onClick={() => moveTask(t.id, "down")}
+                          aria-label={`Move ${t.title} down`}
+                          title="Move task down"
+                          className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {!isActiveDayPast && !goalLocked && !t.completed_at && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            aria-label={`Reschedule ${t.title}`}
+                            title="Reschedule / snooze to another day"
+                            className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground hover:text-amber-400"
+                          >
+                            <CalendarClock className="h-4 w-4" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="w-56 p-3 space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            Reschedule Task
+                          </p>
+                          <div className="grid gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="justify-start text-xs h-8 px-2"
+                              onClick={() => {
+                                const tomorrow = toISODate(addDays(parseISODate(activeDay.date), 1));
+                                rescheduleTask.mutate({ id: t.id, targetDate: tomorrow });
+                              }}
+                            >
+                              👉 Tomorrow ({formatDayDate(toISODate(addDays(parseISODate(activeDay.date), 1))).slice(0, 3)})
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="justify-start text-xs h-8 px-2"
+                              onClick={() => {
+                                const inTwoDays = toISODate(addDays(parseISODate(activeDay.date), 2));
+                                rescheduleTask.mutate({ id: t.id, targetDate: inTwoDays });
+                              }}
+                            >
+                              👉 In 2 days
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="justify-start text-xs h-8 px-2"
+                              onClick={() => {
+                                const nextWeek = toISODate(addDays(parseISODate(activeDay.date), 7));
+                                rescheduleTask.mutate({ id: t.id, targetDate: nextWeek });
+                              }}
+                            >
+                              👉 Next Week (+7d)
+                            </Button>
+                          </div>
+                          <div className="pt-2 border-t border-border/60">
+                            <label className="text-[10px] uppercase text-muted-foreground block mb-1">
+                              Pick Specific Date
+                            </label>
+                            <Input
+                              type="date"
+                              min={todayISO}
+                              defaultValue={activeDay.date}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val && val >= todayISO) {
+                                  rescheduleTask.mutate({ id: t.id, targetDate: val });
+                                }
+                              }}
+                              className="h-7 text-xs px-2"
+                            />
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+
+                    <button
+                      disabled={goalLocked || isActiveDayPast}
+                      onClick={() => toggleNote(t)}
+                      aria-label={t.description ? "Edit note" : "Add note"}
+                      title={t.description ? "View / edit note" : "Add note"}
+                      className={`p-3 -m-2 md:p-1 md:m-0 transition-opacity ${
+                        t.description
+                          ? "text-primary"
+                          : "text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:text-primary"
+                      }`}
+                    >
+                      <FileText className="h-4 w-4" />
+                    </button>
+
                     <button
                       disabled={goalLocked || isActiveDayPast}
                       onClick={() => startRenaming(t)}
@@ -823,6 +1079,99 @@ function UnifiedTasksPage() {
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
+
+                  {/* Task note preview if not expanded */}
+                  {(t.description && parseTaskDescription(t.description).note) && !expandedNotes.has(t.id) && (
+                    <div
+                      onClick={() => !isActiveDayPast && toggleNote(t)}
+                      className="ml-9 cursor-pointer text-xs text-muted-foreground line-clamp-1 hover:text-foreground transition-colors"
+                      title="Click to expand note"
+                    >
+                      📝 {parseTaskDescription(t.description).note}
+                    </div>
+                  )}
+                  {/* Effort estimate badge when note is not expanded */}
+                  {parseTaskDescription(t.description).estMinutes != null && !expandedNotes.has(t.id) && (
+                    <div className="ml-9 mt-0.5">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        ⏱ {formatMinutes(parseTaskDescription(t.description).estMinutes!)} est.
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Expandable note editor */}
+                  {expandedNotes.has(t.id) && (
+                    <div className="ml-9 mt-1 rounded-lg border border-border/80 bg-background/90 p-2.5 shadow-sm">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] font-semibold text-muted-foreground">Task Note & Estimate</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleNote(t)}
+                          className="text-[11px] text-muted-foreground hover:text-foreground"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <Textarea
+                        value={noteDrafts[t.id] ?? ""}
+                        onChange={(e) =>
+                          setNoteDrafts((d) => ({ ...d, [t.id]: e.target.value }))
+                        }
+                        placeholder="Add details, links, or notes for this task..."
+                        className="min-h-[60px] text-xs resize-none bg-secondary/30"
+                        disabled={goalLocked || isActiveDayPast}
+                      />
+                      {/* Effort estimate row */}
+                      <div className="mt-2 flex items-center gap-2">
+                        <label className="text-[11px] text-muted-foreground shrink-0">⏱ Est. mins:</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={1440}
+                          value={estDrafts[t.id] ?? ""}
+                          onChange={(e) => setEstDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
+                          placeholder="e.g. 30"
+                          disabled={goalLocked || isActiveDayPast}
+                          className="h-7 w-24 rounded-md border border-border bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <span className="text-[11px] text-muted-foreground">minutes (optional)</span>
+                      </div>
+                      <div className="mt-2 flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2.5 text-xs"
+                          onClick={() => toggleNote(t)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 px-2.5 text-xs"
+                          disabled={goalLocked || isActiveDayPast || updateDescription.isPending}
+                          onClick={() => {
+                            const rawEst = estDrafts[t.id]?.trim();
+                            const parsedEst = rawEst ? parseInt(rawEst, 10) : null;
+                            const estMinutes = parsedEst && parsedEst > 0 ? parsedEst : null;
+                            updateDescription.mutate({
+                              id: t.id,
+                              description: (noteDrafts[t.id] ?? "").trim() || null,
+                              estMinutes,
+                            });
+                            setExpandedNotes((prev) => {
+                              const next = new Set(prev);
+                              next.delete(t.id);
+                              return next;
+                            });
+                          }}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </li>
                 );
               })}

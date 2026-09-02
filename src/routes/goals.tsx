@@ -1,4 +1,4 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
@@ -16,9 +16,10 @@ import {
   Plus,
   RefreshCw,
   Repeat,
+  Snowflake,
+  Sparkles,
   Target,
   Trash2,
-  Snowflake,
   Unlink,
   X,
   Zap,
@@ -54,6 +55,7 @@ import {
 import {
   addDayTask,
   deleteGoal,
+  getGoalWeeklyProgress,
   getGoals,
   renameGoal,
   removeGoalRoutineTasksBatch,
@@ -68,6 +70,8 @@ import {
   addDays,
   buildRolloverChains,
   formatDayDate,
+  formatGoalTitle,
+  parseGoalTitle,
   parseISODate,
   parseRoutineTitle,
   startOfWeek,
@@ -75,6 +79,7 @@ import {
   type DayTask,
   type Goal,
   type GoalHabitSnapshot,
+  type GoalPriority,
   type GoalProgress,
   type WeekData,
 } from "@/lib/tracker-shared";
@@ -148,9 +153,9 @@ function collapseRolloverChains(tasks: DayTask[]): DayTask[] {
       out.push(members[0]!);
       continue;
     }
-    let oldest = members[0]!;
+    let newest = members[0]!;
     for (const m of members) {
-      if (m.task_date < oldest.task_date) oldest = m;
+      if (m.task_date > newest.task_date) newest = m;
     }
     // Mirror the chain's status: only the newest copy can ever be completed
     // (older rows are locked), so the latest completed member wins.
@@ -158,7 +163,7 @@ function collapseRolloverChains(tasks: DayTask[]): DayTask[] {
     for (const m of members) {
       if (m.completed_at && (!completed || m.task_date >= completed.task_date)) completed = m;
     }
-    out.push(completed ? { ...oldest, completed_at: completed.completed_at } : oldest);
+    out.push(completed ? { ...newest, completed_at: completed.completed_at } : newest);
   }
   return out;
 }
@@ -182,6 +187,8 @@ function GoalsPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetDate, setTargetDate] = useState("");
+  const [priority, setPriority] = useState<GoalPriority | null>(null);
+  const [sortBy, setSortBy] = useState<"default" | "priority" | "progress" | "due">("default");
 
   const weekStart = toISODate(startOfWeek(new Date()));
 
@@ -214,6 +221,7 @@ function GoalsPage() {
       setTitle("");
       setDescription("");
       setTargetDate("");
+      setPriority(null);
       invalidate();
       toast.success("Goal created!");
     },
@@ -319,17 +327,50 @@ function GoalsPage() {
 
   // Compute effective status client-side — no DB mutation on read
   const { activeGoals, overdueGoals, completedGoals } = useMemo(() => {
-    const active: Goal[] = [];
-    const overdue: Goal[] = [];
-    const completed: Goal[] = [];
+    let active: Goal[] = [];
+    let overdue: Goal[] = [];
+    let completed: Goal[] = [];
     for (const g of goals) {
       const s = computeStatus(g);
       if (s === "completed") completed.push(g);
       else if (s === "overdue") overdue.push(g);
       else active.push(g);
     }
+
+    const priorityRank = (g: Goal) => {
+      const p = parseGoalTitle(g.title).priority;
+      if (p === "High") return 3;
+      if (p === "Med") return 2;
+      if (p === "Low") return 1;
+      return 0;
+    };
+
+    if (sortBy === "priority") {
+      active.sort((a, b) => priorityRank(b) - priorityRank(a));
+      overdue.sort((a, b) => priorityRank(b) - priorityRank(a));
+    } else if (sortBy === "progress") {
+      active.sort((a, b) => (progressByGoal[b.id]?.overall ?? 0) - (progressByGoal[a.id]?.overall ?? 0));
+      overdue.sort((a, b) => (progressByGoal[b.id]?.overall ?? 0) - (progressByGoal[a.id]?.overall ?? 0));
+    } else if (sortBy === "due") {
+      active.sort((a, b) => (a.target_date ?? "9999-99-99").localeCompare(b.target_date ?? "9999-99-99"));
+      overdue.sort((a, b) => (a.target_date ?? "9999-99-99").localeCompare(b.target_date ?? "9999-99-99"));
+    }
+
     return { activeGoals: active, overdueGoals: overdue, completedGoals: completed };
-  }, [goals]);
+  }, [goals, sortBy, progressByGoal]);
+
+  const recommendedGoal = useMemo(() => {
+    const uncompleted = [...overdueGoals, ...activeGoals];
+    if (uncompleted.length === 0) return null;
+    return uncompleted.sort((a, b) => {
+      const progA = progressByGoal[a.id]?.overall ?? 0;
+      const progB = progressByGoal[b.id]?.overall ?? 0;
+      const dateA = a.target_date ?? "9999-99-99";
+      const dateB = b.target_date ?? "9999-99-99";
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+      return progA - progB;
+    })[0];
+  }, [overdueGoals, activeGoals, progressByGoal]);
 
   return (
     <AppShell profile={weekData?.profile ?? null}>
@@ -343,6 +384,42 @@ function GoalsPage() {
         Create goals, schedule tasks on any day (optionally repeating for several days), and track
         progress until completion.
       </p>
+
+      {/* Next-Goal Recommendation Highlight */}
+      {recommendedGoal && (
+        <div className="mt-6 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card to-card p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/20 text-primary">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                  Recommended Focus Goal
+                </span>
+                {recommendedGoal.target_date && (
+                  <span className="text-xs text-muted-foreground">
+                    Due {formatDayDate(recommendedGoal.target_date)}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-sm font-semibold text-foreground mt-0.5 truncate">
+                {recommendedGoal.title}
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <span className="text-xs font-semibold text-primary">
+                {progressByGoal[recommendedGoal.id]?.overall ?? 0}% complete
+              </span>
+              <p className="text-[10px] text-muted-foreground">
+                {progressByGoal[recommendedGoal.id]?.taskDone ?? 0}/{progressByGoal[recommendedGoal.id]?.taskTotal ?? 0} tasks done
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
         {/* New Goal Form */}
@@ -393,10 +470,44 @@ function GoalsPage() {
               Goals past their due date are highlighted as overdue.
             </p>
           </div>
+          {/* Priority Level */}
+          <div className="space-y-1.5">
+            <Label>Priority Level</Label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {[
+                { val: null, label: "None" },
+                { val: "Low" as const, label: "🟢 Low" },
+                { val: "Med" as const, label: "🟡 Med" },
+                { val: "High" as const, label: "🔴 High" },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => setPriority(opt.val)}
+                  className={`rounded-lg py-1.5 text-xs font-semibold transition-all border ${
+                    priority === opt.val
+                      ? "border-primary bg-primary/20 text-foreground shadow-xs"
+                      : "border-border/70 bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <Button
             type="submit"
             className="w-full gap-2"
             disabled={create.isPending || !title.trim()}
+            onClick={(e) => {
+              e.preventDefault();
+              if (!title.trim()) return;
+              create.mutate({
+                title: formatGoalTitle(title.trim(), priority),
+                description: description.trim() || null,
+                targetDate: targetDate || null,
+              });
+            }}
           >
             {create.isPending ? (
               <RefreshCw className="h-4 w-4 animate-spin" />
@@ -407,8 +518,35 @@ function GoalsPage() {
           </Button>
         </form>
 
-        {/* Goals List */}
+        {/* Goals List with Sort Controls */}
         <div className="space-y-5">
+          {goals.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Sort Goals By:
+              </span>
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 p-1 text-xs">
+                {[
+                  { id: "default", label: "Default" },
+                  { id: "priority", label: "🔴 Priority" },
+                  { id: "progress", label: "⚡ Progress" },
+                  { id: "due", label: "📅 Due Date" },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSortBy(s.id as any)}
+                    className={`rounded-md px-2.5 py-1 transition-colors ${
+                      sortBy === s.id
+                        ? "bg-card font-medium text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {isLoading && (
             <p className="text-sm text-muted-foreground">Loading goals…</p>
           )}
@@ -726,25 +864,44 @@ function GoalCard({
   const [showExtendPanel, setShowExtendPanel] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
-  const [renameDraft, setRenameDraft] = useState("");
-
-  const submitRename = () => {
-    const title = renameDraft.trim();
-    if (!title || title === goal.title.trim()) {
-      setShowRenameModal(false);
-      return;
-    }
-    onRename(title);
-    setShowRenameModal(false);
-  };
+  const [showProgressDetails, setShowProgressDetails] = useState(false);
+  const [showSchedulePanel, setShowSchedulePanel] = useState(false);
   const [inlineTask, setInlineTask] = useState("");
   const [inlineSubjectId, setInlineSubjectId] = useState<string | null>(null);
-  const [showSchedulePanel, setShowSchedulePanel] = useState(false);
   const [scheduleTitle, setScheduleTitle] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleSubjectId, setScheduleSubjectId] = useState<string | null>(null);
   const [extendDate, setExtendDate] = useState(goal.target_date ?? "");
-  const [showProgressDetails, setShowProgressDetails] = useState(false);
+
+  const parsedGoal = useMemo(() => parseGoalTitle(goal.title), [goal.title]);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renamePriority, setRenamePriority] = useState<GoalPriority | null>(parsedGoal.priority);
+
+  const fetchGoalWeekly = useServerFn(getGoalWeeklyProgress);
+  const { data: trailData, isLoading: isTrailLoading } = useQuery({
+    queryKey: ["goal-weekly-progress", goal.id],
+    queryFn: () =>
+      fetchGoalWeekly({ data: { goalId: goal.id } }) as Promise<{
+        weeks: { weekStart: string; done: number; total: number }[];
+      }>,
+    enabled: showProgressDetails,
+  });
+  const trailWeeks = trailData?.weeks ?? [];
+
+  const submitRename = () => {
+    const clean = renameDraft.trim();
+    if (!clean) {
+      setShowRenameModal(false);
+      return;
+    }
+    const formatted = formatGoalTitle(clean, renamePriority);
+    if (formatted === goal.title.trim()) {
+      setShowRenameModal(false);
+      return;
+    }
+    onRename(formatted);
+    setShowRenameModal(false);
+  };
 
   const isOverdue = effectiveStatus === "overdue";
   const isCompleted = effectiveStatus === "completed";
@@ -790,6 +947,25 @@ function GoalCard({
     .filter((t) => !t.completed_at && t.task_date > today)
     .sort((a, b) => a.task_date.localeCompare(b.task_date));
 
+  // Rollover chain resilience metrics across all tasks linked to this goal
+  const rolloverMetrics = useMemo(() => {
+    const chains = buildRolloverChains(tasks);
+    const rolloverChains = chains.filter(
+      (c) => c.length > 1 || (c[0]?.rollover_count ?? 0) > 0,
+    );
+    const completedAfterRollover = rolloverChains.filter((c) =>
+      c.some((t) => !!t.completed_at),
+    ).length;
+    const activeRollovers = rolloverChains.filter(
+      (c) => !c.some((t) => !!t.completed_at),
+    ).length;
+    return {
+      totalRolloverChains: rolloverChains.length,
+      completedAfterRollover,
+      activeRollovers,
+    };
+  }, [tasks]);
+
   return (
     <article
       className={`rounded-2xl border p-5 shadow-sm transition-all ${
@@ -820,17 +996,18 @@ function GoalCard({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <div className="flex items-center gap-1">
-                <h3 className="font-semibold tracking-tight text-base">{goal.title}</h3>
+                <h3 className="font-semibold tracking-tight text-base">{parsedGoal.cleanTitle}</h3>
                 <button
                   disabled={isCompleted}
                   onClick={() => {
-                    setRenameDraft(goal.title);
+                    setRenameDraft(parsedGoal.cleanTitle);
+                    setRenamePriority(parsedGoal.priority);
                     setShowRenameModal(true);
                   }}
                   aria-label={
                     isCompleted
                       ? "Completed goals are locked and cannot be renamed"
-                      : `Rename goal ${goal.title}`
+                      : `Rename goal ${parsedGoal.cleanTitle}`
                   }
                   title={isCompleted ? "Completed goals are locked" : "Rename goal"}
                   className={`p-3 -m-2 md:p-1 md:m-0 transition-colors ${
@@ -869,6 +1046,24 @@ function GoalCard({
 
           {/* Badges row */}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            {parsedGoal.priority && (
+              <span
+                className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 font-semibold text-xs ${
+                  parsedGoal.priority === "High"
+                    ? "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                    : parsedGoal.priority === "Med"
+                      ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                      : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                }`}
+              >
+                {parsedGoal.priority === "High"
+                  ? "🔴 High Priority"
+                  : parsedGoal.priority === "Med"
+                    ? "🟡 Medium Priority"
+                    : "🟢 Low Priority"}
+              </span>
+            )}
+
             {goal.target_date && (
               <span
                 className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 font-medium ${
@@ -905,6 +1100,18 @@ function GoalCard({
               <span className="flex items-center gap-1 rounded-full bg-secondary/80 px-2.5 py-0.5 text-[11px] text-muted-foreground font-medium">
                 <RefreshCw className="h-2.5 w-2.5 text-primary" />
                 Auto-shifts uncompleted tasks to next day
+              </span>
+            )}
+
+            {rolloverMetrics.totalRolloverChains > 0 && (
+              <span
+                className="flex items-center gap-1 rounded-full bg-indigo-500/10 border border-indigo-500/25 px-2.5 py-0.5 text-xs text-indigo-400 font-medium"
+                title={`${rolloverMetrics.completedAfterRollover} completed after rolling over, ${rolloverMetrics.activeRollovers} actively carried forward`}
+              >
+                <RefreshCw className="h-3 w-3" />
+                {rolloverMetrics.completedAfterRollover > 0
+                  ? `${rolloverMetrics.completedAfterRollover} done post-rollover`
+                  : `${rolloverMetrics.totalRolloverChains} rolled over`}
               </span>
             )}
 
@@ -1015,7 +1222,7 @@ function GoalCard({
                 : "No deadline"}
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4">
               <div className="rounded-lg bg-secondary/40 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Tasks</p>
                 <p className="num mt-0.5 text-sm font-bold">
@@ -1049,6 +1256,29 @@ function GoalCard({
                       : "Goal in progress"}
                 </p>
               </div>
+              {rolloverMetrics.totalRolloverChains > 0 ? (
+                <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-indigo-400 font-semibold">
+                    Rollover Resilience
+                  </p>
+                  <p className="num mt-0.5 text-sm font-bold text-indigo-300">
+                    {rolloverMetrics.completedAfterRollover}/{rolloverMetrics.totalRolloverChains} completed
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {rolloverMetrics.activeRollovers > 0
+                      ? `${rolloverMetrics.activeRollovers} in-flight`
+                      : "All finished"}
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-lg bg-secondary/40 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Rollovers
+                  </p>
+                  <p className="num mt-0.5 text-sm font-bold">0</p>
+                  <p className="text-[10px] text-muted-foreground">All done on schedule</p>
+                </div>
+              )}
             </div>
 
             {progress && progress.linkedHabits.length > 0 && (
@@ -1083,6 +1313,69 @@ function GoalCard({
                 </ul>
               </div>
             )}
+
+            {/* Goal History Trail (Weekly Activity) */}
+            <div className="rounded-xl border border-border/70 bg-secondary/20 p-3.5 mt-3">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  Goal History Trail
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  {trailWeeks.length} {trailWeeks.length === 1 ? "week" : "weeks"} tracked
+                </span>
+              </div>
+
+              {isTrailLoading ? (
+                <p className="text-xs text-muted-foreground py-1">Loading weekly trail...</p>
+              ) : trailWeeks.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-1">
+                  No weekly task history yet for this goal. As you complete linked daily tasks, weekly completion snapshots will appear here.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-2">
+                  {trailWeeks.map((tw) => {
+                    const pct = tw.total > 0 ? Math.round((tw.done / tw.total) * 100) : 0;
+                    const isOnTrack = pct >= 80;
+                    const isPartial = pct >= 40 && pct < 80;
+                    return (
+                      <div
+                        key={tw.weekStart}
+                        className={`rounded-lg border p-2.5 transition-all ${
+                          isOnTrack
+                            ? "border-emerald-500/30 bg-emerald-500/5"
+                            : isPartial
+                              ? "border-amber-500/30 bg-amber-500/5"
+                              : "border-border bg-secondary/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                          <span>Wk {formatDayDate(tw.weekStart).slice(0, 6)}</span>
+                          <span
+                            className={`font-semibold ${
+                              isOnTrack ? "text-emerald-400" : isPartial ? "text-amber-400" : "text-muted-foreground"
+                            }`}
+                          >
+                            {pct}%
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                          <div
+                            className={`h-full transition-all ${
+                              isOnTrack ? "bg-emerald-400" : isPartial ? "bg-amber-400" : "bg-primary"
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          {tw.done}/{tw.total} tasks {isOnTrack ? "✓" : ""}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1516,9 +1809,35 @@ function GoalCard({
           </h4>
           <p className="text-xs text-muted-foreground mb-3">
             {goal.target_date
-              ? `Current deadline: ${formatDayDate(goal.target_date)}. Pick a new date or clear it entirely.`
-              : "No deadline set. Pick a target date for this goal."}
+              ? `Current deadline: ${formatDayDate(goal.target_date)}. Pick a new date, quick-extend, or clear it entirely.`
+              : "No deadline set. Pick a target date or quick-extend for this goal."}
           </p>
+
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            <span className="text-[10px] uppercase font-semibold text-muted-foreground">Quick Extend:</span>
+            {[7, 14, 30].map((days) => {
+              const baseDate =
+                goal.target_date && goal.target_date > today
+                  ? parseISODate(goal.target_date)
+                  : new Date();
+              const newDate = toISODate(addDays(baseDate, days));
+              return (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => {
+                    setExtendDate(newDate);
+                    onExtendDate(newDate);
+                    setShowExtendPanel(false);
+                  }}
+                  className="rounded-full bg-secondary/80 border border-border px-2.5 py-0.5 text-[11px] font-medium text-foreground hover:border-primary hover:bg-primary/10 transition-colors"
+                >
+                  +{days} Days
+                </button>
+              );
+            })}
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <Input
               type="date"
@@ -1676,6 +1995,30 @@ function GoalCard({
             autoFocus
             className="h-9 text-sm"
           />
+          <div className="mt-2 space-y-1">
+            <label className="text-[11px] font-medium text-muted-foreground">Priority</label>
+            <div className="grid grid-cols-4 gap-1">
+              {[
+                { val: null, label: "None" },
+                { val: "Low" as const, label: "🟢 Low" },
+                { val: "Med" as const, label: "🟡 Med" },
+                { val: "High" as const, label: "🔴 High" },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => setRenamePriority(opt.val)}
+                  className={`rounded-md py-1 text-xs font-medium border transition-colors ${
+                    renamePriority === opt.val
+                      ? "border-primary bg-primary/20 text-foreground"
+                      : "border-border/60 bg-secondary/30 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setShowRenameModal(false)}>
               Cancel
@@ -1683,7 +2026,10 @@ function GoalCard({
             <Button
               size="sm"
               onClick={submitRename}
-              disabled={!renameDraft.trim() || renameDraft.trim() === goal.title.trim()}
+              disabled={
+                !renameDraft.trim() ||
+                (renameDraft.trim() === parsedGoal.cleanTitle && renamePriority === parsedGoal.priority)
+              }
             >
               Save
             </Button>

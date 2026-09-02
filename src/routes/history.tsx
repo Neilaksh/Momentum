@@ -2,7 +2,21 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState, useEffect } from "react";
-import { AlertTriangle, BookOpen, CalendarRange, ChevronRight, Flame, RefreshCw, Trash2, Trophy, Zap } from "lucide-react";
+import {
+  AlertTriangle,
+  BookOpen,
+  Calendar,
+  CalendarRange,
+  ChevronRight,
+  Download,
+  Flame,
+  Medal,
+  RefreshCw,
+  Star,
+  Trash2,
+  Trophy,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   Bar,
@@ -36,7 +50,7 @@ import { getHistory, resetTrackerData } from "@/lib/tracker.functions";
 import { getSubjectBreakdown } from "@/lib/subjects.functions";
 import { subjectColorHex, type SubjectBreakdownEntry } from "@/lib/subjects-shared";
 import { listWeeklyReviews } from "@/lib/weekly-review.functions";
-import { formatDayDate, levelProgress, toISODate, type Profile } from "@/lib/tracker-shared";
+import { formatDayDate, levelProgress, parseISODate, toISODate, XP_PER_TASK, type Profile } from "@/lib/tracker-shared";
 
 export const Route = createFileRoute("/history")({
   head: () => ({
@@ -90,11 +104,25 @@ function HistoryPage() {
   const weeks = data?.weeks ?? [];
   const profile = data?.profile ?? null;
   const lp = levelProgress(profile?.total_xp ?? 0);
+  const [chartMetric, setChartMetric] = useState<"pct" | "xp" | "done">("pct");
 
   const chart = weeks.map((w) => ({
     week: formatDayDate(w.weekStart),
     pct: w.total ? Math.round((w.done / w.total) * 100) : 0,
+    xp: w.done * XP_PER_TASK,
+    done: w.done,
+    total: w.total,
   }));
+
+  const totalWeeklyXP = useMemo(() => chart.reduce((acc, w) => acc + w.xp, 0), [chart]);
+  const avgWeeklyXP = useMemo(
+    () => (chart.length > 0 ? Math.round(totalWeeklyXP / chart.length) : 0),
+    [chart, totalWeeklyXP],
+  );
+  const bestWeekXP = useMemo(
+    () => (chart.length > 0 ? Math.max(...chart.map((w) => w.xp)) : 0),
+    [chart],
+  );
 
   // Completed tasks by subject — last 30 days (no time-range picker exists on this page,
   // so the breakdown uses a fixed 30-day window).
@@ -149,10 +177,139 @@ function HistoryPage() {
     setReviewOpen(true);
   };
 
+  const exportCSV = () => {
+    if (!weeks || weeks.length === 0) {
+      toast.info("No tracking history to export yet.");
+      return;
+    }
+    const headers = ["Week Start", "Formatted Date", "Tasks Total", "Tasks Done", "Completion %"];
+    const rows = weeks.map((w) => {
+      const pct = w.total ? Math.round((w.done / w.total) * 100) : 0;
+      return [
+        w.weekStart,
+        `"${formatDayDate(w.weekStart)}"`,
+        w.total,
+        w.done,
+        `${pct}%`,
+      ].join(",");
+    });
+    const csvContent = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `momentum_history_${toISODate(new Date())}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("History CSV exported!");
+  };
+
+  const groupedWeeks = useMemo(() => {
+    const map = new Map<string, typeof weeks>();
+    for (const w of weeks) {
+      const date = parseISODate(w.weekStart);
+      const label = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      const list = map.get(label) ?? [];
+      list.push(w);
+      map.set(label, list);
+    }
+    return Array.from(map.entries()).map(([label, items]) => ({ label, items }));
+  }, [weeks]);
+
+  // Derive milestone events from history data (newest first)
+  const milestones = useMemo(() => {
+    if (weeks.length === 0) return [];
+    const sorted = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+    const events: { date: string; label: string; icon: "trophy" | "flame" | "star" | "medal"; color: string }[] = [];
+
+    // Perfect weeks (100%)
+    for (const w of sorted) {
+      if (w.total > 0 && w.done === w.total) {
+        events.push({
+          date: w.weekStart,
+          label: `Perfect week — ${w.done}/${w.total} tasks ✅`,
+          icon: "trophy",
+          color: "text-amber-400",
+        });
+      }
+    }
+
+    // Best week by done count
+    const bestWeek = sorted.reduce((best, w) => (w.done > best.done ? w : best), sorted[0]);
+    if (bestWeek && bestWeek.done > 0) {
+      // Only add if not already a perfect-week milestone
+      const alreadyPerfect = bestWeek.total > 0 && bestWeek.done === bestWeek.total;
+      if (!alreadyPerfect) {
+        events.push({
+          date: bestWeek.weekStart,
+          label: `Personal best — ${bestWeek.done} tasks in one week 🏆`,
+          icon: "medal",
+          color: "text-violet-400",
+        });
+      }
+    }
+
+    // Rollover resilience: weeks where done > 0 but tasks were rolled over (done < total, pct >= 50%)
+    let rolloverCount = 0;
+    for (const w of sorted) {
+      const pct = w.total > 0 ? w.done / w.total : 0;
+      if (pct >= 0.5 && pct < 1 && w.total > w.done) {
+        rolloverCount++;
+      }
+    }
+    if (rolloverCount >= 3) {
+      events.push({
+        date: sorted[sorted.length - 1].weekStart,
+        label: `Resilient tracker — pushed through ${rolloverCount} partial weeks 💪`,
+        icon: "flame",
+        color: "text-orange-400",
+      });
+    }
+
+    // Longest current streak from profile
+    if ((profile?.best_streak ?? 0) >= 7) {
+      events.push({
+        date: sorted[sorted.length - 1].weekStart,
+        label: `${profile!.best_streak}-day personal streak record 🔥`,
+        icon: "star",
+        color: "text-rose-400",
+      });
+    }
+
+    // First tracked week
+    if (sorted.length > 0) {
+      events.push({
+        date: sorted[0].weekStart,
+        label: "First week tracked — the journey begins! 🌱",
+        icon: "star",
+        color: "text-emerald-400",
+      });
+    }
+
+    // Sort newest first for display
+    return events.sort((a, b) => b.date.localeCompare(a.date));
+  }, [weeks, profile]);
+
   return (
     <AppShell profile={profile}>
-      <h1 className="text-3xl font-semibold tracking-tight">History & Analytics</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Every week you've tracked so far and tracker settings.</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">History & Analytics</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Every week you've tracked so far and tracker settings.</p>
+        </div>
+        {weeks.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCSV}
+            className="gap-2 text-xs border-border hover:bg-secondary"
+          >
+            <Download className="h-3.5 w-3.5" /> Export CSV
+          </Button>
+        )}
+      </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <StatCard icon={<Zap className="h-4 w-4" />} label="Level" value={`${lp.level}`} sub={`${profile?.total_xp ?? 0} XP total`} />
@@ -171,30 +328,166 @@ function HistoryPage() {
       </div>
 
       {chart.length > 1 ? (
-        <section className="mt-6 h-56 rounded-2xl border border-border bg-card p-5">
-          <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Completion rate</p>
-          <div className="mt-3 h-40">
+        <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
+                {chartMetric === "pct"
+                  ? "Completion Rate Trend"
+                  : chartMetric === "xp"
+                    ? "Weekly XP Earned"
+                    : "Tasks Completed"}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {chartMetric === "xp"
+                  ? `Avg ~${avgWeeklyXP} XP/week · Best: ${bestWeekXP} XP (${XP_PER_TASK} XP per task)`
+                  : chartMetric === "pct"
+                    ? "Weekly task completion percentage over time"
+                    : `${chart.reduce((sum, w) => sum + w.done, 0)} total tasks completed`}
+              </p>
+            </div>
+
+            {/* Metric Selector Pills */}
+            <div className="flex items-center gap-1 rounded-full bg-secondary/80 p-1 text-xs">
+              <button
+                onClick={() => setChartMetric("pct")}
+                className={`rounded-full px-2.5 py-1 font-medium transition-all ${
+                  chartMetric === "pct"
+                    ? "bg-background text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Completion %
+              </button>
+              <button
+                onClick={() => setChartMetric("xp")}
+                className={`rounded-full px-2.5 py-1 font-medium transition-all ${
+                  chartMetric === "xp"
+                    ? "bg-background text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Weekly XP ⚡
+              </button>
+              <button
+                onClick={() => setChartMetric("done")}
+                className={`rounded-full px-2.5 py-1 font-medium transition-all ${
+                  chartMetric === "done"
+                    ? "bg-background text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Tasks Done ✓
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 h-48">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
-                <CartesianGrid vertical={false} stroke="var(--border)" />
-                <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={11} interval={isMobile ? 2 : 0} stroke="var(--muted-foreground)" />
-                <YAxis domain={[0, 100]} tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--popover)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 12,
-                    fontSize: 12,
-                  }}
-                />
-                <Line type="monotone" dataKey="pct" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} />
-              </LineChart>
+              {chartMetric === "pct" ? (
+                <LineChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
+                  <CartesianGrid vertical={false} stroke="var(--border)" />
+                  <XAxis
+                    dataKey="week"
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                    interval={isMobile ? 2 : 0}
+                    stroke="var(--muted-foreground)"
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                    stroke="var(--muted-foreground)"
+                  />
+                  <Tooltip
+                    formatter={(value: any) => [`${value}%`, "Completion Rate"]}
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 12,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="pct"
+                    stroke="var(--primary)"
+                    strokeWidth={2.5}
+                    dot={{ r: 3.5 }}
+                  />
+                </LineChart>
+              ) : chartMetric === "xp" ? (
+                <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+                  <CartesianGrid vertical={false} stroke="var(--border)" />
+                  <XAxis
+                    dataKey="week"
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                    interval={isMobile ? 2 : 0}
+                    stroke="var(--muted-foreground)"
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                    stroke="var(--muted-foreground)"
+                  />
+                  <Tooltip
+                    formatter={(value: any) => [`${value} XP`, "Task XP"]}
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 12,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Bar dataKey="xp" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              ) : (
+                <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+                  <CartesianGrid vertical={false} stroke="var(--border)" />
+                  <XAxis
+                    dataKey="week"
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                    interval={isMobile ? 2 : 0}
+                    stroke="var(--muted-foreground)"
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                    stroke="var(--muted-foreground)"
+                  />
+                  <Tooltip
+                    formatter={(value: any, name: any) => [
+                      `${value} tasks`,
+                      name === "done" ? "Completed" : "Total",
+                    ]}
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 12,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Bar dataKey="done" fill="#10b981" radius={[4, 4, 0, 0]} name="Completed" />
+                </BarChart>
+              )}
             </ResponsiveContainer>
           </div>
         </section>
       ) : chart.length === 1 ? (
         <div className="mt-6 rounded-2xl border border-border/80 bg-card p-4 text-xs text-muted-foreground flex items-center justify-between">
-          <span>📊 <strong>Multi-week trend chart:</strong> Keep tracking tasks! The week-over-week completion rate graph will appear once you have at least 2 weeks of activity.</span>
+          <span>
+            📊 <strong>Multi-week trend chart:</strong> Keep tracking tasks! The week-over-week
+            completion rate &amp; XP breakdown graph will appear once you have at least 2 weeks of activity.
+          </span>
         </div>
       ) : null}
 
@@ -290,6 +583,36 @@ function HistoryPage() {
         )}
       </section>
 
+      {/* Milestones & Rollover Timeline */}
+      {milestones.length > 0 && (
+        <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Trophy className="h-4 w-4 text-amber-400" />
+            <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Milestones</p>
+            <span className="ml-auto text-[10px] text-muted-foreground">{milestones.length} achievement{milestones.length !== 1 ? "s" : ""}</span>
+          </div>
+          <ol className="relative border-l border-border/60 space-y-4 pl-5">
+            {milestones.map((m, i) => {
+              const Icon = m.icon === "trophy" ? Trophy
+                : m.icon === "flame" ? Flame
+                : m.icon === "medal" ? Medal
+                : Star;
+              return (
+                <li key={i} className="relative">
+                  <span className={`absolute -left-[1.6rem] flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card ${m.color}`}>
+                    <Icon className="h-3 w-3" />
+                  </span>
+                  <div className="rounded-lg bg-secondary/30 px-3 py-2">
+                    <p className="text-xs font-medium text-foreground">{m.label}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Week of {formatDayDate(m.date)}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
+
       {/* Weekly Reviews — browse past weeks by Monday date */}
       <section className="mt-6 rounded-2xl border border-border bg-card p-5">
         <div className="flex items-center gap-2">
@@ -324,20 +647,37 @@ function HistoryPage() {
           Nothing tracked yet — start ticking tasks on the daily board or habit tracker.
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {weeks.map((w) => (
-            <article
-              key={w.weekStart}
-              className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5"
-            >
-              <ProgressRing value={w.total ? (w.done / w.total) * 100 : 0} size={72} stroke={8} />
-              <div className="min-w-0">
-                <p className="num text-sm font-semibold">Week of {formatDayDate(w.weekStart)}</p>
-                <p className="num text-xs text-muted-foreground">
-                  {w.done} / {w.total} tasks
-                </p>
+        <div className="mt-8 space-y-6">
+          {groupedWeeks.map((group) => (
+            <div key={group.label} className="space-y-3">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
+                <span className="text-xs text-muted-foreground">
+                  ({group.items.length} {group.items.length === 1 ? "week" : "weeks"})
+                </span>
               </div>
-            </article>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {group.items.map((w) => (
+                  <article
+                    key={w.weekStart}
+                    className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-xs hover:border-border/90 transition-colors"
+                  >
+                    <ProgressRing
+                      value={w.total ? (w.done / w.total) * 100 : 0}
+                      size={72}
+                      stroke={8}
+                    />
+                    <div className="min-w-0">
+                      <p className="num text-sm font-semibold">Week of {formatDayDate(w.weekStart)}</p>
+                      <p className="num text-xs text-muted-foreground">
+                        {w.done} / {w.total} tasks ({w.total ? Math.round((w.done / w.total) * 100) : 0}%)
+                      </p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

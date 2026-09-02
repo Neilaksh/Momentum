@@ -4,18 +4,24 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState, useEffect } from "react";
 import {
   Activity,
+  AlertTriangle,
   BarChart3,
   Calendar,
   Check,
   CheckCircle2,
   Clock,
+  Copy,
+  Download,
   Edit2,
+  FileJson,
   Flame,
   Grid,
   Heart,
   Layers,
   List,
   MoreHorizontal,
+  Pause,
+  Play,
   Plus,
   Repeat,
   RotateCcw,
@@ -23,6 +29,7 @@ import {
   Tag,
   Target,
   Trash2,
+  Upload,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -52,6 +59,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   batchAddRoutineTasks,
   clearAllRoutineTasks,
+  copyWeekdayRoutines,
   deleteRoutineTask,
   getGoals,
   getRoutine,
@@ -198,6 +206,18 @@ function RoutinesPage() {
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<RoutineTask | null>(null);
+
+  // Copy Weekday Schedule State
+  const [isCopyScheduleOpen, setIsCopyScheduleOpen] = useState(false);
+  const [copySourceDay, setCopySourceDay] = useState<number>(0);
+  const [copyTargetDay, setCopyTargetDay] = useState<number>(1);
+  const [copyOverwrite, setCopyOverwrite] = useState<boolean>(false);
+
+  // Import JSON State
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importJsonText, setImportJsonText] = useState("");
+  const [importOverwrite, setImportOverwrite] = useState<boolean>(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   // Form State for Routine Slot
   const [formTitle, setFormTitle] = useState("");
@@ -501,6 +521,129 @@ function RoutinesPage() {
       toast.success("Schedule cleared");
     },
   });
+
+  const copyWeekdayFn = useServerFn(copyWeekdayRoutines);
+  const copyMutation = useMutation({
+    mutationFn: (vars: {
+      sourceWeekday: number;
+      targetWeekday: number;
+      overwriteTarget?: boolean;
+    }) => copyWeekdayFn({ data: vars }),
+    onSuccess: (res) => {
+      invalidate();
+      toast.success(`Copied ${res.copiedCount} routine slot(s)!`);
+      setIsCopyScheduleOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to copy routine schedule");
+    },
+  });
+
+  // Export Routine JSON
+  const handleExportRoutinesJSON = () => {
+    try {
+      const exportPayload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        customTimeSlots,
+        categories,
+        routineTasks: tasks.map((t) => ({
+          weekday: t.weekday,
+          title: t.title,
+          goal_id: t.goal_id,
+          subject_id: t.subject_id,
+          is_active: t.is_active,
+        })),
+      };
+      const blob = new Blob([JSON.stringify(exportPayload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `momentum-routines-backup-${toISODate(new Date())}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Routines exported successfully!");
+    } catch (err) {
+      toast.error("Failed to export routines JSON");
+    }
+  };
+
+  // Import Routine JSON
+  const handleImportRoutinesJSON = async () => {
+    setImportError(null);
+    if (!importJsonText.trim()) {
+      setImportError("Please paste JSON or upload a backup file.");
+      return;
+    }
+    try {
+      const parsed = JSON.parse(importJsonText);
+      const items = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed.routineTasks)
+          ? parsed.routineTasks
+          : null;
+
+      if (!items || !Array.isArray(items)) {
+        setImportError("Invalid JSON structure: could not find routine tasks array.");
+        return;
+      }
+
+      // Update customTimeSlots if present
+      if (Array.isArray(parsed.customTimeSlots) && parsed.customTimeSlots.length > 0) {
+        const mergedSlots = Array.from(new Set([...customTimeSlots, ...parsed.customTimeSlots]));
+        setCustomTimeSlots(mergedSlots);
+        try {
+          localStorage.setItem(STORAGE_CUSTOM_SLOTS_KEY, JSON.stringify(mergedSlots));
+        } catch {}
+      }
+
+      // Update categories if present
+      if (Array.isArray(parsed.categories) && parsed.categories.length > 0) {
+        const existingNames = new Set(categories.map((c) => c.name.toLowerCase()));
+        const newCats = parsed.categories.filter(
+          (c: any) => c?.name && !existingNames.has(c.name.toLowerCase()),
+        );
+        if (newCats.length > 0) {
+          const mergedCats = [...categories, ...newCats];
+          setCategories(mergedCats);
+          try {
+            localStorage.setItem(STORAGE_CUSTOM_CATS_KEY, JSON.stringify(mergedCats));
+          } catch {}
+        }
+      }
+
+      const formattedItems = items
+        .filter((t: any) => t && typeof t.title === "string" && typeof t.weekday === "number")
+        .map((t: any) => ({
+          weekday: t.weekday % 7,
+          title: t.title,
+          goalId: t.goal_id ?? t.goalId ?? null,
+          subjectId: t.subject_id ?? t.subjectId ?? null,
+          isActive: t.is_active ?? t.isActive ?? true,
+        }));
+
+      if (formattedItems.length === 0) {
+        setImportError("No valid routine slots found in the JSON file.");
+        return;
+      }
+
+      if (importOverwrite) {
+        await clearFn();
+      }
+
+      await batchAddFn({ data: { items: formattedItems } });
+      invalidate();
+      setIsImportOpen(false);
+      setImportJsonText("");
+      toast.success(`Successfully imported ${formattedItems.length} routine slot(s)!`);
+    } catch (err: any) {
+      setImportError(`Failed to parse or save JSON: ${err?.message || "Invalid syntax"}`);
+    }
+  };
 
   // Modal Handlers
   const openAddModal = (defaultWeekday?: number, defaultTimeSlot?: string) => {
@@ -807,7 +950,7 @@ function RoutinesPage() {
                   <MoreHorizontal className="h-4 w-4 text-muted-foreground" /> More Actions
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuLabel className="text-xs text-muted-foreground">
                   Schedule Options
                 </DropdownMenuLabel>
@@ -818,11 +961,22 @@ function RoutinesPage() {
                 <DropdownMenuItem onClick={() => setIsAddCategoryOpen(true)}>
                   <Tag className="h-4 w-4 text-cyan-400" /> + Category
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsCopyScheduleOpen(true)}>
+                  <Copy className="h-4 w-4 text-indigo-400" /> Copy Day Schedule...
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleExportRoutinesJSON}>
+                  <Download className="h-4 w-4 text-emerald-400" /> Export Schedule JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsImportOpen(true)}>
+                  <Upload className="h-4 w-4 text-amber-400" /> Import Schedule JSON...
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={loadSampleSchedule}
                   disabled={batchAddMutation.isPending}
                 >
-                  <Zap className="h-4 w-4" /> Load Sample
+                  <Zap className="h-4 w-4 text-primary" /> Load Sample
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -998,6 +1152,7 @@ function RoutinesPage() {
                     {WEEKDAY_NAMES.map((dayName, idx) => {
                       const isWeekend = idx === 5 || idx === 6;
                       const dayLoad = analytics.dayLoads[idx];
+                      const isOverloaded = dayLoad && Number(dayLoad.hours) > 8;
                       return (
                         <th
                           key={dayName}
@@ -1007,8 +1162,18 @@ function RoutinesPage() {
                         >
                           <div>{dayName}</div>
                           {dayLoad && (
-                            <div className="text-[10px] font-mono font-normal text-muted-foreground lowercase mt-0.5">
-                              {dayLoad.hours}h ({dayLoad.count} slots)
+                            <div className="flex flex-col items-center gap-0.5 mt-0.5">
+                              <span className="text-[10px] font-mono font-normal text-muted-foreground lowercase">
+                                {dayLoad.hours}h ({dayLoad.count} slots)
+                              </span>
+                              {isOverloaded && (
+                                <span
+                                  title="Scheduled routine exceeds 8 hours"
+                                  className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 text-[9px] font-bold text-amber-500 lowercase"
+                                >
+                                  <AlertTriangle className="h-2.5 w-2.5" /> Over 8h
+                                </span>
+                              )}
                             </div>
                           )}
                         </th>
@@ -1148,6 +1313,12 @@ function RoutinesPage() {
 
                                         {/* Link Badges */}
                                         <div className="flex flex-wrap items-center gap-1 text-[11px] mt-0.5">
+                                          {!task.is_active && (
+                                            <span className="inline-flex items-center gap-0.5 text-muted-foreground bg-muted/60 px-1 py-0.5 rounded border border-border/50 text-[10px] font-semibold">
+                                              <Pause className="h-2 w-2" />
+                                              <span>Paused</span>
+                                            </span>
+                                          )}
                                           {linkedGoal && (
                                             <span className="inline-flex items-center gap-0.5 text-cyan-400 bg-cyan-500/10 px-1 py-0.5 rounded border border-cyan-500/20">
                                               <Target className="h-2 w-2" />
@@ -1221,12 +1392,26 @@ function RoutinesPage() {
                 </p>
               </div>
 
-              {editMode && (
-                <Button size="sm" onClick={() => openAddModal(selectedDay)}>
-                  <Plus className="h-4 w-4 mr-1" /> Add to{" "}
-                  {WEEKDAY_NAMES[selectedDay]?.slice(0, 3) ?? "Day"}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCopySourceDay(selectedDay);
+                    setCopyTargetDay((selectedDay + 1) % 7);
+                    setIsCopyScheduleOpen(true);
+                  }}
+                  className="gap-1.5 text-xs border-border hover:bg-secondary"
+                >
+                  <Copy className="h-3.5 w-3.5 text-indigo-400" /> Copy Day
                 </Button>
-              )}
+                {editMode && (
+                  <Button size="sm" onClick={() => openAddModal(selectedDay)}>
+                    <Plus className="h-4 w-4 mr-1" /> Add to{" "}
+                    {WEEKDAY_NAMES[selectedDay]?.slice(0, 3) ?? "Day"}
+                  </Button>
+                )}
+              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1683,6 +1868,36 @@ function RoutinesPage() {
                 </div>
               </div>
 
+              {/* Per-Block Color Override */}
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                  Block Color Override
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {(Object.entries(COLOR_PALETTE) as Array<[ColorKey, typeof COLOR_PALETTE[ColorKey]]>).map(([key, palette]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      title={palette.label}
+                      aria-label={`Set color to ${palette.label}`}
+                      onClick={() => setFormColorKey(key)}
+                      className={`h-7 w-7 rounded-full border-2 transition-all ${
+                        formColorKey === key
+                          ? "border-foreground scale-110 shadow-sm"
+                          : "border-transparent hover:scale-105 hover:border-border"
+                      } ${palette.bg} flex items-center justify-center`}
+                    >
+                      {formColorKey === key && (
+                        <span className={`text-[10px] font-bold ${palette.text}`}>✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Overrides the category's default color for this specific block.
+                </p>
+              </div>
+
               {/* Weekday Multi-Select (For creating new) */}
               {!editingTask && (
                 <div>
@@ -2006,6 +2221,218 @@ function RoutinesPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Copy Weekday Schedule Modal */}
+      {isCopyScheduleOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-border/60 pb-3">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <Copy className="h-4 w-4 text-indigo-400" /> Copy Weekday Schedule
+              </h3>
+              <button
+                onClick={() => setIsCopyScheduleOpen(false)}
+                className="text-muted-foreground hover:text-foreground text-sm font-semibold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (copySourceDay === copyTargetDay) {
+                  toast.error("Source and target weekday cannot be the same");
+                  return;
+                }
+                copyMutation.mutate({
+                  sourceWeekday: copySourceDay,
+                  targetWeekday: copyTargetDay,
+                  overwriteTarget: copyOverwrite,
+                });
+              }}
+              className="mt-4 space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Copy From (Source)
+                  </label>
+                  <select
+                    value={copySourceDay}
+                    onChange={(e) => setCopySourceDay(Number(e.target.value))}
+                    className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    {WEEKDAY_NAMES.map((name, idx) => (
+                      <option key={name} value={idx}>
+                        {name} ({tasks.filter((t) => t.weekday === idx).length} slots)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Copy To (Target)
+                  </label>
+                  <select
+                    value={copyTargetDay}
+                    onChange={(e) => setCopyTargetDay(Number(e.target.value))}
+                    className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    {WEEKDAY_NAMES.map((name, idx) => (
+                      <option key={name} value={idx}>
+                        {name} ({tasks.filter((t) => t.weekday === idx).length} slots)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border/70 bg-secondary/30 p-3">
+                <label className="flex items-center gap-2.5 text-xs font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={copyOverwrite}
+                    onChange={(e) => setCopyOverwrite(e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  <span>Overwrite existing routine slots on target weekday</span>
+                </label>
+                <p className="text-[11px] text-muted-foreground mt-1 ml-5">
+                  If unchecked, source slots will be appended alongside existing items.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsCopyScheduleOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={copyMutation.isPending}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  {copyMutation.isPending ? "Copying..." : "Copy Schedule"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Import Routines JSON Modal */}
+      {isImportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-border/60 pb-3">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <FileJson className="h-4 w-4 text-amber-400" /> Import Schedule JSON
+              </h3>
+              <button
+                onClick={() => {
+                  setIsImportOpen(false);
+                  setImportError(null);
+                }}
+                className="text-muted-foreground hover:text-foreground text-sm font-semibold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                  Upload Backup File (.json)
+                </label>
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        setImportJsonText(event.target?.result as string);
+                        setImportError(null);
+                      };
+                      reader.readAsText(file);
+                    }
+                  }}
+                  className="block w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-border file:bg-secondary file:text-xs file:font-semibold file:text-foreground hover:file:bg-secondary/80 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                  Or Paste JSON Content
+                </label>
+                <textarea
+                  value={importJsonText}
+                  onChange={(e) => {
+                    setImportJsonText(e.target.value);
+                    setImportError(null);
+                  }}
+                  rows={6}
+                  placeholder={`{\n  "customTimeSlots": [...],\n  "categories": [...],\n  "routineTasks": [...]\n}`}
+                  className="w-full rounded-md border border-border bg-secondary/50 p-2.5 font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              {importError && (
+                <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>{importError}</span>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-border/70 bg-secondary/30 p-3">
+                <label className="flex items-center gap-2.5 text-xs font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={importOverwrite}
+                    onChange={(e) => setImportOverwrite(e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  <span>Replace existing schedule completely</span>
+                </label>
+                <p className="text-[11px] text-muted-foreground mt-1 ml-5">
+                  If unchecked, imported routine slots will be merged with your current schedule.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsImportOpen(false);
+                    setImportError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleImportRoutinesJSON}
+                  disabled={!importJsonText.trim() || batchAddMutation.isPending}
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {batchAddMutation.isPending ? "Importing..." : "Import Schedule"}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

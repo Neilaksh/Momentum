@@ -23,6 +23,25 @@ function currentStreak(doneSet: Set<string>, today: Date): number {
   return streak;
 }
 
+function calculateBestStreak(doneSet: Set<string>): number {
+  if (doneSet.size === 0) return 0;
+  const sorted = Array.from(doneSet).sort();
+  let best = 1;
+  let cur = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = parseISODate(sorted[i - 1]!);
+    const next = parseISODate(sorted[i]!);
+    const diff = Math.round((next.getTime() - prev.getTime()) / 86400000);
+    if (diff === 1) {
+      cur += 1;
+      if (cur > best) best = cur;
+    } else if (diff > 1) {
+      cur = 1;
+    }
+  }
+  return best;
+}
+
 export async function loadHabits(
   supabase: DB,
   userId: string,
@@ -71,6 +90,8 @@ export async function loadHabits(
     const from = created > yearStart ? created : yearStart;
     const yearDone = [...done].filter((d) => d >= toISODate(from) && d >= yearStartISO).length;
     const yearTarget = Math.max(1, Math.round(weeksBetween(from, today) * weekTarget));
+    const curStreak = currentStreak(done, today);
+    const bStreak = Math.max(curStreak, calculateBestStreak(done));
 
     return {
       habit,
@@ -80,8 +101,9 @@ export async function loadHabits(
       yearDone,
       yearTarget,
       yearPct: Math.round((Math.min(yearDone, yearTarget) / yearTarget) * 100),
-      streak: currentStreak(done, today),
-      doneDates: dates.filter((d) => done.has(d)),
+      streak: curStreak,
+      bestStreak: bStreak,
+      doneDates: Array.from(done),
     };
   });
 

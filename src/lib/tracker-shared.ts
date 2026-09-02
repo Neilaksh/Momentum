@@ -286,6 +286,66 @@ export function addDays(d: Date, n: number): Date {
   return copy;
 }
 
+/**
+ * Parse the task `description` field which may contain both a human-readable
+ * note and an embedded effort estimate encoded as `\n---est:N---` at the end.
+ * Returns the clean note and the estimated minutes (or null if not set).
+ */
+export function parseTaskDescription(raw: string | null | undefined): {
+  note: string;
+  estMinutes: number | null;
+} {
+  if (!raw) return { note: "", estMinutes: null };
+  const match = raw.match(/(?:^|\n)---est:(\d+)---$/);
+  if (match) {
+    const est = parseInt(match[1]!, 10);
+    const note = raw.slice(0, match.index).trimEnd();
+    return {
+      note,
+      estMinutes: Number.isInteger(est) && est > 0 ? est : null,
+    };
+  }
+  return { note: raw, estMinutes: null };
+}
+
+/** Serialize note + estMinutes back into the `description` field. */
+export function formatTaskDescription(note: string, estMinutes: number | null): string | null {
+  const cleanNote = note.trim();
+  if (!cleanNote && estMinutes === null) return null;
+  if (estMinutes === null) return cleanNote || null;
+  return cleanNote ? `${cleanNote}\n---est:${estMinutes}---` : `\n---est:${estMinutes}---`;
+}
+
+/** Format minutes as "Xh Ym" / "Xm" / "Xh" for display. */
+export function formatMinutes(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
+
+export type GoalPriority = "High" | "Med" | "Low";
+
+/**
+ * Parse a goal title that may contain an encoded priority prefix `[p:High]`.
+ * Returns the clean title and the priority (or null if unset).
+ */
+export function parseGoalTitle(raw: string): { cleanTitle: string; priority: GoalPriority | null } {
+  if (!raw) return { cleanTitle: "", priority: null };
+  const match = raw.match(/^\[p:(High|Med|Low)\]\s*(.*)$/);
+  if (!match) return { cleanTitle: raw, priority: null };
+  return { cleanTitle: (match[2] ?? "").trim(), priority: match[1] as GoalPriority };
+}
+
+/** Serialize a clean goal title + priority back into the stored title string. */
+export function formatGoalTitle(cleanTitle: string, priority: GoalPriority | null): string {
+  const clean = parseGoalTitle(cleanTitle).cleanTitle.trim();
+  if (!priority) return clean;
+  return `[p:${priority}] ${clean}`;
+}
+
+
 export function weekDates(weekStartISO: string): string[] {
   const start = parseISODate(weekStartISO);
   return Array.from({ length: 7 }, (_, i) => toISODate(addDays(start, i)));

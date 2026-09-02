@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import {
   Award,
   Calendar,
+  CalendarRange,
   Check,
   CheckCircle2,
   ChevronLeft,
@@ -27,6 +28,13 @@ import { PieStat } from "@/components/PieStat";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -43,7 +51,12 @@ import {
   toggleHabitDay,
   updateHabit,
 } from "@/lib/habits.functions";
-import { parseHabitTitle, type HabitsData, type HabitStat } from "@/lib/habits-shared";
+import {
+  formatHabitTitle,
+  parseHabitTitle,
+  type HabitsData,
+  type HabitStat,
+} from "@/lib/habits-shared";
 import {
   WEEKDAY_NAMES,
   addDays,
@@ -79,15 +92,136 @@ export const Route = createFileRoute("/habits")({
 });
 
 const QUICK_HABIT_PRESETS = [
-  { title: "🏃 30m Workout / Gym", target: 5 },
-  { title: "💧 Drink 2L Water", target: 7 },
-  { title: "📖 Read 20 Pages", target: 7 },
-  { title: "🧘 10m Meditation", target: 7 },
-  { title: "💻 Code & Learn", target: 5 },
-  { title: "😴 8 Hours Sleep", target: 7 },
+  { title: "🏃 30m Workout / Gym", target: 5, time: "Morning" },
+  { title: "💧 Drink 2L Water", target: 7, time: "Anytime" },
+  { title: "📖 Read 20 Pages", target: 7, time: "Evening" },
+  { title: "🧘 10m Meditation", target: 7, time: "Morning" },
+  { title: "💻 Code & Learn", target: 5, time: "Afternoon" },
+  { title: "😴 8 Hours Sleep", target: 7, time: "Night" },
+] as const;
+
+const TIME_TAG_OPTIONS = [
+  "Anytime",
+  "Morning",
+  "Afternoon",
+  "Evening",
+  "Night",
 ] as const;
 
 type HabitFilter = "all" | "due_today" | "done_today" | "streaks";
+
+function HabitYearHeatmapDialog({
+  stat,
+  isOpen,
+  onClose,
+  onToggleDate,
+}: {
+  stat: HabitStat | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onToggleDate: (habitId: string, date: string, done: boolean) => void;
+}) {
+  if (!stat) return null;
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const startOfYearDate = new Date(currentYear, 0, 1);
+  const firstMonday = startOfWeek(startOfYearDate);
+
+  const weeks: Array<Array<{ date: Date; iso: string; inYear: boolean }>> = [];
+  let cur = new Date(firstMonday);
+  for (let w = 0; w < 53; w++) {
+    const weekDays: Array<{ date: Date; iso: string; inYear: boolean }> = [];
+    for (let d = 0; d < 7; d++) {
+      const iso = toISODate(cur);
+      weekDays.push({
+        date: new Date(cur),
+        iso,
+        inYear: cur.getFullYear() === currentYear,
+      });
+      cur = addDays(cur, 1);
+    }
+    weeks.push(weekDays);
+    if (cur.getFullYear() > currentYear && cur.getMonth() > 0) break;
+  }
+
+  const doneSet = new Set(stat.doneDates);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span>{parseHabitTitle(stat.habit.title).displayTitle}</span>
+            <span className="text-xs font-normal text-muted-foreground">· {currentYear} Activity Heatmap</span>
+          </DialogTitle>
+          <DialogDescription>
+            {stat.yearDone} total check-ins in {currentYear} · {stat.streak > 0 ? `${stat.streak} day streak` : "No active streak"} · Click any cell to log or remove a check-in.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Heatmap Grid */}
+        <div className="mt-4 overflow-x-auto pb-2">
+          <div className="inline-flex flex-col gap-1 min-w-[650px]">
+            {[0, 1, 2, 3, 4, 5, 6].map((dayIdx) => {
+              const dayName = WEEKDAY_NAMES[dayIdx]!.slice(0, 1);
+              const showLabel = dayIdx === 0 || dayIdx === 2 || dayIdx === 4;
+              return (
+                <div key={dayIdx} className="flex items-center gap-1">
+                  <span className="w-4 text-[9px] font-medium text-muted-foreground text-center">
+                    {showLabel ? dayName : ""}
+                  </span>
+                  <div className="flex gap-1">
+                    {weeks.map((week, wIdx) => {
+                      const day = week[dayIdx];
+                      if (!day || !day.inYear) {
+                        return <div key={wIdx} className="h-3 w-3 rounded-xs opacity-0" />;
+                      }
+                      const isDone = doneSet.has(day.iso);
+                      const isToday = day.iso === toISODate(today);
+                      return (
+                        <button
+                          key={wIdx}
+                          type="button"
+                          onClick={() => {
+                            if (day.iso <= toISODate(today)) {
+                              onToggleDate(stat.habit.id, day.iso, !isDone);
+                            } else {
+                              toast.info("Cannot log habits in the future.");
+                            }
+                          }}
+                          title={`${formatDayDate(day.iso)}: ${isDone ? "Completed ✓ (Click to remove)" : "No check-in (Click to log)"}`}
+                          className={`h-3 w-3 rounded-[3px] transition-all cursor-pointer hover:scale-125 ${
+                            isDone
+                              ? "bg-emerald-500 shadow-xs shadow-emerald-500/50"
+                              : "bg-secondary/70 hover:bg-secondary"
+                          } ${isToday ? "ring-1 ring-primary" : ""}`}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground border-t border-border/60 pt-3">
+            <div className="flex items-center gap-4">
+              <span><strong>{stat.yearDone}</strong> completed days</span>
+              <span><strong>{stat.yearPct}%</strong> yearly target</span>
+              <span><strong>{stat.habit.target_per_week}×</strong> / week goal</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span>Less</span>
+              <div className="h-2.5 w-2.5 rounded-[2px] bg-secondary/70" />
+              <div className="h-2.5 w-2.5 rounded-[2px] bg-emerald-500" />
+              <span>More</span>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function HabitsPage() {
   const [weekStart, setWeekStart] = useState(() => toISODate(startOfWeek(new Date())));
@@ -98,7 +232,10 @@ function HabitsPage() {
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editTarget, setEditTarget] = useState(7);
+  const [timeTag, setTimeTag] = useState<string>("Anytime");
+  const [editTimeTag, setEditTimeTag] = useState<string>("Anytime");
   const [confirmDeleteHabitId, setConfirmDeleteHabitId] = useState<string | null>(null);
+  const [heatmapHabit, setHeatmapHabit] = useState<HabitStat | null>(null);
 
   const qc = useQueryClient();
   const todayISO = toISODate(new Date());
@@ -167,6 +304,7 @@ function HabitsPage() {
     onSuccess: () => {
       invalidate();
       setTitle("");
+      setTimeTag("Anytime");
       toast.success("Habit created successfully!");
     },
     onError: () => toast.error("Couldn't add that habit."),
@@ -231,10 +369,25 @@ function HabitsPage() {
   const weekEnd = toISODate(addDays(parseISODate(weekStart), 6));
   const isWeeklyGoalAchieved = (totals?.weekDone ?? 0) >= (totals?.weekTarget ?? 1) && (totals?.weekTarget ?? 0) > 0;
 
+  const habitToFocus = useMemo(() => {
+    const activeBehind = stats
+      .filter((s) => s.weekDone < s.weekTarget)
+      .map((s) => ({
+        stat: s,
+        deficit: s.weekTarget - s.weekDone,
+        pct: s.weekPct,
+        doneToday: s.doneDates.includes(todayISO),
+      }))
+      .sort((a, b) => b.deficit - a.deficit || a.pct - b.pct);
+    return activeBehind[0] ?? null;
+  }, [stats, todayISO]);
+
   function startEditing(s: HabitStat) {
+    const parsed = parseHabitTitle(s.habit.title);
     setEditingHabitId(s.habit.id);
-    setEditTitle(parseHabitTitle(s.habit.title).cleanTitle);
+    setEditTitle(parsed.cleanTitle);
     setEditTarget(s.habit.target_per_week);
+    setEditTimeTag(parsed.timeTag || "Anytime");
   }
 
   return (
@@ -396,8 +549,49 @@ function HabitsPage() {
         </section>
       </div>
 
+      {/* Weekly "Habit to Focus" Highlight Banner */}
+      {habitToFocus && (
+        <div className="mt-6 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-card to-card p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-500">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-500">
+                  Focus Habit This Week
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {habitToFocus.stat.weekDone}/{habitToFocus.stat.weekTarget} done ({habitToFocus.deficit} behind target)
+                </span>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground mt-0.5 truncate">
+                {parseHabitTitle(habitToFocus.stat.habit.title).displayTitle}
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={habitToFocus.doneToday ? "secondary" : "default"}
+              className="gap-1.5 text-xs h-8"
+              onClick={() =>
+                toggle.mutate({
+                  habitId: habitToFocus.stat.habit.id,
+                  date: todayISO,
+                  done: !habitToFocus.doneToday,
+                })
+              }
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {habitToFocus.doneToday ? "Completed Today" : "Check In Today"}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* User-Friendly Quick Preset Suggestions */}
-      <div className="mt-6 rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
+      <div className="mt-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
         <div className="flex items-center gap-2 mb-2.5">
           <Zap className="h-4 w-4 text-primary" />
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -411,10 +605,11 @@ function HabitsPage() {
               onClick={() => {
                 setTitle(preset.title);
                 setTarget(preset.target);
+                setTimeTag(preset.time);
               }}
               className="rounded-full border border-border/80 bg-secondary/30 px-3 py-1 text-xs font-medium text-foreground transition-colors hover:border-primary hover:bg-primary/10"
             >
-              {preset.title} <span className="text-muted-foreground">({preset.target}×/wk)</span>
+              {preset.title} <span className="text-muted-foreground">({preset.target}×/wk · {preset.time})</span>
             </button>
           ))}
         </div>
@@ -426,7 +621,10 @@ function HabitsPage() {
         onSubmit={(e) => {
           e.preventDefault();
           if (!title.trim()) return;
-          create.mutate({ title: title.trim(), targetPerWeek: target });
+          create.mutate({
+            title: formatHabitTitle(title, timeTag !== "Anytime" ? timeTag : null),
+            targetPerWeek: target,
+          });
         }}
       >
         <Input
@@ -435,6 +633,24 @@ function HabitsPage() {
           placeholder="New repeating habit name..."
           className="min-w-64 flex-1 h-10 text-sm"
         />
+
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+            Time:
+          </label>
+          <select
+            value={timeTag}
+            onChange={(e) => setTimeTag(e.target.value)}
+            className="h-10 rounded-lg border border-border bg-secondary/50 px-3 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            aria-label="Preferred habit time"
+          >
+            {TIME_TAG_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="flex items-center gap-2">
           <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">
@@ -575,8 +791,19 @@ function HabitsPage() {
                           <Input
                             value={editTitle}
                             onChange={(e) => setEditTitle(e.target.value)}
-                            className="h-8 text-xs font-semibold w-48"
+                            className="h-8 text-xs font-semibold w-44"
                           />
+                          <select
+                            value={editTimeTag}
+                            onChange={(e) => setEditTimeTag(e.target.value)}
+                            className="h-8 rounded-md border border-border bg-secondary/50 px-2 text-xs font-medium"
+                          >
+                            {TIME_TAG_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
                           <select
                             value={editTarget}
                             onChange={(e) => setEditTarget(Number(e.target.value))}
@@ -594,7 +821,10 @@ function HabitsPage() {
                             onClick={() =>
                               update.mutate({
                                 id: s.habit.id,
-                                title: editTitle,
+                                title: formatHabitTitle(
+                                  editTitle,
+                                  editTimeTag !== "Anytime" ? editTimeTag : null,
+                                ),
                                 targetPerWeek: editTarget,
                               })
                             }
@@ -612,25 +842,47 @@ function HabitsPage() {
                         </div>
                       ) : (
                         <>
-                          <h2 className="truncate text-base font-semibold tracking-tight">
-                            {parseHabitTitle(s.habit.title).displayTitle}
-                          </h2>
+                          {(() => {
+                            const parsed = parseHabitTitle(s.habit.title);
+                            return (
+                              <>
+                                <h2 className="truncate text-base font-semibold tracking-tight">
+                                  {parsed.displayTitle}
+                                </h2>
 
-                          <span className="num rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                            {s.habit.target_per_week}× / week
-                          </span>
+                                {parsed.timeTag && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-[10px] font-medium text-indigo-400">
+                                    🕒 {parsed.timeTag}
+                                  </span>
+                                )}
 
-                          {s.streak > 0 && (
-                            <span className="num flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                              <Flame className="h-3.5 w-3.5" /> {s.streak}d streak
-                            </span>
-                          )}
+                                <span className="num rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                                  {s.habit.target_per_week}× / week
+                                </span>
 
-                          {isWeekTargetReached && (
-                            <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-                              Goal Reached
-                            </span>
-                          )}
+                                {s.streak > 0 ? (
+                                  <span className="num flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                                    <Flame className="h-3.5 w-3.5" /> {s.streak}d streak
+                                    {s.bestStreak !== undefined && s.bestStreak > s.streak && (
+                                      <span className="text-[10px] text-muted-foreground font-normal ml-0.5">
+                                        · Best: {s.bestStreak}d
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : s.bestStreak !== undefined && s.bestStreak > 0 ? (
+                                  <span className="num flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                                    <Award className="h-3.5 w-3.5 text-amber-400" /> Best: {s.bestStreak}d
+                                  </span>
+                                ) : null}
+
+                                {isWeekTargetReached && (
+                                  <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                                    Goal Reached
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                         </>
                       )}
                     </div>
@@ -655,6 +907,15 @@ function HabitsPage() {
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         <span>{isDoneToday ? "Done Today" : "Check In Today"}</span>
+                      </button>
+
+                      <button
+                        onClick={() => setHeatmapHabit(s)}
+                        aria-label={`View year heatmap for ${s.habit.title}`}
+                        title="View Year Activity Heatmap"
+                        className="text-muted-foreground hover:text-primary p-3 -m-2 md:p-1 md:m-0 transition-colors"
+                      >
+                        <CalendarRange className="h-3.5 w-3.5" />
                       </button>
 
                       {!isEditing && (
@@ -778,6 +1039,27 @@ function HabitsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Year Heatmap Modal with interactive check-in backfilling */}
+      <HabitYearHeatmapDialog
+        stat={heatmapHabit}
+        isOpen={heatmapHabit !== null}
+        onClose={() => setHeatmapHabit(null)}
+        onToggleDate={(habitId, date, done) => {
+          toggle.mutate({ habitId, date, done });
+          // Update local heatmapHabit state so UI reflects the check-in immediately
+          if (heatmapHabit) {
+            const nextDone = done
+              ? [...heatmapHabit.doneDates, date]
+              : heatmapHabit.doneDates.filter((d) => d !== date);
+            setHeatmapHabit({
+              ...heatmapHabit,
+              doneDates: nextDone,
+              yearDone: done ? heatmapHabit.yearDone + 1 : Math.max(0, heatmapHabit.yearDone - 1),
+            });
+          }
+        }}
+      />
     </AppShell>
   );
 }
