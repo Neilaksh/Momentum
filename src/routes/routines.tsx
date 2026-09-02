@@ -5,10 +5,16 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Activity,
   AlertTriangle,
+  ArrowRightLeft,
+  ArrowUpDown,
   BarChart3,
   Calendar,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
   Clock,
   Copy,
   Download,
@@ -20,6 +26,7 @@ import {
   Layers,
   List,
   MoreHorizontal,
+  Move,
   Pause,
   Play,
   Plus,
@@ -136,11 +143,198 @@ const EMOJI_PRESETS = [
   "🚴",
   "🥑",
   "💊",
-  "🧹",
   "🚶",
-  "🌳",
-  "⚡",
+  "🥗",
+  "📖",
+  "🧹",
+  "🎮",
+  "🥋",
+  "😴",
 ];
+
+const STORAGE_CUSTOM_SLOTS_KEY = "momentum_custom_time_slots";
+const STORAGE_CUSTOM_CATS_KEY = "momentum_custom_categories";
+
+/**
+ * Move Routine Slot Popover
+ * Allows moving any routine block to another day or another time slot,
+ * or shifting it one step earlier/later or to prev/next day.
+ */
+function MoveRoutineSlotPopover({
+  task,
+  allTimeSlots,
+  onMove,
+  children,
+}: {
+  task: RoutineTask;
+  allTimeSlots: string[];
+  onMove: (taskId: string, targetWeekday: number, targetTimeSlot: string) => void;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const parsed = parseRoutineTitle(task.title);
+  const currentSlot = parsed.timeSlot || allTimeSlots[0] || "6:00–7:00 AM";
+  const currentWeekday = task.weekday;
+
+  const currentSlotIndex = allTimeSlots.indexOf(currentSlot);
+
+  const handleShiftDay = (delta: number) => {
+    const nextDay = (currentWeekday + delta + 7) % 7;
+    onMove(task.id, nextDay, currentSlot);
+    setOpen(false);
+  };
+
+  const handleShiftSlot = (delta: number) => {
+    if (currentSlotIndex === -1) {
+      if (allTimeSlots.length > 0) {
+        onMove(task.id, currentWeekday, allTimeSlots[0]!);
+      }
+      setOpen(false);
+      return;
+    }
+    const nextIndex = currentSlotIndex + delta;
+    if (nextIndex >= 0 && nextIndex < allTimeSlots.length) {
+      onMove(task.id, currentWeekday, allTimeSlots[nextIndex]!);
+      setOpen(false);
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+        {children}
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-72 p-3 space-y-3 shadow-xl border-border bg-popover text-popover-foreground z-50"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-border/60 pb-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-base leading-none">{parsed.emoji}</span>
+            <span className="text-xs font-semibold truncate text-foreground">
+              {parsed.cleanTitle}
+            </span>
+          </div>
+          <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+            Move Slot
+          </span>
+        </div>
+
+        {/* Quick Shift Arrows */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+            Quick Shift
+          </label>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[11px] justify-center gap-1"
+              onClick={() => handleShiftDay(-1)}
+              title="Shift to Previous Day"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" /> Prev Day
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[11px] justify-center gap-1"
+              onClick={() => handleShiftDay(1)}
+              title="Shift to Next Day"
+            >
+              Next Day <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[11px] justify-center gap-1"
+              disabled={currentSlotIndex <= 0}
+              onClick={() => handleShiftSlot(-1)}
+              title="Shift to Earlier Time Slot"
+            >
+              <ChevronUp className="h-3.5 w-3.5" /> Earlier Slot
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[11px] justify-center gap-1"
+              disabled={currentSlotIndex === -1 || currentSlotIndex >= allTimeSlots.length - 1}
+              onClick={() => handleShiftSlot(1)}
+              title="Shift to Later Time Slot"
+            >
+              Later Slot <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Select Specific Day */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+            Move to Day
+          </label>
+          <div className="grid grid-cols-7 gap-1">
+            {WEEKDAY_NAMES.map((name, idx) => {
+              const isCurrent = idx === currentWeekday;
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => {
+                    if (!isCurrent) {
+                      onMove(task.id, idx, currentSlot);
+                      setOpen(false);
+                    }
+                  }}
+                  className={`py-1 text-[11px] font-semibold rounded transition-colors ${
+                    isCurrent
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={`Move to ${name}`}
+                >
+                  {name.slice(0, 1)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Select Specific Time Slot */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+            Move to Time Slot
+          </label>
+          <div className="max-h-36 overflow-y-auto space-y-0.5 pr-1">
+            {allTimeSlots.map((slot) => {
+              const isCurrent = slot === currentSlot;
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => {
+                    if (!isCurrent) {
+                      onMove(task.id, currentWeekday, slot);
+                      setOpen(false);
+                    }
+                  }}
+                  className={`w-full text-left px-2 py-1 rounded text-[11px] transition-colors flex items-center justify-between ${
+                    isCurrent
+                      ? "bg-primary/20 text-primary font-semibold border border-primary/30"
+                      : "hover:bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span>{slot}</span>
+                  {isCurrent && <span className="text-[10px] text-primary">Current</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 type ViewMode = "matrix" | "day" | "analytics";
 
@@ -148,9 +342,6 @@ export type CustomCategory = {
   name: string;
   colorKey: ColorKey;
 };
-
-const STORAGE_CUSTOM_SLOTS_KEY = "momentum_custom_routine_slots";
-const STORAGE_CUSTOM_CATS_KEY = "momentum_custom_routine_categories";
 
 // Category that slots are reassigned to when their custom category is deleted.
 // "General" is the app-wide catch-all fallback (parseRoutineTitle defaults an
@@ -217,7 +408,9 @@ function RoutinesPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importJsonText, setImportJsonText] = useState("");
   const [importOverwrite, setImportOverwrite] = useState<boolean>(false);
-  const [importError, setImportError] = useState<string | null>(null);
+  // Drag and Drop Slot Movement State
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dragOverCellKey, setDragOverCellKey] = useState<string | null>(null);
 
   // Form State for Routine Slot
   const [formTitle, setFormTitle] = useState("");
@@ -479,6 +672,46 @@ function RoutinesPage() {
     },
     onError: () => toast.error("Failed to update routine"),
   });
+
+  const moveSlotMutation = useMutation({
+    mutationFn: (vars: { id: string; title: string; weekday: number }) =>
+      updateFn({ data: vars }),
+    onSuccess: (_, vars) => {
+      invalidate();
+      const parsed = parseRoutineTitle(vars.title);
+      toast.success(
+        `Moved "${parsed.cleanTitle}" to ${WEEKDAY_NAMES[vars.weekday]} (${parsed.timeSlot || "Flexible"})`,
+      );
+    },
+    onError: () => toast.error("Failed to move routine slot"),
+  });
+
+  const handleMoveRoutineSlot = (
+    taskId: string,
+    targetWeekday: number,
+    targetTimeSlot: string,
+  ) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const parsed = parseRoutineTitle(task.title);
+    if (task.weekday === targetWeekday && (parsed.timeSlot || "") === targetTimeSlot) {
+      return;
+    }
+    const newTitle = formatRoutineTitle(
+      parsed.cleanTitle,
+      targetTimeSlot,
+      parsed.category,
+      parsed.emoji,
+      parsed.colorKey,
+      parsed.habitId,
+      parsed.taskId,
+    );
+    moveSlotMutation.mutate({
+      id: taskId,
+      weekday: targetWeekday,
+      title: newTitle,
+    });
+  };
 
   const toggleMutation = useMutation({
     mutationFn: (vars: { id: string; isActive: boolean }) => toggleFn({ data: vars }),
@@ -1235,13 +1468,39 @@ function RoutinesPage() {
                             const key = `${timeSlot}|${dayIdx}`;
                             const cellTasks = taskMatrix.get(key) ?? [];
                             const isWeekend = dayIdx === 5 || dayIdx === 6;
+                            const isCellDragOver = dragOverCellKey === key;
 
                             return (
                               <td
                                 key={dayIdx}
-                                className={`p-2 border-r border-border/30 vertical-top align-top min-h-[52px] transition-colors relative ${
+                                onDragOver={(e) => {
+                                  if (draggingTaskId) {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = "move";
+                                    setDragOverCellKey(key);
+                                  }
+                                }}
+                                onDragLeave={() => {
+                                  if (dragOverCellKey === key) {
+                                    setDragOverCellKey(null);
+                                  }
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  setDragOverCellKey(null);
+                                  const tId = e.dataTransfer.getData("text/plain") || draggingTaskId;
+                                  if (tId) {
+                                    handleMoveRoutineSlot(tId, dayIdx, timeSlot);
+                                    setDraggingTaskId(null);
+                                  }
+                                }}
+                                className={`p-2 border-r border-border/30 vertical-top align-top min-h-[52px] transition-all relative ${
                                   isWeekend ? "bg-rose-500/[0.02]" : ""
-                                } ${editMode ? "group" : ""}`}
+                                } ${editMode ? "group" : ""} ${
+                                  isCellDragOver
+                                    ? "bg-primary/20 border-primary ring-2 ring-primary/50 shadow-inner"
+                                    : ""
+                                }`}
                               >
                                 <div className="space-y-1.5 min-h-[44px] flex flex-col justify-center">
                                   {cellTasks.map((task) => {
@@ -1254,16 +1513,30 @@ function RoutinesPage() {
                                     const linkedHabit = parsed.habitId
                                       ? habitsMap.get(parsed.habitId)
                                       : null;
+                                    const isThisDragging = draggingTaskId === task.id;
 
                                     return (
                                       <div
                                         key={task.id}
+                                        draggable={true}
+                                        onDragStart={(e) => {
+                                          e.stopPropagation();
+                                          setDraggingTaskId(task.id);
+                                          e.dataTransfer.setData("text/plain", task.id);
+                                          e.dataTransfer.effectAllowed = "move";
+                                        }}
+                                        onDragEnd={() => {
+                                          setDraggingTaskId(null);
+                                          setDragOverCellKey(null);
+                                        }}
                                         onClick={editMode ? () => openEditModal(task) : undefined}
-                                        className={`relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] transition-all ${
+                                        className={`relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] transition-all cursor-grab active:cursor-grabbing ${
                                           editMode
-                                            ? "group/item cursor-pointer hover:scale-[1.02] hover:shadow-md"
-                                            : "cursor-default"
-                                        } ${!task.is_active ? "opacity-40 grayscale" : ""}`}
+                                            ? "group/item hover:scale-[1.02] hover:shadow-md"
+                                            : "hover:shadow-xs"
+                                        } ${!task.is_active ? "opacity-40 grayscale" : ""} ${
+                                          isThisDragging ? "opacity-30 scale-95 border-dashed border-primary" : ""
+                                        }`}
                                       >
                                         {/* Category colour accent: thin left stripe carries the
                                         category's colour; the card itself stays neutral. */}
@@ -1279,36 +1552,54 @@ function RoutinesPage() {
                                             <span className="truncate">{parsed.cleanTitle}</span>
                                           </span>
 
-                                          {/* Action icons on item hover (edit mode only) */}
-                                          {editMode && (
-                                            <div className="flex md:hidden md:group-hover/item:flex items-center gap-1">
+                                          {/* Action icons */}
+                                          <div className="flex items-center gap-1">
+                                            {/* Move Slot Popover */}
+                                            <MoveRoutineSlotPopover
+                                              task={task}
+                                              allTimeSlots={allTimeSlots}
+                                              onMove={handleMoveRoutineSlot}
+                                            >
                                               <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  toggleMutation.mutate({
-                                                    id: task.id,
-                                                    isActive: !task.is_active,
-                                                  });
-                                                }}
-                                                title={task.is_active ? "Deactivate" : "Activate"}
-                                                className="text-muted-foreground hover:text-foreground p-1.5 -m-1 md:p-0 md:m-0"
+                                                type="button"
+                                                onClick={(e) => e.stopPropagation()}
+                                                title="Move routine slot to another day / time slot"
+                                                className="text-muted-foreground hover:text-foreground p-1 -m-0.5 transition-colors"
                                               >
-                                                <Check
-                                                  className={`h-3 w-3 ${task.is_active ? "text-emerald-400" : ""}`}
-                                                />
+                                                <ArrowRightLeft className="h-3 w-3" />
                                               </button>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  deleteMutation.mutate(task.id);
-                                                }}
-                                                title="Delete slot"
-                                                className="text-muted-foreground hover:text-destructive p-1.5 -m-1 md:p-0 md:m-0"
-                                              >
-                                                <Trash2 className="h-3 w-3" />
-                                              </button>
-                                            </div>
-                                          )}
+                                            </MoveRoutineSlotPopover>
+
+                                            {editMode && (
+                                              <>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleMutation.mutate({
+                                                      id: task.id,
+                                                      isActive: !task.is_active,
+                                                    });
+                                                  }}
+                                                  title={task.is_active ? "Deactivate" : "Activate"}
+                                                  className="text-muted-foreground hover:text-foreground p-1 -m-0.5"
+                                                >
+                                                  <Check
+                                                    className={`h-3 w-3 ${task.is_active ? "text-emerald-400" : ""}`}
+                                                  />
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    deleteMutation.mutate(task.id);
+                                                  }}
+                                                  title="Delete slot"
+                                                  className="text-muted-foreground hover:text-destructive p-1 -m-0.5"
+                                                >
+                                                  <Trash2 className="h-3 w-3" />
+                                                </button>
+                                              </>
+                                            )}
+                                          </div>
                                         </div>
 
                                         {/* Link Badges */}
@@ -1343,6 +1634,12 @@ function RoutinesPage() {
                                       </div>
                                     );
                                   })}
+
+                                  {isCellDragOver && (
+                                    <div className="rounded border border-dashed border-primary/60 bg-primary/10 py-1.5 text-center text-[10px] font-semibold text-primary">
+                                      Drop slot here
+                                    </div>
+                                  )}
 
                                   {/* Add button on hover (edit mode only) */}
                                   {editMode && (
@@ -1508,22 +1805,41 @@ function RoutinesPage() {
                           {parsed.category}
                         </span>
 
-                        {editMode && (
-                          <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          {/* Move Slot Popover */}
+                          <MoveRoutineSlotPopover
+                            task={task}
+                            allTimeSlots={allTimeSlots}
+                            onMove={handleMoveRoutineSlot}
+                          >
                             <button
-                              onClick={() => openEditModal(task)}
-                              className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                              type="button"
+                              className="flex items-center gap-1 rounded-md bg-secondary/60 hover:bg-secondary px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                              title="Move to another day or time slot"
                             >
-                              <Edit2 className="h-3.5 w-3.5" />
+                              <ArrowRightLeft className="h-3 w-3" /> Move
                             </button>
-                            <button
-                              onClick={() => deleteMutation.mutate(task.id)}
-                              className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        )}
+                          </MoveRoutineSlotPopover>
+
+                          {editMode && (
+                            <>
+                              <button
+                                onClick={() => openEditModal(task)}
+                                className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                                title="Edit slot details"
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => deleteMutation.mutate(task.id)}
+                                className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                                title="Delete slot"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
