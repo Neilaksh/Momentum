@@ -72,6 +72,7 @@ import {
   formatRoutineTitle,
   parseRoutineTitle,
   startOfWeek,
+  timeSlotStartMinutes,
   toISODate,
   type ColorKey,
   type Goal,
@@ -285,14 +286,23 @@ function RoutinesPage() {
     return map;
   }, [tasks]);
 
-  // Collect all unique time slots in order
+  // Collect all unique time slots, sorted chronologically by start time
+  // (earliest → latest, 12h and 24h formats alike) regardless of creation
+  // order. Unparseable slots keep their relative order at the end.
   const allTimeSlots = useMemo(() => {
     const set = new Set<string>(customTimeSlots);
     for (const t of tasks) {
       const parsed = parseRoutineTitle(t.title);
       if (parsed.timeSlot) set.add(parsed.timeSlot);
     }
-    return Array.from(set);
+    return Array.from(set).sort((a, b) => {
+      const aStart = timeSlotStartMinutes(a);
+      const bStart = timeSlotStartMinutes(b);
+      if (aStart === null && bStart === null) return a.localeCompare(b);
+      if (aStart === null) return 1;
+      if (bStart === null) return -1;
+      return aStart - bStart || a.localeCompare(b);
+    });
   }, [customTimeSlots, tasks]);
 
   // ===================== CALCULATIONS & ANALYTICS =====================
@@ -1022,6 +1032,14 @@ function RoutinesPage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {tasks
                 .filter((t) => t.weekday === selectedDay)
+                // Chronological within the day: sort by the block's start time
+                // (same parser as the matrix rows), tasks without a parseable
+                // slot keep their original order at the end.
+                .sort(
+                  (a, b) =>
+                    (timeSlotStartMinutes(parseRoutineTitle(a.title).timeSlot) ?? Infinity) -
+                    (timeSlotStartMinutes(parseRoutineTitle(b.title).timeSlot) ?? Infinity),
+                )
                 .map((task) => {
                   const parsed = parseRoutineTitle(task.title);
                   const color = COLOR_PALETTE[parsed.colorKey] ?? COLOR_PALETTE.slate;

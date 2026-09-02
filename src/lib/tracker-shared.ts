@@ -622,6 +622,61 @@ export function calculateSlotDurationMinutes(timeSlot: string): number {
   return 30;
 }
 
+/**
+ * Start time of a time slot in minutes since midnight (0–1439), or null if the
+ * slot's start can't be parsed. Handles 12-hour ("6:00–7:00 AM", with the
+ * AM/PM inherited from the end part when the start omits it, and 12:00 AM
+ * correctly resolving to midnight), 24-hour ("21:45–23:30"), and the en-dash /
+ * em-dash / hyphen / "to" delimiters accepted by calculateSlotDurationMinutes.
+ * Used to keep time-slot rows sorted chronologically regardless of the order
+ * slots were created in.
+ */
+export function timeSlotStartMinutes(timeSlot: string): number | null {
+  if (!timeSlot) return null;
+
+  // Normalize delimiters (en-dash, em-dash, hyphen, to) — same as duration calc.
+  const normalized = timeSlot.replace(/[–—]/g, "-").replace(/\s+to\s+/i, "-");
+  const parts = normalized.split("-");
+
+  const parseOne = (part: string, fallbackAmPm?: string): number | null => {
+    const trimmed = part.trim().toUpperCase();
+    const isPm = trimmed.includes("PM");
+    const isAm = trimmed.includes("AM");
+    const rawTime = trimmed.replace(/[^\d:]/g, "");
+    if (!rawTime) return null;
+
+    const [hStr, mStr] = rawTime.split(":");
+    let h = parseInt(hStr ?? "0", 10);
+    const m = parseInt(mStr ?? "0", 10);
+    if (isNaN(h)) return null;
+
+    let pm = isPm;
+    if (!isPm && !isAm && fallbackAmPm) pm = fallbackAmPm.includes("PM");
+
+    if (pm && h < 12) h += 12;
+    // 12 o'clock: PM stays noon; AM — explicit or inherited from the end part —
+    // is midnight.
+    if (!pm && (isAm || fallbackAmPm === "AM") && h === 12) h = 0;
+
+    if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+    return h * 60 + (isNaN(m) ? 0 : m);
+  };
+
+  if (parts.length < 2) {
+    // Bare single time (no range) — parse it on its own.
+    return parseOne(parts[0] ?? "");
+  }
+
+  const endPart = parts[1] ?? "";
+  const endAmPm = endPart.toUpperCase().includes("PM")
+    ? "PM"
+    : endPart.toUpperCase().includes("AM")
+      ? "AM"
+      : undefined;
+
+  return parseOne(parts[0] ?? "", endAmPm);
+}
+
 /** Sample Routine Schedule matching reference spreadsheet */
 export const SAMPLE_WEEKLY_ROUTINE: Array<{
   weekdays: number[]; // 0=Mon, 1=Tue, ..., 6=Sun
