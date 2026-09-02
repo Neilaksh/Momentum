@@ -203,6 +203,16 @@ export type WeekData = {
   days: WeekDay[];
   profile: Profile | null;
   subjects?: Subject[];
+  /**
+   * day_tasks rows fetched from just OUTSIDE the visible week (a ±7-day
+   * lookaround buffer — chains are capped at STALE_LIMIT = 3 rolls, so a few
+   * days always spans the whole chain). Used ONLY by the client's rollover
+   * chain detection so the "Completed late" badge works for chains that cross
+   * a Sunday/Monday boundary: a chain whose frozen originals sit in the
+   * visible week can have its completed copy a few days past the week edge.
+   * These rows are never rendered and never affect week counts/percentages.
+   */
+  chainContextTasks?: DayTask[];
 };
 
 /** ISO date string (YYYY-MM-DD) in local time. */

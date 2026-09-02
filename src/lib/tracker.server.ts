@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   XP_PER_TASK,
   XP_PERFECT_DAY,
+  addDays,
   goalLinkKey,
   levelFromXp,
   parseISODate,
@@ -338,16 +339,29 @@ export async function loadWeek(supabase: DB, userId: string, weekStart: string):
   await rolloverIncompleteGoalTasks(supabase, userId);
   await materializeWeek(supabase, userId, weekStart);
   const dates = weekDates(weekStart);
+  // ±CHAIN_CONTEXT_BUFFER_DAYS lookaround on the SAME single query (no extra
+  // round-trip): rollover chains are capped at STALE_LIMIT (3) rolls, so a
+  // chain can never reach further than a few calendar days past either edge of
+  // the visible week. Widening the fetch lets the client's "Completed late"
+  // badge see a chain's completed copy even when the chain crosses a
+  // Sunday/Monday boundary. Rows outside the visible week are split out below
+  // and are never rendered — they exist only so buildRolloverChains on the
+  // client sees whole chains.
+  const CHAIN_CONTEXT_BUFFER_DAYS = 7;
+  const rangeStart = toISODate(addDays(parseISODate(dates[0]!), -CHAIN_CONTEXT_BUFFER_DAYS));
+  const rangeEnd = toISODate(addDays(parseISODate(dates[6]!), CHAIN_CONTEXT_BUFFER_DAYS));
   const { data } = await supabase
     .from("day_tasks")
     .select("*")
     .eq("user_id", userId)
-    .gte("task_date", dates[0]!)
-    .lte("task_date", dates[6]!)
+    .gte("task_date", rangeStart)
+    .lte("task_date", rangeEnd)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
   const tasks = data ?? [];
+  const visibleTasks = tasks.filter((t) => t.task_date >= dates[0]! && t.task_date <= dates[6]!);
+  const chainContextTasks = tasks.filter((t) => t.task_date < dates[0]! || t.task_date > dates[6]!);
   const profile = await ensureProfile(supabase, userId);
 
   const { data: subjectRows } = await supabase
@@ -361,10 +375,11 @@ export async function loadWeek(supabase: DB, userId: string, weekStart: string):
     days: dates.map((date, i) => ({
       date,
       weekday: i,
-      tasks: tasks.filter((t) => t.task_date === date),
+      tasks: visibleTasks.filter((t) => t.task_date === date),
     })),
     profile,
     subjects: subjectRows ?? [],
+    chainContextTasks,
   };
 }
 

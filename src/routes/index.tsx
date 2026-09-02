@@ -241,8 +241,22 @@ function UnifiedTasksPage() {
   // a badge swap — day counts/percentages use t.completed_at and are unchanged,
   // the frozen row stays read-only, and the completed copy's own day renders
   // exactly as it already does.
+  //
+  // Chain detection runs over the visible week's tasks PLUS the ±7-day
+  // lookaround buffer the server attaches (chainContextTasks): chains are
+  // capped at STALE_LIMIT = 3 rolls, so a chain's completed copy can sit a few
+  // days past the week edge (e.g. starts Friday, completes Monday). Without
+  // the buffer the chain would collapse to its frozen prefix with no completed
+  // member and the badge would never show. Buffer rows never render and never
+  // enter the week's counts — they only complete chain membership here.
   const chainCompletedIds = new Set<string>();
-  for (const chain of buildRolloverChains(allTasks)) {
+  const chainContextTasks = (data?.chainContextTasks ?? []).filter(
+    // Same universe as allTasks above: pure-routine (non-goal) rows are not
+    // rendered as tasks, so they must not join a chain either.
+    (t) => t.source !== "routine" || t.goal_id !== null,
+  );
+  const chainDetectionTasks = [...allTasks, ...chainContextTasks];
+  for (const chain of buildRolloverChains(chainDetectionTasks)) {
     if (chain.length > 1 && chain.some((t) => t.completed_at)) {
       for (const t of chain) chainCompletedIds.add(t.id);
     }
