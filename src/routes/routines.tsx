@@ -1518,21 +1518,21 @@ function RoutinesPage() {
                                     return (
                                       <div
                                         key={task.id}
-                                        draggable={true}
-                                        onDragStart={(e) => {
+                                        draggable={editMode}
+                                        onDragStart={editMode ? (e) => {
                                           e.stopPropagation();
                                           setDraggingTaskId(task.id);
                                           e.dataTransfer.setData("text/plain", task.id);
                                           e.dataTransfer.effectAllowed = "move";
-                                        }}
-                                        onDragEnd={() => {
+                                        } : undefined}
+                                        onDragEnd={editMode ? () => {
                                           setDraggingTaskId(null);
                                           setDragOverCellKey(null);
-                                        }}
+                                        } : undefined}
                                         onClick={editMode ? () => openEditModal(task) : undefined}
-                                        className={`relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] transition-all cursor-grab active:cursor-grabbing ${
+                                        className={`relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] transition-all ${
                                           editMode
-                                            ? "group/item hover:scale-[1.02] hover:shadow-md"
+                                            ? "group/item hover:scale-[1.02] hover:shadow-md cursor-grab active:cursor-grabbing"
                                             : "hover:shadow-xs"
                                         } ${!task.is_active ? "opacity-40 grayscale" : ""} ${
                                           isThisDragging ? "opacity-30 scale-95 border-dashed border-primary" : ""
@@ -1554,7 +1554,8 @@ function RoutinesPage() {
 
                                           {/* Action icons */}
                                           <div className="flex items-center gap-1">
-                                            {/* Move Slot Popover */}
+                                            {/* Move Slot Popover — edit mode only */}
+                                            {editMode && (
                                             <MoveRoutineSlotPopover
                                               task={task}
                                               allTimeSlots={allTimeSlots}
@@ -1569,6 +1570,7 @@ function RoutinesPage() {
                                                 <ArrowRightLeft className="h-3 w-3" />
                                               </button>
                                             </MoveRoutineSlotPopover>
+                                            )}
 
                                             {editMode && (
                                               <>
@@ -1806,7 +1808,8 @@ function RoutinesPage() {
                         </span>
 
                         <div className="flex items-center gap-1.5">
-                          {/* Move Slot Popover */}
+                          {/* Move Slot Popover — edit mode only */}
+                          {editMode && (
                           <MoveRoutineSlotPopover
                             task={task}
                             allTimeSlots={allTimeSlots}
@@ -1820,6 +1823,7 @@ function RoutinesPage() {
                               <ArrowRightLeft className="h-3 w-3" /> Move
                             </button>
                           </MoveRoutineSlotPopover>
+                          )}
 
                           {editMode && (
                             <>
