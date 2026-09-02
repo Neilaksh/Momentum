@@ -100,10 +100,38 @@ export const Route = createFileRoute("/routines")({
 });
 
 const EMOJI_PRESETS = [
-  "🌅", "🏋️", "🏊", "🚿", "🍳", "☕", "📚", "💻", 
-  "🌺", "🍱", "🎮", "🏄", "🧘", "🥋", "🍲", "📖", 
-  "🎨", "🌙", "😴", "💼", "🎓", "🏃", "🚰", "📝",
-  "🎯", "🚴", "🥑", "💊", "🧹", "🚶", "🌳", "⚡"
+  "🌅",
+  "🏋️",
+  "🏊",
+  "🚿",
+  "🍳",
+  "☕",
+  "📚",
+  "💻",
+  "🌺",
+  "🍱",
+  "🎮",
+  "🏄",
+  "🧘",
+  "🥋",
+  "🍲",
+  "📖",
+  "🎨",
+  "🌙",
+  "😴",
+  "💼",
+  "🎓",
+  "🏃",
+  "🚰",
+  "📝",
+  "🎯",
+  "🚴",
+  "🥑",
+  "💊",
+  "🧹",
+  "🚶",
+  "🌳",
+  "⚡",
 ];
 
 type ViewMode = "matrix" | "day" | "analytics";
@@ -129,7 +157,7 @@ function RoutinesPage() {
   }, []);
   const [selectedDay, setSelectedDay] = useState<number>(0); // 0=Mon, ..., 6=Sun
   const [editMode, setEditMode] = useState(false); // grid "view" (default) vs "edit"
-  
+
   // Custom Time Slots & Categories (stored in localStorage with fallback)
   const [customTimeSlots, setCustomTimeSlots] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
@@ -310,8 +338,14 @@ function RoutinesPage() {
     let totalWeeklyMins = 0;
     const catMins: Record<string, { mins: number; count: number; colorKey: ColorKey }> = {};
     const dayMins = Array.from({ length: 7 }, () => ({ mins: 0, count: 0 }));
-    const goalAllocations: Record<string, { goal: Goal; mins: number; count: number; routines: string[] }> = {};
-    const habitAllocations: Record<string, { habitTitle: string; target: number; scheduledDays: number; isMet: boolean }> = {};
+    const goalAllocations: Record<
+      string,
+      { goal: Goal; mins: number; count: number; routines: string[] }
+    > = {};
+    const habitAllocations: Record<
+      string,
+      { habitTitle: string; target: number; scheduledDays: number; isMet: boolean }
+    > = {};
 
     // Initialize habits tracking
     for (const hs of habitStats) {
@@ -371,13 +405,15 @@ function RoutinesPage() {
     const totalWeeklyHours = (totalWeeklyMins / 60).toFixed(1);
     const avgDailyHours = (totalWeeklyMins / 60 / 7).toFixed(1);
 
-    const categoriesList = Object.entries(catMins).map(([name, data]) => ({
-      name,
-      hours: (data.mins / 60).toFixed(1),
-      count: data.count,
-      colorKey: data.colorKey,
-      pct: totalWeeklyMins > 0 ? Math.round((data.mins / totalWeeklyMins) * 100) : 0,
-    })).sort((a, b) => Number(b.hours) - Number(a.hours));
+    const categoriesList = Object.entries(catMins)
+      .map(([name, data]) => ({
+        name,
+        hours: (data.mins / 60).toFixed(1),
+        count: data.count,
+        colorKey: data.colorKey,
+        pct: totalWeeklyMins > 0 ? Math.round((data.mins / totalWeeklyMins) * 100) : 0,
+      }))
+      .sort((a, b) => Number(b.hours) - Number(a.hours));
 
     return {
       totalWeeklyMins,
@@ -399,8 +435,14 @@ function RoutinesPage() {
 
   // Mutations
   const updateMutation = useMutation({
-    mutationFn: (vars: { id: string; title: string; weekday: number; goalId?: string | null; subjectId?: string | null; isActive?: boolean }) =>
-      updateFn({ data: vars }),
+    mutationFn: (vars: {
+      id: string;
+      title: string;
+      weekday: number;
+      goalId?: string | null;
+      subjectId?: string | null;
+      isActive?: boolean;
+    }) => updateFn({ data: vars }),
     onSuccess: () => {
       invalidate();
       toast.success("Routine updated");
@@ -418,8 +460,15 @@ function RoutinesPage() {
   });
 
   const batchAddMutation = useMutation({
-    mutationFn: (items: Array<{ weekday: number; title: string; goalId?: string | null; subjectId?: string | null; isActive?: boolean }>) =>
-      batchAddFn({ data: { items } }),
+    mutationFn: (
+      items: Array<{
+        weekday: number;
+        title: string;
+        goalId?: string | null;
+        subjectId?: string | null;
+        isActive?: boolean;
+      }>,
+    ) => batchAddFn({ data: { items } }),
     onSuccess: () => {
       invalidate();
       toast.success("Routines saved to schedule!");
@@ -609,16 +658,32 @@ function RoutinesPage() {
 
   const loadSampleSchedule = () => {
     if (tasks.length > 0) {
-      if (!confirm("This will add the sample daily routine timetable to your schedule. Continue?")) {
+      if (
+        !confirm("This will add the sample daily routine timetable to your schedule. Continue?")
+      ) {
         return;
       }
     }
 
     setCustomTimeSlots(Array.from(new Set([...SAMPLE_TIME_SLOTS])));
-    const items: Array<{ weekday: number; title: string; goalId?: string | null; isActive?: boolean }> = [];
+    const items: Array<{
+      weekday: number;
+      title: string;
+      goalId?: string | null;
+      isActive?: boolean;
+    }> = [];
     for (const entry of SAMPLE_WEEKLY_ROUTINE) {
-      const color = (entry.colorKey ?? (COLOR_PALETTE[entry.category.toLowerCase() as ColorKey] ? entry.category.toLowerCase() : "slate")) as ColorKey;
-      const fullTitle = formatRoutineTitle(entry.title, entry.timeSlot, entry.category, entry.emoji, color);
+      const color = (entry.colorKey ??
+        (COLOR_PALETTE[entry.category.toLowerCase() as ColorKey]
+          ? entry.category.toLowerCase()
+          : "slate")) as ColorKey;
+      const fullTitle = formatRoutineTitle(
+        entry.title,
+        entry.timeSlot,
+        entry.category,
+        entry.emoji,
+        color,
+      );
       for (const wd of entry.weekdays) {
         items.push({
           weekday: wd,
@@ -646,7 +711,8 @@ function RoutinesPage() {
               My Daily Routine <span className="text-muted-foreground">— Weekly Schedule</span>
             </h1>
             <p className="text-sm text-muted-foreground">
-              Fully editable time-blocked timetable with custom time slots, custom categories, habit & goal integrations.
+              Fully editable time-blocked timetable with custom time slots, custom categories, habit
+              & goal integrations.
             </p>
           </div>
 
@@ -664,7 +730,9 @@ function RoutinesPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel className="text-xs text-muted-foreground">Schedule Options</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  Schedule Options
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setIsAddSlotOpen(true)}>
                   <Clock className="h-4 w-4 text-primary" /> + Time Slot
@@ -672,7 +740,10 @@ function RoutinesPage() {
                 <DropdownMenuItem onClick={() => setIsAddCategoryOpen(true)}>
                   <Tag className="h-4 w-4 text-cyan-400" /> + Category
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={loadSampleSchedule} disabled={batchAddMutation.isPending}>
+                <DropdownMenuItem
+                  onClick={loadSampleSchedule}
+                  disabled={batchAddMutation.isPending}
+                >
                   <Zap className="h-4 w-4" /> Load Sample
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -691,8 +762,13 @@ function RoutinesPage() {
               <span>Weekly Scheduled</span>
               <Clock className="h-3.5 w-3.5 text-primary" />
             </div>
-            <div className="num mt-1 text-2xl font-bold">{analytics.totalWeeklyHours} <span className="text-xs font-normal text-muted-foreground">hrs/wk</span></div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">~{analytics.avgDailyHours} hrs/day average</div>
+            <div className="num mt-1 text-2xl font-bold">
+              {analytics.totalWeeklyHours}{" "}
+              <span className="text-xs font-normal text-muted-foreground">hrs/wk</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              ~{analytics.avgDailyHours} hrs/day average
+            </div>
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -700,8 +776,12 @@ function RoutinesPage() {
               <span>Active Routine Slots</span>
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
             </div>
-            <div className="num mt-1 text-2xl font-bold text-emerald-400">{analytics.activeRoutineCount}</div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">{tasks.length} total registered</div>
+            <div className="num mt-1 text-2xl font-bold text-emerald-400">
+              {analytics.activeRoutineCount}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              {tasks.length} total registered
+            </div>
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -709,7 +789,9 @@ function RoutinesPage() {
               <span>Goal Allocation</span>
               <Target className="h-3.5 w-3.5 text-cyan-400" />
             </div>
-            <div className="num mt-1 text-2xl font-bold text-cyan-400">{analytics.goalAllocations.length}</div>
+            <div className="num mt-1 text-2xl font-bold text-cyan-400">
+              {analytics.goalAllocations.length}
+            </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">active goals linked</div>
           </div>
 
@@ -719,7 +801,8 @@ function RoutinesPage() {
               <Flame className="h-3.5 w-3.5 text-amber-400" />
             </div>
             <div className="num mt-1 text-2xl font-bold text-amber-400">
-              {analytics.habitAllocations.filter((h) => h.isMet).length}/{analytics.habitAllocations.length}
+              {analytics.habitAllocations.filter((h) => h.isMet).length}/
+              {analytics.habitAllocations.length}
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">habits target met</div>
           </div>
@@ -731,7 +814,9 @@ function RoutinesPage() {
             <button
               onClick={() => setViewMode("matrix")}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-all ${
-                viewMode === "matrix" ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"
+                viewMode === "matrix"
+                  ? "bg-background text-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <Grid className="h-3.5 w-3.5" /> 7-Day Matrix Grid
@@ -739,7 +824,9 @@ function RoutinesPage() {
             <button
               onClick={() => setViewMode("day")}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-all ${
-                viewMode === "day" ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"
+                viewMode === "day"
+                  ? "bg-background text-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <List className="h-3.5 w-3.5" /> Day View
@@ -747,7 +834,9 @@ function RoutinesPage() {
             <button
               onClick={() => setViewMode("analytics")}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-all ${
-                viewMode === "analytics" ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"
+                viewMode === "analytics"
+                  ? "bg-background text-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <BarChart3 className="h-3.5 w-3.5" /> Calculations & Analytics
@@ -761,7 +850,9 @@ function RoutinesPage() {
                   key={name}
                   onClick={() => setSelectedDay(idx)}
                   className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
-                    selectedDay === idx ? "bg-primary text-primary-foreground font-semibold" : "bg-card text-muted-foreground hover:text-foreground"
+                    selectedDay === idx
+                      ? "bg-primary text-primary-foreground font-semibold"
+                      : "bg-card text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {name.slice(0, 3)}
@@ -854,9 +945,12 @@ function RoutinesPage() {
                     <tr>
                       <td colSpan={8} className="p-12 text-center text-muted-foreground">
                         <Clock className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
-                        <h4 className="font-semibold text-sm text-foreground">No time slots created yet</h4>
+                        <h4 className="font-semibold text-sm text-foreground">
+                          No time slots created yet
+                        </h4>
                         <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                          Create your own custom time slots to design your schedule, or load the sample timetable.
+                          Create your own custom time slots to design your schedule, or load the
+                          sample timetable.
                         </p>
                         <div className="flex items-center justify-center gap-2 mt-4">
                           <Button size="sm" onClick={() => setIsAddSlotOpen(true)}>
@@ -870,132 +964,153 @@ function RoutinesPage() {
                     </tr>
                   ) : (
                     <>
-                    {allTimeSlots.map((timeSlot) => (
-                      <tr key={timeSlot} className="hover:bg-secondary/20 transition-colors">
-                        {/* Time Column with hover delete button */}
-                        <td className="sticky left-0 z-10 w-32 md:w-44 border-r border-border bg-card/95 py-2.5 px-2 font-mono font-medium text-[11px] text-center text-muted-foreground group/time">
-                          <div className="flex items-center justify-center gap-1">
-                            <span className="whitespace-nowrap">{timeSlot.replace(/\s*-\s*/g, "–")}</span>
-                            {editMode && (
-                              <button
-                                onClick={() => handleDeleteTimeSlotRow(timeSlot)}
-                                className="inline-flex md:hidden md:group-hover/time:inline-flex text-muted-foreground hover:text-destructive p-1.5 -m-1 md:p-0 md:m-0 transition-colors"
-                                title={`Delete time slot "${timeSlot}"`}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            )}
-                          </div>
-                          <div className="mt-0.5 text-[10px] text-muted-foreground/40 font-sans">
-                            {calculateSlotDurationMinutes(timeSlot)}m
-                          </div>
-                        </td>
-
-                        {/* 7 Days Columns */}
-                        {WEEKDAY_NAMES.map((_, dayIdx) => {
-                          const key = `${timeSlot}|${dayIdx}`;
-                          const cellTasks = taskMatrix.get(key) ?? [];
-                          const isWeekend = dayIdx === 5 || dayIdx === 6;
-
-                          return (
-                            <td
-                              key={dayIdx}
-                              className={`p-2 border-r border-border/30 vertical-top align-top min-h-[52px] transition-colors relative ${
-                                isWeekend ? "bg-rose-500/[0.02]" : ""
-                              } ${editMode ? "group" : ""}`}
-                            >
-                            <div className="space-y-1.5 min-h-[44px] flex flex-col justify-center">
-                              {cellTasks.map((task) => {
-                                const parsed = parseRoutineTitle(task.title);
-                                const color = COLOR_PALETTE[parsed.colorKey] ?? COLOR_PALETTE.slate;
-                                const linkedGoal = task.goal_id ? goalsMap.get(task.goal_id) : null;
-                                const linkedHabit = parsed.habitId ? habitsMap.get(parsed.habitId) : null;
-
-                                return (
-                                  <div
-                                    key={task.id}
-                                    onClick={editMode ? () => openEditModal(task) : undefined}
-                                    className={`relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] transition-all ${
-                                      editMode ? "group/item cursor-pointer hover:scale-[1.02] hover:shadow-md" : "cursor-default"
-                                    } ${
-                                      !task.is_active ? "opacity-40 grayscale" : ""
-                                    }`}
-                                  >
-                                    {/* Category colour accent: thin left stripe carries the
-                                        category's colour; the card itself stays neutral. */}
-                                    <span
-                                      aria-hidden
-                                      className={`absolute left-0.5 top-1 bottom-1 w-[3px] rounded-full bg-current ${color.text}`}
-                                    />
-                                    <div className="flex items-center justify-between gap-1">
-                                      <span className="font-semibold truncate text-foreground flex items-center gap-1">
-                                        <span className="text-sm leading-none">{parsed.emoji}</span>
-                                        <span className="truncate">{parsed.cleanTitle}</span>
-                                      </span>
-
-                                      {/* Action icons on item hover (edit mode only) */}
-                                      {editMode && (
-                                        <div className="flex md:hidden md:group-hover/item:flex items-center gap-1">
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              toggleMutation.mutate({ id: task.id, isActive: !task.is_active });
-                                            }}
-                                            title={task.is_active ? "Deactivate" : "Activate"}
-                                            className="text-muted-foreground hover:text-foreground p-1.5 -m-1 md:p-0 md:m-0"
-                                          >
-                                            <Check className={`h-3 w-3 ${task.is_active ? "text-emerald-400" : ""}`} />
-                                          </button>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              deleteMutation.mutate(task.id);
-                                            }}
-                                            title="Delete slot"
-                                            className="text-muted-foreground hover:text-destructive p-1.5 -m-1 md:p-0 md:m-0"
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Link Badges */}
-                                    <div className="flex flex-wrap items-center gap-1 text-[11px] mt-0.5">
-                                      {linkedGoal && (
-                                        <span className="inline-flex items-center gap-0.5 text-cyan-400 bg-cyan-500/10 px-1 py-0.5 rounded border border-cyan-500/20">
-                                          <Target className="h-2 w-2" />
-                                          <span className="truncate max-w-[80px]">{linkedGoal.title}</span>
-                                        </span>
-                                      )}
-
-                                      {linkedHabit && (
-                                        <span className="inline-flex items-center gap-0.5 text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
-                                          <Repeat className="h-2 w-2" />
-                                          <span className="truncate max-w-[80px]">{parseHabitTitle(linkedHabit.habit.title).displayTitle}</span>
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-
-                              {/* Add button on hover (edit mode only) */}
+                      {allTimeSlots.map((timeSlot) => (
+                        <tr key={timeSlot} className="hover:bg-secondary/20 transition-colors">
+                          {/* Time Column with hover delete button */}
+                          <td className="sticky left-0 z-10 w-32 md:w-44 border-r border-border bg-card/95 py-2.5 px-2 font-mono font-medium text-[11px] text-center text-muted-foreground group/time">
+                            <div className="flex items-center justify-center gap-1">
+                              <span className="whitespace-nowrap">
+                                {timeSlot.replace(/\s*-\s*/g, "–")}
+                              </span>
                               {editMode && (
                                 <button
-                                  onClick={() => openAddModal(dayIdx, timeSlot)}
-                                  className="w-full flex md:hidden md:group-hover:flex items-center justify-center rounded border border-dashed border-border/60 py-2 text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-all"
+                                  onClick={() => handleDeleteTimeSlotRow(timeSlot)}
+                                  className="inline-flex md:hidden md:group-hover/time:inline-flex text-muted-foreground hover:text-destructive p-1.5 -m-1 md:p-0 md:m-0 transition-colors"
+                                  title={`Delete time slot "${timeSlot}"`}
                                 >
-                                  <Plus className="h-3 w-3 mr-0.5" /> Add
+                                  <Trash2 className="h-3 w-3" />
                                 </button>
                               )}
                             </div>
+                            <div className="mt-0.5 text-[10px] text-muted-foreground/40 font-sans">
+                              {calculateSlotDurationMinutes(timeSlot)}m
+                            </div>
                           </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                  </>
+
+                          {/* 7 Days Columns */}
+                          {WEEKDAY_NAMES.map((_, dayIdx) => {
+                            const key = `${timeSlot}|${dayIdx}`;
+                            const cellTasks = taskMatrix.get(key) ?? [];
+                            const isWeekend = dayIdx === 5 || dayIdx === 6;
+
+                            return (
+                              <td
+                                key={dayIdx}
+                                className={`p-2 border-r border-border/30 vertical-top align-top min-h-[52px] transition-colors relative ${
+                                  isWeekend ? "bg-rose-500/[0.02]" : ""
+                                } ${editMode ? "group" : ""}`}
+                              >
+                                <div className="space-y-1.5 min-h-[44px] flex flex-col justify-center">
+                                  {cellTasks.map((task) => {
+                                    const parsed = parseRoutineTitle(task.title);
+                                    const color =
+                                      COLOR_PALETTE[parsed.colorKey] ?? COLOR_PALETTE.slate;
+                                    const linkedGoal = task.goal_id
+                                      ? goalsMap.get(task.goal_id)
+                                      : null;
+                                    const linkedHabit = parsed.habitId
+                                      ? habitsMap.get(parsed.habitId)
+                                      : null;
+
+                                    return (
+                                      <div
+                                        key={task.id}
+                                        onClick={editMode ? () => openEditModal(task) : undefined}
+                                        className={`relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] transition-all ${
+                                          editMode
+                                            ? "group/item cursor-pointer hover:scale-[1.02] hover:shadow-md"
+                                            : "cursor-default"
+                                        } ${!task.is_active ? "opacity-40 grayscale" : ""}`}
+                                      >
+                                        {/* Category colour accent: thin left stripe carries the
+                                        category's colour; the card itself stays neutral. */}
+                                        <span
+                                          aria-hidden
+                                          className={`absolute left-0.5 top-1 bottom-1 w-[3px] rounded-full bg-current ${color.text}`}
+                                        />
+                                        <div className="flex items-center justify-between gap-1">
+                                          <span className="font-semibold truncate text-foreground flex items-center gap-1">
+                                            <span className="text-sm leading-none">
+                                              {parsed.emoji}
+                                            </span>
+                                            <span className="truncate">{parsed.cleanTitle}</span>
+                                          </span>
+
+                                          {/* Action icons on item hover (edit mode only) */}
+                                          {editMode && (
+                                            <div className="flex md:hidden md:group-hover/item:flex items-center gap-1">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  toggleMutation.mutate({
+                                                    id: task.id,
+                                                    isActive: !task.is_active,
+                                                  });
+                                                }}
+                                                title={task.is_active ? "Deactivate" : "Activate"}
+                                                className="text-muted-foreground hover:text-foreground p-1.5 -m-1 md:p-0 md:m-0"
+                                              >
+                                                <Check
+                                                  className={`h-3 w-3 ${task.is_active ? "text-emerald-400" : ""}`}
+                                                />
+                                              </button>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  deleteMutation.mutate(task.id);
+                                                }}
+                                                title="Delete slot"
+                                                className="text-muted-foreground hover:text-destructive p-1.5 -m-1 md:p-0 md:m-0"
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {/* Link Badges */}
+                                        <div className="flex flex-wrap items-center gap-1 text-[11px] mt-0.5">
+                                          {linkedGoal && (
+                                            <span className="inline-flex items-center gap-0.5 text-cyan-400 bg-cyan-500/10 px-1 py-0.5 rounded border border-cyan-500/20">
+                                              <Target className="h-2 w-2" />
+                                              <span className="truncate max-w-[80px]">
+                                                {linkedGoal.title}
+                                              </span>
+                                            </span>
+                                          )}
+
+                                          {linkedHabit && (
+                                            <span className="inline-flex items-center gap-0.5 text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
+                                              <Repeat className="h-2 w-2" />
+                                              <span className="truncate max-w-[80px]">
+                                                {
+                                                  parseHabitTitle(linkedHabit.habit.title)
+                                                    .displayTitle
+                                                }
+                                              </span>
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+
+                                  {/* Add button on hover (edit mode only) */}
+                                  {editMode && (
+                                    <button
+                                      onClick={() => openAddModal(dayIdx, timeSlot)}
+                                      className="w-full flex md:hidden md:group-hover:flex items-center justify-center rounded border border-dashed border-border/60 py-2 text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-all"
+                                    >
+                                      <Plus className="h-3 w-3 mr-0.5" /> Add
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </>
                   )}
                 </tbody>
               </table>
@@ -1016,15 +1131,22 @@ function RoutinesPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
               <div>
-                <h3 className="font-semibold text-lg">{WEEKDAY_NAMES[selectedDay]} Routine Schedule</h3>
+                <h3 className="font-semibold text-lg">
+                  {WEEKDAY_NAMES[selectedDay]} Routine Schedule
+                </h3>
                 <p className="text-xs text-muted-foreground">
-                  Scheduled time: <span className="num font-semibold text-foreground">{analytics.dayLoads[selectedDay]?.hours ?? 0} hours</span> across {analytics.dayLoads[selectedDay]?.count ?? 0} routine blocks.
+                  Scheduled time:{" "}
+                  <span className="num font-semibold text-foreground">
+                    {analytics.dayLoads[selectedDay]?.hours ?? 0} hours
+                  </span>{" "}
+                  across {analytics.dayLoads[selectedDay]?.count ?? 0} routine blocks.
                 </p>
               </div>
 
               {editMode && (
                 <Button size="sm" onClick={() => openAddModal(selectedDay)}>
-                  <Plus className="h-4 w-4 mr-1" /> Add to {WEEKDAY_NAMES[selectedDay]?.slice(0, 3) ?? "Day"}
+                  <Plus className="h-4 w-4 mr-1" /> Add to{" "}
+                  {WEEKDAY_NAMES[selectedDay]?.slice(0, 3) ?? "Day"}
                 </Button>
               )}
             </div>
@@ -1065,13 +1187,19 @@ function RoutinesPage() {
                           <div className="flex items-center gap-2.5">
                             <span className="text-3xl">{parsed.emoji}</span>
                             <div>
-                              <h4 className="font-bold text-foreground text-sm">{parsed.cleanTitle}</h4>
-                              <span className="num text-xs text-muted-foreground">{parsed.timeSlot || "Flexible Time"} ({duration}m)</span>
+                              <h4 className="font-bold text-foreground text-sm">
+                                {parsed.cleanTitle}
+                              </h4>
+                              <span className="num text-xs text-muted-foreground">
+                                {parsed.timeSlot || "Flexible Time"} ({duration}m)
+                              </span>
                             </div>
                           </div>
 
                           <button
-                            onClick={() => toggleMutation.mutate({ id: task.id, isActive: !task.is_active })}
+                            onClick={() =>
+                              toggleMutation.mutate({ id: task.id, isActive: !task.is_active })
+                            }
                             className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
                               task.is_active
                                 ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
@@ -1094,7 +1222,10 @@ function RoutinesPage() {
                           {linkedHabit && (
                             <div className="flex items-center gap-1.5 text-amber-400">
                               <Repeat className="h-3.5 w-3.5" />
-                              <span>Habit: {parseHabitTitle(linkedHabit.habit.title).displayTitle} ({linkedHabit.weekDone}/{linkedHabit.weekTarget} this week)</span>
+                              <span>
+                                Habit: {parseHabitTitle(linkedHabit.habit.title).displayTitle} (
+                                {linkedHabit.weekDone}/{linkedHabit.weekTarget} this week)
+                              </span>
                             </div>
                           )}
 
@@ -1108,7 +1239,9 @@ function RoutinesPage() {
                       </div>
 
                       <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-2 text-xs">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${color.text} bg-background/50 border ${color.border}`}>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-medium ${color.text} bg-background/50 border ${color.border}`}
+                        >
                           {parsed.category}
                         </span>
 
@@ -1154,16 +1287,28 @@ function RoutinesPage() {
               <div className="h-3 w-full overflow-hidden rounded-full bg-secondary flex">
                 {analytics.categoriesList.map((cat) => {
                   const color = COLOR_PALETTE[cat.colorKey] ?? COLOR_PALETTE.slate;
-                  const bgClass = cat.colorKey === "emerald" ? "bg-emerald-500" :
-                    cat.colorKey === "cyan" ? "bg-cyan-500" :
-                    cat.colorKey === "amber" ? "bg-amber-500" :
-                    cat.colorKey === "purple" ? "bg-purple-500" :
-                    cat.colorKey === "indigo" ? "bg-indigo-500" :
-                    cat.colorKey === "rose" ? "bg-rose-500" :
-                    cat.colorKey === "blue" ? "bg-blue-500" :
-                    cat.colorKey === "teal" ? "bg-teal-500" :
-                    cat.colorKey === "fuchsia" ? "bg-fuchsia-500" :
-                    cat.colorKey === "orange" ? "bg-orange-500" : "bg-primary";
+                  const bgClass =
+                    cat.colorKey === "emerald"
+                      ? "bg-emerald-500"
+                      : cat.colorKey === "cyan"
+                        ? "bg-cyan-500"
+                        : cat.colorKey === "amber"
+                          ? "bg-amber-500"
+                          : cat.colorKey === "purple"
+                            ? "bg-purple-500"
+                            : cat.colorKey === "indigo"
+                              ? "bg-indigo-500"
+                              : cat.colorKey === "rose"
+                                ? "bg-rose-500"
+                                : cat.colorKey === "blue"
+                                  ? "bg-blue-500"
+                                  : cat.colorKey === "teal"
+                                    ? "bg-teal-500"
+                                    : cat.colorKey === "fuchsia"
+                                      ? "bg-fuchsia-500"
+                                      : cat.colorKey === "orange"
+                                        ? "bg-orange-500"
+                                        : "bg-primary";
 
                   return (
                     <div
@@ -1181,13 +1326,20 @@ function RoutinesPage() {
                 {analytics.categoriesList.map((cat) => {
                   const color = COLOR_PALETTE[cat.colorKey] ?? COLOR_PALETTE.slate;
                   return (
-                    <div key={cat.name} className={`rounded-lg border p-3 ${color.bg} ${color.border}`}>
+                    <div
+                      key={cat.name}
+                      className={`rounded-lg border p-3 ${color.bg} ${color.border}`}
+                    >
                       <div className="flex items-center justify-between text-xs">
                         <span className={`font-semibold ${color.text}`}>{cat.name}</span>
                         <span className="num font-bold text-muted-foreground">{cat.pct}%</span>
                       </div>
-                      <div className="num mt-1 text-lg font-bold text-foreground">{cat.hours} <span className="text-xs font-normal">hrs</span></div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{cat.count} routine blocks</div>
+                      <div className="num mt-1 text-lg font-bold text-foreground">
+                        {cat.hours} <span className="text-xs font-normal">hrs</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        {cat.count} routine blocks
+                      </div>
                     </div>
                   );
                 })}
@@ -1203,7 +1355,10 @@ function RoutinesPage() {
                 </h3>
                 <div className="space-y-2">
                   {analytics.dayLoads.map((dl) => (
-                    <div key={dl.weekday} className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-xs">
+                    <div
+                      key={dl.weekday}
+                      className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-xs"
+                    >
                       <span className="font-semibold text-foreground w-24">{dl.name}</span>
                       <div className="flex-1 mx-3">
                         <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
@@ -1215,7 +1370,9 @@ function RoutinesPage() {
                       </div>
                       <div className="text-right">
                         <span className="num font-bold">{dl.hours} hrs</span>
-                        <span className="text-[10px] text-muted-foreground ml-1.5">({dl.count} slots)</span>
+                        <span className="text-[10px] text-muted-foreground ml-1.5">
+                          ({dl.count} slots)
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -1230,14 +1387,21 @@ function RoutinesPage() {
                     <Target className="h-4 w-4 text-cyan-400" /> Linked Goals Allocation
                   </h3>
                   {analytics.goalAllocations.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">No routines currently linked to active goals.</p>
+                    <p className="text-xs text-muted-foreground italic">
+                      No routines currently linked to active goals.
+                    </p>
                   ) : (
                     <div className="space-y-2">
                       {analytics.goalAllocations.map((ga) => (
-                        <div key={ga.goal.id} className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs">
+                        <div
+                          key={ga.goal.id}
+                          className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs"
+                        >
                           <div className="flex items-center justify-between font-semibold text-cyan-400">
                             <span>{ga.goal.title}</span>
-                            <span className="num font-bold">{(ga.mins / 60).toFixed(1)} hrs/week</span>
+                            <span className="num font-bold">
+                              {(ga.mins / 60).toFixed(1)} hrs/week
+                            </span>
                           </div>
                           <div className="text-[11px] text-muted-foreground mt-1">
                             {ga.count} routine blocks: {ga.routines.join(", ")}
@@ -1254,20 +1418,31 @@ function RoutinesPage() {
                     <Repeat className="h-4 w-4 text-amber-400" /> Habit Target Alignment
                   </h3>
                   {analytics.habitAllocations.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">No routines currently linked to habits.</p>
+                    <p className="text-xs text-muted-foreground italic">
+                      No routines currently linked to habits.
+                    </p>
                   ) : (
                     <div className="space-y-2">
                       {analytics.habitAllocations.map((ha, i) => (
-                        <div key={i} className="flex items-center justify-between rounded-lg border border-border bg-secondary/40 p-2.5 text-xs">
+                        <div
+                          key={i}
+                          className="flex items-center justify-between rounded-lg border border-border bg-secondary/40 p-2.5 text-xs"
+                        >
                           <div>
-                            <span className="font-semibold text-foreground">{parseHabitTitle(ha.habitTitle).displayTitle}</span>
+                            <span className="font-semibold text-foreground">
+                              {parseHabitTitle(ha.habitTitle).displayTitle}
+                            </span>
                             <div className="text-[10px] text-muted-foreground">
                               Scheduled in routine: {ha.scheduledDays}x / Target: {ha.target}x/week
                             </div>
                           </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                            ha.isMet ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" : "bg-amber-500/20 text-amber-400 border border-amber-500/40"
-                          }`}>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              ha.isMet
+                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                                : "bg-amber-500/20 text-amber-400 border border-amber-500/40"
+                            }`}
+                          >
                             {ha.isMet ? "Target Covered" : "Needs More Slots"}
                           </span>
                         </div>
@@ -1362,7 +1537,9 @@ function RoutinesPage() {
                             setEmojiPickerOpen(false);
                           }}
                           className={`h-8 w-8 rounded text-lg flex items-center justify-center transition-all ${
-                            formEmoji === emo ? "bg-primary text-primary-foreground scale-110 shadow" : "hover:bg-secondary"
+                            formEmoji === emo
+                              ? "bg-primary text-primary-foreground scale-110 shadow"
+                              : "hover:bg-secondary"
                           }`}
                         >
                           {emo}
@@ -1477,7 +1654,9 @@ function RoutinesPage() {
                             }
                           }}
                           className={`rounded-lg py-2 text-xs font-semibold transition-colors ${
-                            selected ? "bg-primary text-primary-foreground shadow" : "bg-secondary text-muted-foreground hover:text-foreground"
+                            selected
+                              ? "bg-primary text-primary-foreground shadow"
+                              : "bg-secondary text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {dayName.slice(0, 3)}
@@ -1522,7 +1701,8 @@ function RoutinesPage() {
                     <option value="">-- No Habit --</option>
                     {habitStats.map((h) => (
                       <option key={h.habit.id} value={h.habit.id}>
-                        {parseHabitTitle(h.habit.title).displayTitle} ({h.habit.target_per_week}x/wk)
+                        {parseHabitTitle(h.habit.title).displayTitle} ({h.habit.target_per_week}
+                        x/wk)
                       </option>
                     ))}
                   </select>
@@ -1618,7 +1798,12 @@ function RoutinesPage() {
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
-                <Button type="button" variant="outline" size="sm" onClick={() => setIsAddSlotOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddSlotOpen(false)}
+                >
                   Cancel
                 </Button>
                 <Button type="submit" size="sm">
@@ -1672,7 +1857,9 @@ function RoutinesPage() {
                         type="button"
                         onClick={() => setNewCatColor(cKey)}
                         className={`rounded-lg border p-2 text-xs font-semibold transition-all ${c.bg} ${c.text} ${c.border} ${
-                          newCatColor === cKey ? "ring-2 ring-primary scale-105" : "opacity-75 hover:opacity-100"
+                          newCatColor === cKey
+                            ? "ring-2 ring-primary scale-105"
+                            : "opacity-75 hover:opacity-100"
                         }`}
                       >
                         {c.label}
@@ -1683,7 +1870,12 @@ function RoutinesPage() {
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
-                <Button type="button" variant="outline" size="sm" onClick={() => setIsAddCategoryOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddCategoryOpen(false)}
+                >
                   Cancel
                 </Button>
                 <Button type="submit" size="sm">
