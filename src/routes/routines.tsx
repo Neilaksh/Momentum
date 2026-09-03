@@ -20,7 +20,6 @@ import {
   Download,
   Edit2,
   FileJson,
-  Flame,
   Grid,
   Heart,
   Layers,
@@ -30,11 +29,9 @@ import {
   Pause,
   Play,
   Plus,
-  Repeat,
   RotateCcw,
   Sparkles,
   Tag,
-  Target,
   Trash2,
   Upload,
   Zap,
@@ -68,16 +65,12 @@ import {
   clearAllRoutineTasks,
   copyWeekdayRoutines,
   deleteRoutineTask,
-  getGoals,
   getRoutine,
   getWeek,
   reorderRoutineTasks,
   toggleRoutineTaskActive,
   updateRoutineTask,
 } from "@/lib/tracker.functions";
-import { getHabits } from "@/lib/habits.functions";
-import { getSubjects } from "@/lib/subjects.functions";
-import type { Subject } from "@/lib/subjects-shared";
 import {
   COLOR_PALETTE,
   DEFAULT_CATEGORIES,
@@ -91,11 +84,9 @@ import {
   timeSlotStartMinutes,
   toISODate,
   type ColorKey,
-  type Goal,
   type RoutineTask,
   type WeekData,
 } from "@/lib/tracker-shared";
-import { parseHabitTitle, type HabitsData } from "@/lib/habits-shared";
 
 export const Route = createFileRoute("/routines")({
   head: () => ({
@@ -421,10 +412,7 @@ function RoutinesPage() {
   const [formColorKey, setFormColorKey] = useState<ColorKey>("emerald");
   const [formTimeSlot, setFormTimeSlot] = useState<string>("6:00–7:00 AM");
   const [formWeekdays, setFormWeekdays] = useState<number[]>([0]); // Default Monday
-  const [formGoalId, setFormGoalId] = useState<string | null>(null);
-  const [formHabitId, setFormHabitId] = useState<string | null>(null);
   const [formTaskId, setFormTaskId] = useState<string | null>(null);
-  const [formSubjectId, setFormSubjectId] = useState<string | null>(null);
   const [formIsActive, setFormIsActive] = useState<boolean>(true);
 
   // Form State for Custom Time Slot
@@ -440,9 +428,6 @@ function RoutinesPage() {
   const weekStart = useMemo(() => toISODate(startOfWeek(new Date())), []);
   const fetchWeekFn = useServerFn(getWeek);
   const fetchRoutineFn = useServerFn(getRoutine);
-  const fetchGoalsFn = useServerFn(getGoals);
-  const fetchHabitsFn = useServerFn(getHabits);
-  const fetchSubjectsFn = useServerFn(getSubjects);
   const updateFn = useServerFn(updateRoutineTask);
   const toggleFn = useServerFn(toggleRoutineTaskActive);
   const batchAddFn = useServerFn(batchAddRoutineTasks);
@@ -460,25 +445,7 @@ function RoutinesPage() {
     queryFn: () => fetchRoutineFn(),
   });
 
-  const { data: goalsData } = useQuery({
-    queryKey: ["goals"],
-    queryFn: () => fetchGoalsFn(),
-  });
-
-  const { data: habitsData } = useQuery({
-    queryKey: ["habits", weekStart],
-    queryFn: () => fetchHabitsFn({ data: { weekStart } }) as Promise<HabitsData>,
-  });
-
-  const { data: subjectsData } = useQuery({
-    queryKey: ["subjects"],
-    queryFn: () => fetchSubjectsFn() as Promise<{ subjects: Subject[] }>,
-  });
-
   const tasks = (routineData?.tasks ?? []) as RoutineTask[];
-  const goals = (goalsData?.goals ?? []) as Goal[];
-  const subjects = subjectsData?.subjects ?? [];
-  const habitStats = habitsData?.stats ?? [];
   const existingTasks = useMemo(() => {
     const list: Array<{ id: string; title: string }> = [];
     for (const day of weekData?.days ?? []) {
@@ -504,24 +471,10 @@ function RoutinesPage() {
     } catch {}
   }, [categories]);
 
-  const goalsMap = useMemo(() => {
-    const map = new Map<string, Goal>();
-    for (const g of goals) map.set(g.id, g);
-    return map;
-  }, [goals]);
-
-  const habitsMap = useMemo(() => {
-    const map = new Map<string, (typeof habitStats)[0]>();
-    for (const h of habitStats) map.set(h.habit.id, h);
-    return map;
-  }, [habitStats]);
-
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["routine"] });
     void qc.invalidateQueries({ queryKey: ["week"] });
     void qc.invalidateQueries({ queryKey: ["day"] });
-    void qc.invalidateQueries({ queryKey: ["goals"] });
-    void qc.invalidateQueries({ queryKey: ["habits"] });
   };
 
   // Group tasks by (timeSlot, weekday)
@@ -575,24 +528,6 @@ function RoutinesPage() {
     let totalWeeklyMins = 0;
     const catMins: Record<string, { mins: number; count: number; colorKey: ColorKey }> = {};
     const dayMins = Array.from({ length: 7 }, () => ({ mins: 0, count: 0 }));
-    const goalAllocations: Record<
-      string,
-      { goal: Goal; mins: number; count: number; routines: string[] }
-    > = {};
-    const habitAllocations: Record<
-      string,
-      { habitTitle: string; target: number; scheduledDays: number; isMet: boolean }
-    > = {};
-
-    // Initialize habits tracking
-    for (const hs of habitStats) {
-      habitAllocations[hs.habit.id] = {
-        habitTitle: hs.habit.title,
-        target: hs.habit.target_per_week,
-        scheduledDays: 0,
-        isMet: false,
-      };
-    }
 
     for (const t of tasks) {
       if (!t.is_active) continue;
@@ -614,29 +549,6 @@ function RoutinesPage() {
       catEntry.count += 1;
       catEntry.colorKey = parsed.colorKey;
       catMins[cat] = catEntry;
-
-      // Goal allocation
-      if (t.goal_id && goalsMap.has(t.goal_id)) {
-        const goal = goalsMap.get(t.goal_id)!;
-        const gEntry = goalAllocations[goal.id] ?? { goal, mins: 0, count: 0, routines: [] };
-        gEntry.mins += duration;
-        gEntry.count += 1;
-        if (!gEntry.routines.includes(parsed.cleanTitle)) {
-          gEntry.routines.push(parsed.cleanTitle);
-        }
-        goalAllocations[goal.id] = gEntry;
-      }
-
-      // Habit synergy
-      if (parsed.habitId && habitAllocations[parsed.habitId]) {
-        habitAllocations[parsed.habitId]!.scheduledDays += 1;
-      }
-    }
-
-    // Check habit goals met
-    for (const hId of Object.keys(habitAllocations)) {
-      const h = habitAllocations[hId]!;
-      h.isMet = h.scheduledDays >= h.target;
     }
 
     const totalWeeklyHours = (totalWeeklyMins / 60).toFixed(1);
@@ -664,11 +576,9 @@ function RoutinesPage() {
         count: d.count,
         level: d.mins < 240 ? "Light" : d.mins <= 480 ? "Balanced" : "Intense",
       })),
-      goalAllocations: Object.values(goalAllocations),
-      habitAllocations: Object.values(habitAllocations),
       activeRoutineCount: tasks.filter((t) => t.is_active).length,
     };
-  }, [tasks, goalsMap, habitStats]);
+  }, [tasks]);
 
   // Mutations
   const updateMutation = useMutation({
@@ -895,8 +805,6 @@ function RoutinesPage() {
         .map((t: any) => ({
           weekday: t.weekday % 7,
           title: t.title,
-          goalId: t.goal_id ?? t.goalId ?? null,
-          subjectId: t.subject_id ?? t.subjectId ?? null,
           isActive: t.is_active ?? t.isActive ?? true,
           sortOrder: typeof t.sort_order === "number" ? t.sort_order : typeof t.sortOrder === "number" ? t.sortOrder : undefined,
         }));
@@ -929,10 +837,7 @@ function RoutinesPage() {
     setFormColorKey(categories[0]?.colorKey ?? "emerald");
     setFormTimeSlot(defaultTimeSlot ?? allTimeSlots[0] ?? "6:00–7:00 AM");
     setFormWeekdays(defaultWeekday !== undefined ? [defaultWeekday] : [0]);
-    setFormGoalId(null);
-    setFormHabitId(null);
     setFormTaskId(null);
-    setFormSubjectId(null);
     setFormIsActive(true);
     setIsDialogOpen(true);
   };
@@ -946,10 +851,7 @@ function RoutinesPage() {
     setFormColorKey(parsed.colorKey);
     setFormTimeSlot(parsed.timeSlot || (allTimeSlots[0] ?? "6:00–7:00 AM"));
     setFormWeekdays([task.weekday]);
-    setFormGoalId(task.goal_id);
-    setFormHabitId(parsed.habitId);
     setFormTaskId(parsed.taskId);
-    setFormSubjectId(task.subject_id);
     setFormIsActive(task.is_active);
     setIsDialogOpen(true);
   };
@@ -963,18 +865,6 @@ function RoutinesPage() {
     setFormCategory(catName);
     const found = categories.find((c) => c.name === catName);
     if (found) setFormColorKey(found.colorKey);
-  };
-
-  const handleHabitSelect = (hId: string) => {
-    setFormHabitId(hId || null);
-    if (hId) {
-      const h = habitsMap.get(hId);
-      if (h && !formTitle) {
-        const parsedHabit = parseHabitTitle(h.habit.title);
-        setFormTitle(parsedHabit.cleanTitle);
-        setFormEmoji("🎯");
-      }
-    }
   };
 
   const handleTaskSelect = (tTitle: string) => {
@@ -997,7 +887,7 @@ function RoutinesPage() {
       formCategory,
       formEmoji,
       formColorKey,
-      formHabitId,
+      null,
       formTaskId,
     );
 
@@ -1006,16 +896,12 @@ function RoutinesPage() {
         id: editingTask.id,
         title: fullTitle,
         weekday: formWeekdays[0] ?? editingTask.weekday,
-        goalId: formGoalId,
-        subjectId: formSubjectId,
         isActive: formIsActive,
       });
     } else {
       const items = formWeekdays.map((wd) => ({
         weekday: wd,
         title: fullTitle,
-        goalId: formGoalId,
-        subjectId: formSubjectId,
         isActive: formIsActive,
       }));
       batchAddMutation.mutate(items);
@@ -1263,7 +1149,7 @@ function RoutinesPage() {
         </div>
 
         {/* Calculated Stats Overview */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4">
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Weekly Scheduled</span>
@@ -1289,29 +1175,6 @@ function RoutinesPage() {
             <div className="text-[11px] text-muted-foreground mt-0.5">
               {tasks.length} total registered
             </div>
-          </div>
-
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Goal Allocation</span>
-              <Target className="h-3.5 w-3.5 text-cyan-400" />
-            </div>
-            <div className="num mt-1 text-2xl font-bold text-cyan-400">
-              {analytics.goalAllocations.length}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">active goals linked</div>
-          </div>
-
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Habit Synergy</span>
-              <Flame className="h-3.5 w-3.5 text-amber-400" />
-            </div>
-            <div className="num mt-1 text-2xl font-bold text-amber-400">
-              {analytics.habitAllocations.filter((h) => h.isMet).length}/
-              {analytics.habitAllocations.length}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">habits target met</div>
           </div>
         </div>
 
@@ -1549,12 +1412,6 @@ function RoutinesPage() {
                                     const parsed = parseRoutineTitle(task.title);
                                     const color =
                                       COLOR_PALETTE[parsed.colorKey] ?? COLOR_PALETTE.slate;
-                                    const linkedGoal = task.goal_id
-                                      ? goalsMap.get(task.goal_id)
-                                      : null;
-                                    const linkedHabit = parsed.habitId
-                                      ? habitsMap.get(parsed.habitId)
-                                      : null;
                                     const isThisDragging = draggingTaskId === task.id;
 
                                     return (
@@ -1676,32 +1533,12 @@ function RoutinesPage() {
                                           </div>
                                         </div>
 
-                                        {/* Link Badges */}
+                                        {/* Status Badge */}
                                         <div className="flex flex-wrap items-center gap-1 text-[11px] mt-0.5">
                                           {!task.is_active && (
                                             <span className="inline-flex items-center gap-0.5 text-muted-foreground bg-muted/60 px-1 py-0.5 rounded border border-border/50 text-[10px] font-semibold">
                                               <Pause className="h-2 w-2" />
                                               <span>Paused</span>
-                                            </span>
-                                          )}
-                                          {linkedGoal && (
-                                            <span className="inline-flex items-center gap-0.5 text-cyan-400 bg-cyan-500/10 px-1 py-0.5 rounded border border-cyan-500/20">
-                                              <Target className="h-2 w-2" />
-                                              <span className="truncate max-w-[80px]">
-                                                {linkedGoal.title}
-                                              </span>
-                                            </span>
-                                          )}
-
-                                          {linkedHabit && (
-                                            <span className="inline-flex items-center gap-0.5 text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
-                                              <Repeat className="h-2 w-2" />
-                                              <span className="truncate max-w-[80px]">
-                                                {
-                                                  parseHabitTitle(linkedHabit.habit.title)
-                                                    .displayTitle
-                                                }
-                                              </span>
                                             </span>
                                           )}
                                         </div>
@@ -1799,8 +1636,6 @@ function RoutinesPage() {
                 .map((task) => {
                   const parsed = parseRoutineTitle(task.title);
                   const color = COLOR_PALETTE[parsed.colorKey] ?? COLOR_PALETTE.slate;
-                  const linkedGoal = task.goal_id ? goalsMap.get(task.goal_id) : null;
-                  const linkedHabit = parsed.habitId ? habitsMap.get(parsed.habitId) : null;
                   const duration = calculateSlotDurationMinutes(parsed.timeSlot);
 
                   return (
@@ -1844,32 +1679,15 @@ function RoutinesPage() {
                           </button>
                         </div>
 
-                        {/* Integration Badges */}
-                        <div className="flex flex-col gap-1 text-xs">
-                          {linkedGoal && (
-                            <div className="flex items-center gap-1.5 text-cyan-400">
-                              <Target className="h-3.5 w-3.5" />
-                              <span>Goal: {linkedGoal.title}</span>
-                            </div>
-                          )}
-
-                          {linkedHabit && (
-                            <div className="flex items-center gap-1.5 text-amber-400">
-                              <Repeat className="h-3.5 w-3.5" />
-                              <span>
-                                Habit: {parseHabitTitle(linkedHabit.habit.title).displayTitle} (
-                                {linkedHabit.weekDone}/{linkedHabit.weekTarget} this week)
-                              </span>
-                            </div>
-                          )}
-
-                          {parsed.taskId && (
+                        {/* Task Reference Badge */}
+                        {parsed.taskId && (
+                          <div className="flex flex-col gap-1 text-xs">
                             <div className="flex items-center gap-1.5 text-purple-400">
                               <Layers className="h-3.5 w-3.5" />
                               <span>Task Reference: {parsed.taskId}</span>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-2 text-xs">
@@ -2001,110 +1819,34 @@ function RoutinesPage() {
               </div>
             </div>
 
-            {/* Day Load & Goal/Habit Synergy Columns */}
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Daily Schedule Density */}
-              <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-purple-400" /> Day-by-Day Load Density
-                </h3>
-                <div className="space-y-2">
-                  {analytics.dayLoads.map((dl) => (
-                    <div
-                      key={dl.weekday}
-                      className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-xs"
-                    >
-                      <span className="font-semibold text-foreground w-24">{dl.name}</span>
-                      <div className="flex-1 mx-3">
-                        <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-                          <div
-                            className="h-full bg-primary rounded-full transition-all"
-                            style={{ width: `${Math.min(100, (Number(dl.hours) / 10) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="num font-bold">{dl.hours} hrs</span>
-                        <span className="text-[10px] text-muted-foreground ml-1.5">
-                          ({dl.count} slots)
-                        </span>
+            {/* Day Load */}
+            <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-purple-400" /> Day-by-Day Load Density
+              </h3>
+              <div className="space-y-2">
+                {analytics.dayLoads.map((dl) => (
+                  <div
+                    key={dl.weekday}
+                    className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-xs"
+                  >
+                    <span className="font-semibold text-foreground w-24">{dl.name}</span>
+                    <div className="flex-1 mx-3">
+                      <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${Math.min(100, (Number(dl.hours) / 10) * 100)}%` }}
+                        />
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Goal Allocation & Habit Synergy */}
-              <div className="space-y-6">
-                {/* Goal Allocation */}
-                <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Target className="h-4 w-4 text-cyan-400" /> Linked Goals Allocation
-                  </h3>
-                  {analytics.goalAllocations.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
-                      No routines currently linked to active goals.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {analytics.goalAllocations.map((ga) => (
-                        <div
-                          key={ga.goal.id}
-                          className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs"
-                        >
-                          <div className="flex items-center justify-between font-semibold text-cyan-400">
-                            <span>{ga.goal.title}</span>
-                            <span className="num font-bold">
-                              {(ga.mins / 60).toFixed(1)} hrs/week
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-muted-foreground mt-1">
-                            {ga.count} routine blocks: {ga.routines.join(", ")}
-                          </div>
-                        </div>
-                      ))}
+                    <div className="text-right">
+                      <span className="num font-bold">{dl.hours} hrs</span>
+                      <span className="text-[10px] text-muted-foreground ml-1.5">
+                        ({dl.count} slots)
+                      </span>
                     </div>
-                  )}
-                </div>
-
-                {/* Habit Synergy */}
-                <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Repeat className="h-4 w-4 text-amber-400" /> Habit Target Alignment
-                  </h3>
-                  {analytics.habitAllocations.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
-                      No routines currently linked to habits.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {analytics.habitAllocations.map((ha, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between rounded-lg border border-border bg-secondary/40 p-2.5 text-xs"
-                        >
-                          <div>
-                            <span className="font-semibold text-foreground">
-                              {parseHabitTitle(ha.habitTitle).displayTitle}
-                            </span>
-                            <div className="text-[10px] text-muted-foreground">
-                              Scheduled in routine: {ha.scheduledDays}x / Target: {ha.target}x/week
-                            </div>
-                          </div>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                              ha.isMet
-                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
-                                : "bg-amber-500/20 text-amber-400 border border-amber-500/40"
-                            }`}
-                          >
-                            {ha.isMet ? "Target Covered" : "Needs More Slots"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -2351,72 +2093,6 @@ function RoutinesPage() {
                   </div>
                 </div>
               )}
-
-              {/* Link to Goal & Habit */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                    Link to Goal
-                  </label>
-                  <select
-                    value={formGoalId ?? ""}
-                    onChange={(e) => setFormGoalId(e.target.value || null)}
-                    className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="">-- No Goal --</option>
-                    {goals
-                      .filter((g) => g.status === "active")
-                      .map((goal) => (
-                        <option key={goal.id} value={goal.id}>
-                          {goal.title}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                    Link to Habit
-                  </label>
-                  <select
-                    value={formHabitId ?? ""}
-                    onChange={(e) => handleHabitSelect(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="">-- No Habit --</option>
-                    {habitStats.map((h) => (
-                      <option key={h.habit.id} value={h.habit.id}>
-                        {parseHabitTitle(h.habit.title).displayTitle} ({h.habit.target_per_week}
-                        x/wk)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Link to Subject (optional) */}
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                  Subject
-                </label>
-                <select
-                  value={formSubjectId ?? ""}
-                  onChange={(e) => setFormSubjectId(e.target.value || null)}
-                  className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">-- No Subject --</option>
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                {subjects.length === 0 && (
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    No subjects yet — create one on the Manage Subjects page.
-                  </p>
-                )}
-              </div>
 
               {/* Submit Buttons */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/60">
