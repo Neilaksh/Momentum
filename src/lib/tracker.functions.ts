@@ -627,7 +627,7 @@ export const getRoutine = createServerFn({ method: "POST" })
       .maybeSingle();
     const activeVariant = profile?.active_routine_variant ?? "primary";
 
-    const { data } = await context.supabase
+    const { data, error } = await context.supabase
       .from("routine_tasks")
       .select("*")
       .eq("user_id", context.userId)
@@ -636,6 +636,7 @@ export const getRoutine = createServerFn({ method: "POST" })
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
+    if (error) throw new Error(error.message);
     return { tasks: data ?? [], activeVariant };
   });
 
@@ -645,14 +646,15 @@ export const setActiveRoutineVariant = createServerFn({ method: "POST" })
     z.object({ variant: z.enum(["primary", "alternate"]) }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    await context.supabase
+    const { error } = await context.supabase
       .from("profiles")
       .update({ active_routine_variant: data.variant })
       .eq("id", context.userId);
+    if (error) throw new Error(error.message);
 
     // Return the target week's tasks in the same round-trip so the client can
     // swap the routine cache atomically — no second fetch, no stale read.
-    const { data: routineRows } = await context.supabase
+    const { data: routineRows, error: routineError } = await context.supabase
       .from("routine_tasks")
       .select("*")
       .eq("user_id", context.userId)
@@ -661,6 +663,7 @@ export const setActiveRoutineVariant = createServerFn({ method: "POST" })
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
+    if (routineError) throw new Error(routineError.message);
     return { tasks: routineRows ?? [], activeVariant: data.variant };
   });
 
@@ -787,7 +790,10 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
       is_active: item.isActive ?? true,
       week_variant: variant,
     }));
-    await context.supabase.from("routine_tasks").insert(rows);
+    const { error: insertError } = await context.supabase
+      .from("routine_tasks")
+      .insert(rows);
+    if (insertError) throw new Error(insertError.message);
     return { ok: true };
   });
 
@@ -798,11 +804,12 @@ export const clearAllRoutineTasks = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const variant = data.variant ?? "primary";
-    await context.supabase
+    const { error } = await context.supabase
       .from("routine_tasks")
       .delete()
       .eq("user_id", context.userId)
       .eq("week_variant", variant);
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
