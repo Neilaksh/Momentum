@@ -510,7 +510,7 @@ function UnifiedTasksPage() {
       </div>
 
       {/* Top Analytics Row: Dedicated Day Pie Chart (Left) + Week Overview Chart (Right) */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-[340px_1fr]">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
         {/* Left: Selected Day Pie Chart & XP Breakdown */}
         <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
           <div>

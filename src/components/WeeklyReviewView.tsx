@@ -181,7 +181,7 @@ export function WeeklyReviewView({
                 No tagged tasks completed this week.
               </p>
             ) : (
-              <div className="mt-3 grid gap-6 lg:grid-cols-[1fr_260px]">
+              <div className="mt-3 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={review.subjects.map((e) => ({ name: e.name, count: e.count, color: subjectColorHex(e.color) }))} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>

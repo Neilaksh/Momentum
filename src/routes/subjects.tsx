@@ -278,7 +278,7 @@ function SubjectsPage() {
         together.
       </p>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         {/* New Subject Form */}
         <form
           className="h-fit space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm"
@@ -322,7 +322,7 @@ function SubjectsPage() {
         </form>
 
         {/* Subjects List */}
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 p-1 text-xs">
               <button

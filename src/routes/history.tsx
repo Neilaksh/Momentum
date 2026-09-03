@@ -510,7 +510,7 @@ function HistoryPage() {
             </p>
           </div>
         ) : (
-          <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_280px]">
+          <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
             {/* Bar chart — subject name vs completed count, colored per subject */}
             <div className="h-56 min-w-0">
               <ResponsiveContainer width="100%" height="100%">

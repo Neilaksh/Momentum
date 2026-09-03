@@ -421,7 +421,7 @@ function GoalsPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         {/* New Goal Form */}
         <form
           className="h-fit space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5"
@@ -519,7 +519,7 @@ function GoalsPage() {
         </form>
 
         {/* Goals List with Sort Controls */}
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           {goals.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
