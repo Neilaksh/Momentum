@@ -71,6 +71,7 @@ import {
   getGoals,
   getRoutine,
   getWeek,
+  reorderRoutineTasks,
   toggleRoutineTaskActive,
   updateRoutineTask,
 } from "@/lib/tracker.functions";
@@ -534,18 +535,14 @@ function RoutinesPage() {
       list.push(t);
       map.set(key, list);
     }
-    // Within a shared time-slot cell, order must be identical on every
-    // weekday for the same group of tasks. sort_order is not reliably set
-    // the same way across per-weekday rows (often all zeros), so fall back
-    // to weekday-agnostic keys: clean title, then creation order, then id —
-    // guaranteeing "Shower" vs "Eat Breakfast" stacks the same on all days.
+    // Within a shared time-slot cell, order comes from user-defined sort_order
+    // (written globally per task by reorderRoutineTasks) — never alphabetical.
+    // created_at then id only guarantee stable rendering for never-reordered
+    // (all-zero) cells and as a final deterministic tiebreak.
     const cellComparator = (a: RoutineTask, b: RoutineTask) => {
       const ao = a.sort_order ?? 0;
       const bo = b.sort_order ?? 0;
       if (ao !== bo) return ao - bo;
-      const at = parseRoutineTitle(a.title).cleanTitle;
-      const bt = parseRoutineTitle(b.title).cleanTitle;
-      if (at !== bt) return at.localeCompare(bt);
       if (a.created_at !== b.created_at)
         return (a.created_at ?? "").localeCompare(b.created_at ?? "");
       return (a.id ?? "").localeCompare(b.id ?? "");
@@ -729,6 +726,32 @@ function RoutinesPage() {
       weekday: targetWeekday,
       title: newTitle,
     });
+  };
+
+  const reorderFn = useServerFn(reorderRoutineTasks);
+  const reorderMutation = useMutation({
+    mutationFn: (vars: { orderedIds: string[] }) => reorderFn({ data: vars }),
+    onSuccess: invalidate,
+    onError: () => {
+      invalidate();
+      toast.error("Couldn't reorder routines.");
+    },
+  });
+
+  // Swap a task with its neighbour inside a time-slot cell. Order is
+  // title-based and global: the whole cell's (re-ordered) ids are sent so the
+  // server can write the new sort_order to every weekday's row for those tasks.
+  const moveRoutineInCell = (cellKey: string, taskId: string, direction: "up" | "down") => {
+    const list = [...(taskMatrix.get(cellKey) ?? [])];
+    const index = list.findIndex((t) => t.id === taskId);
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (index === -1 || targetIndex < 0 || targetIndex >= list.length) return;
+    const moved = list[index];
+    if (!moved) return;
+    const [neighbour] = list.splice(targetIndex, 1, moved);
+    if (!neighbour) return;
+    list[index] = neighbour;
+    reorderMutation.mutate({ orderedIds: list.map((t) => t.id) });
   };
 
   const toggleMutation = useMutation({
@@ -1522,7 +1545,7 @@ function RoutinesPage() {
                                 }`}
                               >
                                 <div className="space-y-1.5 min-h-[44px] flex flex-col justify-center">
-                                  {cellTasks.map((task) => {
+                                  {cellTasks.map((task, taskIdx) => {
                                     const parsed = parseRoutineTitle(task.title);
                                     const color =
                                       COLOR_PALETTE[parsed.colorKey] ?? COLOR_PALETTE.slate;
@@ -1573,6 +1596,36 @@ function RoutinesPage() {
 
                                           {/* Action icons */}
                                           <div className="flex items-center gap-1">
+                                            {/* Reorder within cell — edit mode only */}
+                                            {editMode && (
+                                              <>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    moveRoutineInCell(key, task.id, "up");
+                                                  }}
+                                                  disabled={taskIdx === 0}
+                                                  aria-label={`Move ${parsed.cleanTitle} up`}
+                                                  title="Move up"
+                                                  className="text-muted-foreground hover:text-foreground disabled:opacity-25 disabled:hover:text-muted-foreground p-1 -m-0.5"
+                                                >
+                                                  <ChevronUp className="h-3 w-3" />
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    moveRoutineInCell(key, task.id, "down");
+                                                  }}
+                                                  disabled={taskIdx === cellTasks.length - 1}
+                                                  aria-label={`Move ${parsed.cleanTitle} down`}
+                                                  title="Move down"
+                                                  className="text-muted-foreground hover:text-foreground disabled:opacity-25 disabled:hover:text-muted-foreground p-1 -m-0.5"
+                                                >
+                                                  <ChevronDown className="h-3 w-3" />
+                                                </button>
+                                              </>
+                                            )}
+
                                             {/* Move Slot Popover — edit mode only */}
                                             {editMode && (
                                             <MoveRoutineSlotPopover

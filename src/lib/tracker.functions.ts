@@ -15,6 +15,7 @@ import {
   formatTaskDescription as formatTaskDescriptionServer,
   getSupersededRolloverIds,
   parseISODate,
+  parseRoutineTitle,
   parseTaskDescription as parseTaskDescriptionServer,
   startOfWeek,
   toISODate,
@@ -531,6 +532,74 @@ export const copyWeekdayRoutines = createServerFn({ method: "POST" })
   });
 
 
+export const reorderRoutineTasks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { orderedIds: string[] }) =>
+      z
+        .object({
+          orderedIds: z.array(z.string().uuid()).min(1),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+
+    // Fetch the referenced rows to learn which logical tasks (by clean title)
+    // they correspond to. Reordering is title-based and GLOBAL: routine tasks
+    // are separate rows per weekday, so a manual order must be written to every
+    // weekday's row for the same task to keep all days rendering identically.
+    const { data: rows, error: fetchErr } = await supabase
+      .from("routine_tasks")
+      .select("id, title")
+      .eq("user_id", context.userId)
+      .in("id", data.orderedIds);
+    if (fetchErr) throw new Error(fetchErr.message);
+
+    // Preserve the caller's ordering: map each ordered id to its clean title,
+    // de-duplicating while keeping first occurrence.
+    const titleById = new Map(
+      (rows ?? []).map((r) => [r.id, parseRoutineTitle(r.title).cleanTitle.trim().toLowerCase()]),
+    );
+    const orderedTitles: string[] = [];
+    for (const id of data.orderedIds) {
+      const t = titleById.get(id);
+      if (t && !orderedTitles.includes(t)) orderedTitles.push(t);
+    }
+    if (orderedTitles.length === 0) return { ok: true };
+
+    // Positional values (10, 20, 30, ...) for the ordered set. Any task NOT in
+    // the reordered cell keeps its existing sort_order (typically 0), which
+    // still sorts before these — creation-order fallback remains deterministic.
+    const orderByTitle = new Map(
+      orderedTitles.map((t, i) => [t, (i + 1) * 10]),
+    );
+
+    // Update every row (all weekdays) whose parsed clean title matches one of
+    // the reordered tasks. Titles carry structured prefixes
+    // ("[slot|category|emoji|color|habit|task] CleanTitle"), so match on the
+    // parsed clean title in JS instead of fragile SQL pattern matching.
+    const { data: allRows, error: allErr } = await supabase
+      .from("routine_tasks")
+      .select("id, title")
+      .eq("user_id", context.userId);
+    if (allErr) throw new Error(allErr.message);
+
+    await Promise.all(
+      (allRows ?? [])
+        .map((r) => {
+          const t = parseRoutineTitle(r.title).cleanTitle.trim().toLowerCase();
+          const sortOrder = orderByTitle.get(t);
+          return sortOrder == null
+            ? null
+            : supabase.from("routine_tasks").update({ sort_order: sortOrder }).eq("id", r.id);
+        })
+        .filter(Boolean),
+    );
+
+    return { ok: true };
+  });
+
 export const getRoutine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -642,13 +711,25 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
         .parse(input),
   )
   .handler(async ({ data, context }) => {
+    // New tasks append at the END of their cell (max sort_order + 10) instead
+    // of tying everything at 0, so user-defined order is never reshuffled by
+    // alphabetical or creation-order fallbacks.
+    const { data: maxRow } = await context.supabase
+      .from("routine_tasks")
+      .select("sort_order")
+      .eq("user_id", context.userId)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    let nextSort = (maxRow?.sort_order ?? 0) + 10;
+
     const rows = data.items.map((item) => ({
       user_id: context.userId,
       weekday: item.weekday,
       title: item.title.trim(),
       goal_id: item.goalId ?? null,
       subject_id: item.subjectId ?? null,
-      sort_order: item.sortOrder ?? 0,
+      sort_order: item.sortOrder ?? nextSort++,
       is_active: item.isActive ?? true,
     }));
     await context.supabase.from("routine_tasks").insert(rows);
