@@ -649,7 +649,19 @@ export const setActiveRoutineVariant = createServerFn({ method: "POST" })
       .from("profiles")
       .update({ active_routine_variant: data.variant })
       .eq("id", context.userId);
-    return { activeVariant: data.variant };
+
+    // Return the target week's tasks in the same round-trip so the client can
+    // swap the routine cache atomically — no second fetch, no stale read.
+    const { data: routineRows } = await context.supabase
+      .from("routine_tasks")
+      .select("*")
+      .eq("user_id", context.userId)
+      .eq("week_variant", data.variant)
+      .order("weekday", { ascending: true })
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+    return { tasks: routineRows ?? [], activeVariant: data.variant };
   });
 
 export const deleteRoutineTask = createServerFn({ method: "POST" })

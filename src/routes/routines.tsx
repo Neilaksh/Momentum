@@ -816,11 +816,14 @@ function RoutinesPage() {
 
   const switchVariantMutation = useMutation({
     mutationFn: (variant: "primary" | "alternate") => setVariantFn({ data: { variant } }),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      // Write the target week's tasks + variant straight into the cache so the
+      // grid flips instantly and reliably (no dependence on a later refetch).
+      qc.setQueryData(["routine"], res);
       invalidate();
       toast.success(
-        activeVariant === "primary"
-          ? "Switched to Alternate Routine (blank slate)."
+        res.activeVariant === "alternate"
+          ? "Switched to Alternate Routine."
           : "Switched back to Primary Routine.",
       );
     },
