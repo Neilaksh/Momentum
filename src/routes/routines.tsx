@@ -408,6 +408,7 @@ function RoutinesPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importJsonText, setImportJsonText] = useState("");
   const [importOverwrite, setImportOverwrite] = useState<boolean>(false);
+  const [importError, setImportError] = useState<string | null>(null);
   // Drag and Drop Slot Movement State
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dragOverCellKey, setDragOverCellKey] = useState<string | null>(null);
@@ -533,6 +534,23 @@ function RoutinesPage() {
       list.push(t);
       map.set(key, list);
     }
+    // Within a shared time-slot cell, order must be identical on every
+    // weekday for the same group of tasks. sort_order is not reliably set
+    // the same way across per-weekday rows (often all zeros), so fall back
+    // to weekday-agnostic keys: clean title, then creation order, then id —
+    // guaranteeing "Shower" vs "Eat Breakfast" stacks the same on all days.
+    const cellComparator = (a: RoutineTask, b: RoutineTask) => {
+      const ao = a.sort_order ?? 0;
+      const bo = b.sort_order ?? 0;
+      if (ao !== bo) return ao - bo;
+      const at = parseRoutineTitle(a.title).cleanTitle;
+      const bt = parseRoutineTitle(b.title).cleanTitle;
+      if (at !== bt) return at.localeCompare(bt);
+      if (a.created_at !== b.created_at)
+        return (a.created_at ?? "").localeCompare(b.created_at ?? "");
+      return (a.id ?? "").localeCompare(b.id ?? "");
+    };
+    for (const list of map.values()) list.sort(cellComparator);
     return map;
   }, [tasks]);
 
@@ -857,6 +875,7 @@ function RoutinesPage() {
           goalId: t.goal_id ?? t.goalId ?? null,
           subjectId: t.subject_id ?? t.subjectId ?? null,
           isActive: t.is_active ?? t.isActive ?? true,
+          sortOrder: typeof t.sort_order === "number" ? t.sort_order : typeof t.sortOrder === "number" ? t.sortOrder : undefined,
         }));
 
       if (formattedItems.length === 0) {

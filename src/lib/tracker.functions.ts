@@ -494,7 +494,12 @@ export const copyWeekdayRoutines = createServerFn({ method: "POST" })
       .from("routine_tasks")
       .select("*")
       .eq("user_id", context.userId)
-      .eq("weekday", data.sourceWeekday);
+      .eq("weekday", data.sourceWeekday)
+      // Deterministic source order so clones get stable (i + 1) * 10 sort
+      // values that mirror the source day's layout across all weekdays.
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
 
     if (srcErr) throw new Error(srcErr.message);
     if (!sourceTasks || sourceTasks.length === 0) {
@@ -534,7 +539,9 @@ export const getRoutine = createServerFn({ method: "POST" })
       .select("*")
       .eq("user_id", context.userId)
       .order("weekday", { ascending: true })
-      .order("sort_order", { ascending: true });
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
     return { tasks: data ?? [] };
   });
 
