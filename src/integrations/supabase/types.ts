@@ -334,6 +334,7 @@ export type Database = {
           title: string
           updated_at: string
           user_id: string
+          variant_key: string | null
           weekday: number
         }
         Insert: {
@@ -346,6 +347,7 @@ export type Database = {
           title: string
           updated_at?: string
           user_id: string
+          variant_key?: string | null
           weekday: number
         }
         Update: {
@@ -358,6 +360,7 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id?: string
+          variant_key?: string | null
           weekday?: number
         }
         Relationships: [

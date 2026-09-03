@@ -165,6 +165,7 @@ export type RoutineTask = {
   goal_id: string | null;
   subject_id: string | null;
   is_active: boolean;
+  variant_key: string | null;
   created_at: string;
 };
 

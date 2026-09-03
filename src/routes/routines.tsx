@@ -30,6 +30,7 @@ import {
   Play,
   Plus,
   RotateCcw,
+  Shuffle,
   Sparkles,
   Tag,
   Trash2,
@@ -68,6 +69,7 @@ import {
   getRoutine,
   getWeek,
   reorderRoutineTasks,
+  toggleAlternateRoutine,
   toggleRoutineTaskActive,
   updateRoutineTask,
 } from "@/lib/tracker.functions";
@@ -406,6 +408,10 @@ function RoutinesPage() {
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<RoutineTask | null>(null);
+  // When set, the Add modal is creating an ALTERNATE for this routine instead
+  // of a brand-new slot: on save, alternate rows (inactive, sharing a fresh
+  // variant_key) are created for every weekday where the source routine exists.
+  const [alternateSource, setAlternateSource] = useState<RoutineTask | null>(null);
 
   // Copy Weekday Schedule State
   const [isCopyScheduleOpen, setIsCopyScheduleOpen] = useState(false);
@@ -450,6 +456,7 @@ function RoutinesPage() {
   const batchAddFn = useServerFn(batchAddRoutineTasks);
   const deleteFn = useServerFn(deleteRoutineTask);
   const clearFn = useServerFn(clearAllRoutineTasks);
+  const toggleAltFn = useServerFn(toggleAlternateRoutine);
 
   // Queries
   const { data: weekData } = useQuery({
@@ -718,6 +725,16 @@ function RoutinesPage() {
     },
   });
 
+  const toggleAltMutation = useMutation({
+    mutationFn: (vars: { variantKey: string; originalTitle: string; alternateTitle: string }) =>
+      toggleAltFn({ data: { variantKey: vars.variantKey } }),
+    onSuccess: (_, vars) => {
+      invalidate();
+      toast.success(`Swapped "${vars.originalTitle}" ⇄ "${vars.alternateTitle}"`);
+    },
+    onError: () => toast.error("Couldn't switch the alternate routine."),
+  });
+
   const batchAddMutation = useMutation({
     mutationFn: (
       items: Array<{
@@ -726,11 +743,17 @@ function RoutinesPage() {
         goalId?: string | null;
         subjectId?: string | null;
         isActive?: boolean;
+        variantKey?: string | null;
+        sortOrder?: number;
       }>,
     ) => batchAddFn({ data: { items } }),
-    onSuccess: () => {
+    onSuccess: (_, items) => {
       invalidate();
-      toast.success("Routines saved to schedule!");
+      if (items.some((i) => i.variantKey)) {
+        toast.success("Alternate routine saved — press the swap icon to switch");
+      } else {
+        toast.success("Routines saved to schedule!");
+      }
       closeModal();
     },
     onError: () => toast.error("Failed to save routine slots"),
@@ -905,6 +928,38 @@ function RoutinesPage() {
   const closeModal = () => {
     setIsDialogOpen(false);
     setEditingTask(null);
+    setAlternateSource(null);
+  };
+
+  // Open the Add modal in "create alternate" mode for a source routine. The
+  // form is pre-filled from the source (title left blank for the user to name
+  // the alternate) and, on save, one inactive alternate row is created per
+  // weekday where the source exists — all sharing a fresh variant_key.
+  const openAlternateModal = (source: RoutineTask) => {
+    const parsed = parseRoutineTitle(source.title);
+    const sourceClean = parsed.cleanTitle.trim().toLowerCase();
+    // The source's full footprint: every row sharing its clean title.
+    const sourceWeekdays = Array.from(
+      new Set(
+        tasks
+          .filter(
+            (t) =>
+              parseRoutineTitle(t.title).cleanTitle.trim().toLowerCase() === sourceClean,
+          )
+          .map((t) => t.weekday),
+      ),
+    );
+    setEditingTask(null);
+    setAlternateSource(source);
+    setFormTitle("");
+    setFormEmoji(parsed.emoji);
+    setFormCategory(parsed.category);
+    setFormColorKey(parsed.colorKey);
+    setFormTimeSlot(parsed.timeSlot || (allTimeSlots[0] ?? "6:00–7:00 AM"));
+    setFormWeekdays(sourceWeekdays.length > 0 ? sourceWeekdays : [source.weekday]);
+    setFormTaskId(null);
+    setFormIsActive(false);
+    setIsDialogOpen(true);
   };
 
   const handleCategoryChange = (catName: string) => {
@@ -944,6 +999,31 @@ function RoutinesPage() {
         weekday: formWeekdays[0] ?? editingTask.weekday,
         isActive: formIsActive,
       });
+    } else if (alternateSource) {
+      // Alternate creation: one inactive row per selected weekday, all sharing
+      // a fresh variant_key that ties them to the source routine as a pair.
+      const sourceParsed = parseRoutineTitle(alternateSource.title);
+      const sourceClean = sourceParsed.cleanTitle.trim().toLowerCase();
+      const sourceRows = tasks.filter(
+        (t) => parseRoutineTitle(t.title).cleanTitle.trim().toLowerCase() === sourceClean,
+      );
+      const variantKey =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `alt-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const items = formWeekdays.map((wd) => {
+        const srcRow = sourceRows.find((r) => r.weekday === wd);
+        return {
+          weekday: wd,
+          title: fullTitle,
+          isActive: false,
+          variantKey,
+          // Mirror the source's sort_order for this weekday so the alternate
+          // occupies the same position in its cell when swapped in.
+          ...(srcRow ? { sortOrder: srcRow.sort_order } : {}),
+        };
+      });
+      batchAddMutation.mutate(items);
     } else {
       const items = formWeekdays.map((wd) => ({
         weekday: wd,
@@ -1480,6 +1560,7 @@ function RoutinesPage() {
                                     const color =
                                       COLOR_PALETTE[parsed.colorKey] ?? COLOR_PALETTE.slate;
                                     const isThisDragging = draggingTaskId === task.id;
+                                    const variantKey = task.variant_key;
 
                                     return (
                                       <div
@@ -1520,6 +1601,50 @@ function RoutinesPage() {
 
                                           {/* Action icons */}
                                           <div className="flex items-center gap-1">
+                                            {/* Alternate swap — both modes: pressing it
+                                            switches the whole pair to the other variant
+                                            (and back on the next press). */}
+                                            {variantKey && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const other = tasks.find(
+                                                    (t) =>
+                                                      t.variant_key === variantKey &&
+                                                      t.is_active !== task.is_active,
+                                                  );
+                                                  if (!other) return;
+                                                  toggleAltMutation.mutate({
+                                                    variantKey,
+                                                    originalTitle: parsed.cleanTitle,
+                                                    alternateTitle:
+                                                      parseRoutineTitle(other.title).cleanTitle,
+                                                  });
+                                                }}
+                                                aria-label={`Switch alternate for ${parsed.cleanTitle}`}
+                                                title="Switch alternate routine"
+                                                className="text-purple-400 hover:text-purple-300 p-1 -m-0.5 transition-colors"
+                                              >
+                                                <ArrowRightLeft className="h-3 w-3" />
+                                              </button>
+                                            )}
+
+                                            {/* Set Alternate — edit mode only, only for
+                                            routines that don't already have one */}
+                                            {editMode && !variantKey && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  openAlternateModal(task);
+                                                }}
+                                                aria-label={`Set alternate routine for ${parsed.cleanTitle}`}
+                                                title="Set alternate routine"
+                                                className="text-muted-foreground hover:text-purple-400 p-1 -m-0.5 transition-colors"
+                                              >
+                                                <Shuffle className="h-3 w-3" />
+                                              </button>
+                                            )}
+
                                             {/* Reorder within cell — edit mode only */}
                                             {editMode && (
                                               <>
@@ -1602,7 +1727,13 @@ function RoutinesPage() {
 
                                         {/* Status Badge */}
                                         <div className="flex flex-wrap items-center gap-1 text-[11px] mt-0.5">
-                                          {!task.is_active && (
+                                          {!task.is_active && task.variant_key && (
+                                            <span className="inline-flex items-center gap-0.5 text-purple-400 bg-purple-500/10 px-1 py-0.5 rounded border border-purple-500/20 text-[10px] font-semibold">
+                                              <Shuffle className="h-2 w-2" />
+                                              <span>Alternate</span>
+                                            </span>
+                                          )}
+                                          {!task.is_active && !task.variant_key && (
                                             <span className="inline-flex items-center gap-0.5 text-muted-foreground bg-muted/60 px-1 py-0.5 rounded border border-border/50 text-[10px] font-semibold">
                                               <Pause className="h-2 w-2" />
                                               <span>Paused</span>
@@ -1739,10 +1870,12 @@ function RoutinesPage() {
                             className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
                               task.is_active
                                 ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
-                                : "bg-muted text-muted-foreground"
+                                : task.variant_key
+                                  ? "bg-purple-500/20 text-purple-400 border border-purple-500/40"
+                                  : "bg-muted text-muted-foreground"
                             }`}
                           >
-                            {task.is_active ? "Active" : "Paused"}
+                            {task.is_active ? "Active" : task.variant_key ? "Alternate" : "Paused"}
                           </button>
                         </div>
 
@@ -1765,6 +1898,32 @@ function RoutinesPage() {
                         </span>
 
                         <div className="flex items-center gap-1.5">
+                          {/* Alternate swap — both modes */}
+                          {task.variant_key && (
+                            <button
+                              onClick={() => {
+                                const vkey = task.variant_key;
+                                if (!vkey) return;
+                                const other = tasks.find(
+                                  (t) =>
+                                    t.variant_key === task.variant_key &&
+                                    t.is_active !== task.is_active,
+                                );
+                                if (!other) return;
+                                toggleAltMutation.mutate({
+                                  variantKey: vkey,
+                                  originalTitle: parsed.cleanTitle,
+                                  alternateTitle:
+                                    parseRoutineTitle(other.title).cleanTitle,
+                                });
+                              }}
+                              className="flex items-center gap-1 rounded-md bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 text-[11px] text-purple-400 transition-colors"
+                              title="Switch alternate routine"
+                            >
+                              <Shuffle className="h-3 w-3" /> Swap
+                            </button>
+                          )}
+
                           {/* Move Slot Popover — edit mode only */}
                           {editMode && (
                           <MoveRoutineSlotPopover
@@ -1784,6 +1943,13 @@ function RoutinesPage() {
 
                           {editMode && (
                             <>
+                              <button
+                                onClick={() => openAlternateModal(task)}
+                                className="text-muted-foreground hover:text-purple-400 transition-colors p-1"
+                                title="Set alternate routine"
+                              >
+                                <Shuffle className="h-3.5 w-3.5" />
+                              </button>
                               <button
                                 onClick={() => openEditModal(task)}
                                 className="text-muted-foreground hover:text-foreground transition-colors p-1"
@@ -1927,7 +2093,11 @@ function RoutinesPage() {
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                {editingTask ? "Edit Routine Slot" : "Add Routine Slot"}
+                {editingTask
+                  ? "Edit Routine Slot"
+                  : alternateSource
+                    ? "Add Alternate Routine"
+                    : "Add Routine Slot"}
               </h3>
               <button
                 onClick={closeModal}

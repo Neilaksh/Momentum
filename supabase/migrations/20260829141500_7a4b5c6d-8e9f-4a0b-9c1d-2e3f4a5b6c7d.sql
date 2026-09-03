@@ -18,3 +18,8 @@ CREATE INDEX day_tasks_subject_idx ON public.day_tasks(subject_id);
 
 ALTER TABLE public.routine_tasks ADD COLUMN subject_id uuid REFERENCES public.subjects(id) ON DELETE SET NULL;
 CREATE INDEX routine_tasks_subject_idx ON public.routine_tasks(subject_id);
+
+-- Alternate routines: rows sharing a variant_key form an alternate pair/group
+-- (original + alternate); exactly one variant of the pair is active at a time.
+ALTER TABLE public.routine_tasks ADD COLUMN variant_key text;
+CREATE INDEX routine_tasks_variant_idx ON public.routine_tasks(user_id, variant_key);

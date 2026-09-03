@@ -691,6 +691,7 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
         subjectId?: string | null;
         sortOrder?: number;
         isActive?: boolean;
+        variantKey?: string | null;
       }>;
     }) =>
       z
@@ -704,6 +705,7 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
                 subjectId: z.string().nullable().optional(),
                 sortOrder: z.number().optional(),
                 isActive: z.boolean().optional(),
+                variantKey: z.string().min(1).max(100).nullable().optional(),
               }),
             )
             .min(1),
@@ -731,9 +733,52 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
       subject_id: item.subjectId ?? null,
       sort_order: item.sortOrder ?? nextSort++,
       is_active: item.isActive ?? true,
+      variant_key: item.variantKey ?? null,
     }));
     await context.supabase.from("routine_tasks").insert(rows);
     return { ok: true };
+  });
+
+/**
+ * Alternate routines: rows sharing a variant_key form a pair/group (original +
+ * alternate) with exactly one variant active at a time. Toggling flips
+ * is_active on every row of the group, across all weekdays at once.
+ */
+export const toggleAlternateRoutine = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { variantKey: string }) =>
+      z.object({ variantKey: z.string().min(1).max(100) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: rows, error: fetchErr } = await context.supabase
+      .from("routine_tasks")
+      .select("id, is_active")
+      .eq("user_id", context.userId)
+      .eq("variant_key", data.variantKey);
+    if (fetchErr) throw new Error(fetchErr.message);
+    if (!rows || rows.length === 0) return { ok: false };
+
+    // Flip whichever variant is currently active to inactive, and vice versa.
+    const activeIds = rows.filter((r) => r.is_active).map((r) => r.id);
+    const inactiveIds = rows.filter((r) => !r.is_active).map((r) => r.id);
+
+    await Promise.all([
+      activeIds.length > 0 &&
+        context.supabase
+          .from("routine_tasks")
+          .update({ is_active: false })
+          .in("id", activeIds)
+          .eq("user_id", context.userId),
+      inactiveIds.length > 0 &&
+        context.supabase
+          .from("routine_tasks")
+          .update({ is_active: true })
+          .in("id", inactiveIds)
+          .eq("user_id", context.userId),
+    ]);
+
+    return { ok: true, activeVariant: inactiveIds.length > 0 ? "alternate" : "original" };
   });
 
 export const clearAllRoutineTasks = createServerFn({ method: "POST" })
