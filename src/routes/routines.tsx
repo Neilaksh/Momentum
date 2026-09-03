@@ -146,6 +146,7 @@ const EMOJI_PRESETS = [
 
 const STORAGE_CUSTOM_SLOTS_KEY = "momentum_custom_time_slots";
 const STORAGE_CUSTOM_CATS_KEY = "momentum_custom_categories";
+const STORAGE_SLOT_ORDER_KEY = "momentum_slot_order";
 
 /**
  * Move Routine Slot Popover
@@ -370,6 +371,22 @@ function RoutinesPage() {
     return [];
   });
 
+  // Manual time-slot row ordering for the Matrix (localStorage). Slots the user
+  // has explicitly positioned live here; anything else falls back to the
+  // chronological order derived from the slot times.
+  const [slotOrder, setSlotOrder] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(STORAGE_SLOT_ORDER_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
   const [categories, setCategories] = useState<CustomCategory[]>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -467,6 +484,12 @@ function RoutinesPage() {
 
   useEffect(() => {
     try {
+      localStorage.setItem(STORAGE_SLOT_ORDER_KEY, JSON.stringify(slotOrder));
+    } catch {}
+  }, [slotOrder]);
+
+  useEffect(() => {
+    try {
       localStorage.setItem(STORAGE_CUSTOM_CATS_KEY, JSON.stringify(categories));
     } catch {}
   }, [categories]);
@@ -522,6 +545,29 @@ function RoutinesPage() {
       return aStart - bStart || a.localeCompare(b);
     });
   }, [customTimeSlots, tasks]);
+
+  // Matrix row order: the user's manual slot ordering (slotOrder) takes
+  // precedence; slots never explicitly positioned keep their chronological
+  // position after any ordered ones, so nothing disappears when new slots are
+  // added or tasks are moved into a brand-new time slot.
+  const orderedTimeSlots = useMemo(() => {
+    const ordered = slotOrder.filter((s) => allTimeSlots.includes(s));
+    const rest = allTimeSlots.filter((s) => !ordered.includes(s));
+    return [...ordered, ...rest];
+  }, [slotOrder, allTimeSlots]);
+
+  // Swap a time-slot row with its neighbour and persist the full manual order.
+  const moveTimeSlotRow = (slot: string, direction: "up" | "down") => {
+    const list = [...orderedTimeSlots];
+    const index = list.indexOf(slot);
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (index === -1 || targetIndex < 0 || targetIndex >= list.length) return;
+    const moved = list[index]!;
+    const [neighbour] = list.splice(targetIndex, 1, moved);
+    if (!neighbour) return;
+    list[index] = neighbour;
+    setSlotOrder(list);
+  };
 
   // ===================== CALCULATIONS & ANALYTICS =====================
   const analytics = useMemo(() => {
@@ -1033,6 +1079,7 @@ function RoutinesPage() {
     setCustomTimeSlots([]);
     try {
       localStorage.removeItem(STORAGE_CUSTOM_SLOTS_KEY);
+    localStorage.removeItem(STORAGE_SLOT_ORDER_KEY);
     } catch {}
     clearMutation.mutate();
     toast.success("All time slots and routines cleared");
@@ -1345,7 +1392,7 @@ function RoutinesPage() {
                     </tr>
                   ) : (
                     <>
-                      {allTimeSlots.map((timeSlot) => (
+                      {orderedTimeSlots.map((timeSlot, slotIdx) => (
                         <tr key={timeSlot} className="hover:bg-secondary/20 transition-colors">
                           {/* Time Column with hover delete button */}
                           <td className="sticky left-0 z-10 w-32 md:w-44 border-r border-border bg-card/95 py-2.5 px-2 font-mono font-medium text-[11px] text-center text-muted-foreground group/time">
@@ -1354,13 +1401,33 @@ function RoutinesPage() {
                                 {timeSlot.replace(/\s*-\s*/g, "–")}
                               </span>
                               {editMode && (
-                                <button
-                                  onClick={() => handleDeleteTimeSlotRow(timeSlot)}
-                                  className="inline-flex md:hidden md:group-hover/time:inline-flex text-muted-foreground hover:text-destructive p-1.5 -m-1 md:p-0 md:m-0 transition-colors"
-                                  title={`Delete time slot "${timeSlot}"`}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => moveTimeSlotRow(timeSlot, "up")}
+                                    disabled={slotIdx === 0}
+                                    aria-label={`Move time slot ${timeSlot} up`}
+                                    title="Move time slot up"
+                                    className="text-muted-foreground hover:text-foreground disabled:opacity-25 disabled:hover:text-muted-foreground p-0.5 -m-0.5 transition-colors"
+                                  >
+                                    <ChevronUp className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => moveTimeSlotRow(timeSlot, "down")}
+                                    disabled={slotIdx === orderedTimeSlots.length - 1}
+                                    aria-label={`Move time slot ${timeSlot} down`}
+                                    title="Move time slot down"
+                                    className="text-muted-foreground hover:text-foreground disabled:opacity-25 disabled:hover:text-muted-foreground p-0.5 -m-0.5 transition-colors"
+                                  >
+                                    <ChevronDown className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteTimeSlotRow(timeSlot)}
+                                    className="inline-flex md:hidden md:group-hover/time:inline-flex text-muted-foreground hover:text-destructive p-1.5 -m-1 md:p-0 md:m-0 transition-colors"
+                                    title={`Delete time slot "${timeSlot}"`}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </>
                               )}
                             </div>
                             <div className="mt-0.5 text-[10px] text-muted-foreground/40 font-sans">
