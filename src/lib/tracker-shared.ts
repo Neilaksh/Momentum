@@ -165,6 +165,7 @@ export type RoutineTask = {
   goal_id: string | null;
   subject_id: string | null;
   is_active: boolean;
+  week_variant: string;
   created_at: string;
 };
 
@@ -239,6 +240,7 @@ export type Profile = {
   level: number;
   current_streak: number;
   best_streak: number;
+  active_routine_variant?: string;
 };
 
 export type WeekDay = { date: string; weekday: number; tasks: DayTask[] };

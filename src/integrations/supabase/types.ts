@@ -286,6 +286,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          active_routine_variant: string
           best_streak: number
           created_at: string
           current_streak: number
@@ -298,6 +299,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          active_routine_variant?: string
           best_streak?: number
           created_at?: string
           current_streak?: number
@@ -310,6 +312,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          active_routine_variant?: string
           best_streak?: number
           created_at?: string
           current_streak?: number
@@ -334,6 +337,7 @@ export type Database = {
           title: string
           updated_at: string
           user_id: string
+          week_variant: string
           weekday: number
         }
         Insert: {
@@ -346,6 +350,7 @@ export type Database = {
           title: string
           updated_at?: string
           user_id: string
+          week_variant?: string
           weekday: number
         }
         Update: {
@@ -358,6 +363,7 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id?: string
+          week_variant?: string
           weekday?: number
         }
         Relationships: [

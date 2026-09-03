@@ -90,6 +90,7 @@ const schema = {
     user_id: ["uuid", false, false],
   },
   profiles: {
+    active_routine_variant: ["text", false, true],
     best_streak: ["integer", false, true],
     created_at: ["timestamptz", false, true],
     current_streak: ["integer", false, true],
@@ -111,6 +112,7 @@ const schema = {
     title: ["text", false, false],
     updated_at: ["timestamptz", false, true],
     user_id: ["uuid", false, false],
+    week_variant: ["text", false, true],
     weekday: ["smallint", false, false],
   },
   subjects: {

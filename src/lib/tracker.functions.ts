@@ -480,22 +480,30 @@ export const getGoalWeeklyProgress = createServerFn({ method: "GET" })
 export const copyWeekdayRoutines = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: { sourceWeekday: number; targetWeekday: number; overwriteTarget?: boolean }) =>
+    (input: {
+      sourceWeekday: number;
+      targetWeekday: number;
+      overwriteTarget?: boolean;
+      variant?: string;
+    }) =>
       z
         .object({
           sourceWeekday: z.number().int().min(0).max(6),
           targetWeekday: z.number().int().min(0).max(6),
           overwriteTarget: z.boolean().optional(),
+          variant: z.string().optional(),
         })
         .parse(input),
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
+    const variant = data.variant ?? "primary";
     const { data: sourceTasks, error: srcErr } = await supabase
       .from("routine_tasks")
       .select("*")
       .eq("user_id", context.userId)
       .eq("weekday", data.sourceWeekday)
+      .eq("week_variant", variant)
       // Deterministic source order so clones get stable (i + 1) * 10 sort
       // values that mirror the source day's layout across all weekdays.
       .order("sort_order", { ascending: true })
@@ -512,7 +520,8 @@ export const copyWeekdayRoutines = createServerFn({ method: "POST" })
         .from("routine_tasks")
         .delete()
         .eq("user_id", context.userId)
-        .eq("weekday", data.targetWeekday);
+        .eq("weekday", data.targetWeekday)
+        .eq("week_variant", variant);
     }
 
     const clones = sourceTasks.map((t, i) => ({
@@ -523,6 +532,7 @@ export const copyWeekdayRoutines = createServerFn({ method: "POST" })
       goal_id: t.goal_id,
       subject_id: t.subject_id,
       is_active: t.is_active,
+      week_variant: variant,
     }));
 
     const { error: insErr } = await supabase.from("routine_tasks").insert(clones);
@@ -535,24 +545,28 @@ export const copyWeekdayRoutines = createServerFn({ method: "POST" })
 export const reorderRoutineTasks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: { orderedIds: string[] }) =>
+    (input: { orderedIds: string[]; variant?: string }) =>
       z
         .object({
           orderedIds: z.array(z.string().uuid()).min(1),
+          variant: z.string().optional(),
         })
         .parse(input),
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
+    const variant = data.variant ?? "primary";
 
     // Fetch the referenced rows to learn which logical tasks (by clean title)
-    // they correspond to. Reordering is title-based and GLOBAL: routine tasks
-    // are separate rows per weekday, so a manual order must be written to every
-    // weekday's row for the same task to keep all days rendering identically.
+    // they correspond to. Reordering is title-based and GLOBAL within a single
+    // week_variant: routine tasks are separate rows per weekday, so a manual
+    // order must be written to every weekday's row for the same task to keep
+    // all days rendering identically.
     const { data: rows, error: fetchErr } = await supabase
       .from("routine_tasks")
       .select("id, title")
       .eq("user_id", context.userId)
+      .eq("week_variant", variant)
       .in("id", data.orderedIds);
     if (fetchErr) throw new Error(fetchErr.message);
 
@@ -582,7 +596,8 @@ export const reorderRoutineTasks = createServerFn({ method: "POST" })
     const { data: allRows, error: allErr } = await supabase
       .from("routine_tasks")
       .select("id, title")
-      .eq("user_id", context.userId);
+      .eq("user_id", context.userId)
+      .eq("week_variant", variant);
     if (allErr) throw new Error(allErr.message);
 
     await Promise.all(
@@ -603,15 +618,38 @@ export const reorderRoutineTasks = createServerFn({ method: "POST" })
 export const getRoutine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    // The currently-viewed week (primary/alternate), stored on the profile so
+    // the active variant syncs across devices.
+    const { data: profile } = await context.supabase
+      .from("profiles")
+      .select("active_routine_variant")
+      .eq("id", context.userId)
+      .maybeSingle();
+    const activeVariant = profile?.active_routine_variant ?? "primary";
+
     const { data } = await context.supabase
       .from("routine_tasks")
       .select("*")
       .eq("user_id", context.userId)
+      .eq("week_variant", activeVariant)
       .order("weekday", { ascending: true })
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
-    return { tasks: data ?? [] };
+    return { tasks: data ?? [], activeVariant };
+  });
+
+export const setActiveRoutineVariant = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { variant: string }) =>
+    z.object({ variant: z.enum(["primary", "alternate"]) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await context.supabase
+      .from("profiles")
+      .update({ active_routine_variant: data.variant })
+      .eq("id", context.userId);
+    return { activeVariant: data.variant };
   });
 
 export const deleteRoutineTask = createServerFn({ method: "POST" })
@@ -692,6 +730,7 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
         sortOrder?: number;
         isActive?: boolean;
       }>;
+      variant?: string;
     }) =>
       z
         .object({
@@ -707,6 +746,7 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
               }),
             )
             .min(1),
+          variant: z.enum(["primary", "alternate"]).optional(),
         })
         .parse(input),
   )
@@ -714,10 +754,12 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
     // New tasks append at the END of their cell (max sort_order + 10) instead
     // of tying everything at 0, so user-defined order is never reshuffled by
     // alphabetical or creation-order fallbacks.
+    const variant = data.variant ?? "primary";
     const { data: maxRow } = await context.supabase
       .from("routine_tasks")
       .select("sort_order")
       .eq("user_id", context.userId)
+      .eq("week_variant", variant)
       .order("sort_order", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -731,6 +773,7 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
       subject_id: item.subjectId ?? null,
       sort_order: item.sortOrder ?? nextSort++,
       is_active: item.isActive ?? true,
+      week_variant: variant,
     }));
     await context.supabase.from("routine_tasks").insert(rows);
     return { ok: true };
@@ -738,8 +781,16 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
 
 export const clearAllRoutineTasks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await context.supabase.from("routine_tasks").delete().eq("user_id", context.userId);
+  .inputValidator((input: { variant?: string }) =>
+    z.object({ variant: z.enum(["primary", "alternate"]).optional() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const variant = data.variant ?? "primary";
+    await context.supabase
+      .from("routine_tasks")
+      .delete()
+      .eq("user_id", context.userId)
+      .eq("week_variant", variant);
     return { ok: true };
   });
 
@@ -1015,6 +1066,14 @@ export const getGoals = createServerFn({ method: "POST" })
     // Automatically rollover uncompleted goal tasks to today
     await rolloverIncompleteGoalTasks(supabase, context.userId);
 
+    // Which weekly routine (primary/alternate) should drive goal progress.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("active_routine_variant")
+      .eq("id", context.userId)
+      .maybeSingle();
+    const activeVariant = profile?.active_routine_variant ?? "primary";
+
     const { data: goals } = await supabase
       .from("goals")
       .select("*")
@@ -1068,6 +1127,7 @@ export const getGoals = createServerFn({ method: "POST" })
       .from("routine_tasks")
       .select("*")
       .eq("user_id", context.userId)
+      .eq("week_variant", activeVariant)
       .not("goal_id", "is", null)
       .eq("is_active", true);
 

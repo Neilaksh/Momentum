@@ -30,6 +30,7 @@ import {
   Play,
   Plus,
   RotateCcw,
+  Shuffle,
   Sparkles,
   Tag,
   Trash2,
@@ -68,6 +69,7 @@ import {
   getRoutine,
   getWeek,
   reorderRoutineTasks,
+  setActiveRoutineVariant,
   toggleRoutineTaskActive,
   updateRoutineTask,
 } from "@/lib/tracker.functions";
@@ -147,6 +149,17 @@ const EMOJI_PRESETS = [
 const STORAGE_CUSTOM_SLOTS_KEY = "momentum_custom_time_slots";
 const STORAGE_CUSTOM_CATS_KEY = "momentum_custom_categories";
 const STORAGE_SLOT_ORDER_KEY = "momentum_slot_order";
+
+// Each weekly routine ("primary" | "alternate") keeps its own time-slot rows,
+// categories, and manual slot ordering. Keys are suffixed per variant, so
+// switching weeks swaps the whole grid. For the primary we fall back to the
+// legacy unsuffixed key so existing users keep their current setup.
+const slotsKeyFor = (v: string) =>
+  v === "primary" ? STORAGE_CUSTOM_SLOTS_KEY : `${STORAGE_CUSTOM_SLOTS_KEY}_${v}`;
+const catsKeyFor = (v: string) =>
+  v === "primary" ? STORAGE_CUSTOM_CATS_KEY : `${STORAGE_CUSTOM_CATS_KEY}_${v}`;
+const slotOrderKeyFor = (v: string) =>
+  v === "primary" ? STORAGE_SLOT_ORDER_KEY : `${STORAGE_SLOT_ORDER_KEY}_${v}`;
 
 /**
  * Move Routine Slot Popover
@@ -450,6 +463,7 @@ function RoutinesPage() {
   const batchAddFn = useServerFn(batchAddRoutineTasks);
   const deleteFn = useServerFn(deleteRoutineTask);
   const clearFn = useServerFn(clearAllRoutineTasks);
+  const setVariantFn = useServerFn(setActiveRoutineVariant);
 
   // Queries
   const { data: weekData } = useQuery({
@@ -463,6 +477,10 @@ function RoutinesPage() {
   });
 
   const tasks = (routineData?.tasks ?? []) as RoutineTask[];
+  // Which weekly routine (primary/alternate) is currently being viewed/edited.
+  // Sourced from the server so the active week stays in sync across devices.
+  const activeVariant = (routineData?.activeVariant ?? "primary") as "primary" | "alternate";
+
   const existingTasks = useMemo(() => {
     const list: Array<{ id: string; title: string }> = [];
     for (const day of weekData?.days ?? []) {
@@ -475,24 +493,49 @@ function RoutinesPage() {
     return list;
   }, [weekData]);
 
-  // Persist custom time slots & categories
+  // When the active week changes, reload THAT week's slots/categories/order so
+  // each weekly routine renders its own independent grid. A fresh alternate
+  // falls back to just the default categories (a blank slate).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = localStorage.getItem(slotsKeyFor(activeVariant));
+      setCustomTimeSlots(saved ? (JSON.parse(saved) as string[]) : []);
+    } catch {
+      setCustomTimeSlots([]);
+    }
+    try {
+      const saved = localStorage.getItem(slotOrderKeyFor(activeVariant));
+      setSlotOrder(saved ? (JSON.parse(saved) as string[]) : []);
+    } catch {
+      setSlotOrder([]);
+    }
+    try {
+      const saved = localStorage.getItem(catsKeyFor(activeVariant));
+      setCategories(saved ? (JSON.parse(saved) as CustomCategory[]) : [...DEFAULT_CATEGORIES]);
+    } catch {
+      setCategories([...DEFAULT_CATEGORIES]);
+    }
+  }, [activeVariant]);
+
+  // Persist custom time slots & categories (per active week)
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_CUSTOM_SLOTS_KEY, JSON.stringify(customTimeSlots));
+      localStorage.setItem(slotsKeyFor(activeVariant), JSON.stringify(customTimeSlots));
     } catch {}
-  }, [customTimeSlots]);
+  }, [customTimeSlots, activeVariant]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_SLOT_ORDER_KEY, JSON.stringify(slotOrder));
+      localStorage.setItem(slotOrderKeyFor(activeVariant), JSON.stringify(slotOrder));
     } catch {}
-  }, [slotOrder]);
+  }, [slotOrder, activeVariant]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_CUSTOM_CATS_KEY, JSON.stringify(categories));
+      localStorage.setItem(catsKeyFor(activeVariant), JSON.stringify(categories));
     } catch {}
-  }, [categories]);
+  }, [categories, activeVariant]);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["routine"] });
@@ -686,7 +729,8 @@ function RoutinesPage() {
 
   const reorderFn = useServerFn(reorderRoutineTasks);
   const reorderMutation = useMutation({
-    mutationFn: (vars: { orderedIds: string[] }) => reorderFn({ data: vars }),
+    mutationFn: (vars: { orderedIds: string[]; variant?: string }) =>
+      reorderFn({ data: { orderedIds: vars.orderedIds, variant: vars.variant ?? activeVariant } }),
     onSuccess: invalidate,
     onError: () => {
       invalidate();
@@ -728,7 +772,7 @@ function RoutinesPage() {
         isActive?: boolean;
         sortOrder?: number;
       }>,
-    ) => batchAddFn({ data: { items } }),
+    ) => batchAddFn({ data: { items, variant: activeVariant } }),
     onSuccess: () => {
       invalidate();
       toast.success("Routines saved to schedule!");
@@ -746,7 +790,7 @@ function RoutinesPage() {
   });
 
   const clearMutation = useMutation({
-    mutationFn: () => clearFn(),
+    mutationFn: () => clearFn({ data: { variant: activeVariant } }),
     onSuccess: () => {
       invalidate();
       toast.success("Schedule cleared");
@@ -759,7 +803,7 @@ function RoutinesPage() {
       sourceWeekday: number;
       targetWeekday: number;
       overwriteTarget?: boolean;
-    }) => copyWeekdayFn({ data: vars }),
+    }) => copyWeekdayFn({ data: { ...vars, variant: activeVariant } }),
     onSuccess: (res) => {
       invalidate();
       toast.success(`Copied ${res.copiedCount} routine slot(s)!`);
@@ -768,6 +812,19 @@ function RoutinesPage() {
     onError: (err: any) => {
       toast.error(err?.message || "Failed to copy routine schedule");
     },
+  });
+
+  const switchVariantMutation = useMutation({
+    mutationFn: (variant: "primary" | "alternate") => setVariantFn({ data: { variant } }),
+    onSuccess: () => {
+      invalidate();
+      toast.success(
+        activeVariant === "primary"
+          ? "Switched to Alternate Routine (blank slate)."
+          : "Switched back to Primary Routine.",
+      );
+    },
+    onError: () => toast.error("Couldn't switch routine."),
   });
 
   // Export Routine JSON
@@ -828,7 +885,7 @@ function RoutinesPage() {
         const mergedSlots = Array.from(new Set([...customTimeSlots, ...parsed.customTimeSlots]));
         setCustomTimeSlots(mergedSlots);
         try {
-          localStorage.setItem(STORAGE_CUSTOM_SLOTS_KEY, JSON.stringify(mergedSlots));
+          localStorage.setItem(slotsKeyFor(activeVariant), JSON.stringify(mergedSlots));
         } catch {}
       }
 
@@ -862,10 +919,10 @@ function RoutinesPage() {
       }
 
       if (importOverwrite) {
-        await clearFn();
+        await clearFn({ data: { variant: activeVariant } });
       }
 
-      await batchAddFn({ data: { items: formattedItems } });
+      await batchAddFn({ data: { items: formattedItems, variant: activeVariant } });
       invalidate();
       setIsImportOpen(false);
       setImportJsonText("");
@@ -1079,8 +1136,8 @@ function RoutinesPage() {
   const doClearAllSlots = () => {
     setCustomTimeSlots([]);
     try {
-      localStorage.removeItem(STORAGE_CUSTOM_SLOTS_KEY);
-    localStorage.removeItem(STORAGE_SLOT_ORDER_KEY);
+      localStorage.removeItem(slotsKeyFor(activeVariant));
+    localStorage.removeItem(slotOrderKeyFor(activeVariant));
     } catch {}
     clearMutation.mutate();
     toast.success("All time slots and routines cleared");
@@ -1140,6 +1197,18 @@ function RoutinesPage() {
             <h1 className="text-3xl font-semibold tracking-tight">
               My Daily Routine <span className="text-muted-foreground">— Weekly Schedule</span>
             </h1>
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
+                  activeVariant === "primary"
+                    ? "bg-emerald-500/15 text-emerald-400"
+                    : "bg-purple-500/15 text-purple-400"
+                }`}
+              >
+                <Shuffle className="h-3 w-3" />
+                {activeVariant === "primary" ? "Primary Week" : "Alternate Week"}
+              </span>
+            </div>
             <p className="text-sm text-muted-foreground">
               Fully editable time-blocked timetable with custom time slots, custom categories, habit
               & goal integrations.
@@ -1192,6 +1261,22 @@ function RoutinesPage() {
 
             <Button size="sm" className="gap-1.5" onClick={() => openAddModal()}>
               <Plus className="h-4 w-4" /> Add Routine Slot
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              disabled={switchVariantMutation.isPending}
+              onClick={() =>
+                switchVariantMutation.mutate(
+                  activeVariant === "primary" ? "alternate" : "primary",
+                )
+              }
+              title="Switch between your Primary and Alternate weekly routines"
+            >
+              <Shuffle className="h-4 w-4 text-purple-400" />{" "}
+              {activeVariant === "primary" ? "Alternate Routine" : "Primary Routine"}
             </Button>
           </div>
         </div>
