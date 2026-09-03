@@ -1601,10 +1601,12 @@ function RoutinesPage() {
 
                                           {/* Action icons */}
                                           <div className="flex items-center gap-1">
-                                            {/* Alternate swap — both modes: pressing it
-                                            switches the whole pair to the other variant
-                                            (and back on the next press). */}
-                                            {variantKey && (
+                                            {/* Unified Alternate button — both modes:
+                                            no alternate yet → opens the alternate
+                                            modal (original stays saved); alternate
+                                            exists → swaps to it (and back on the
+                                            next press). */}
+                                            {variantKey ? (
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
@@ -1627,18 +1629,14 @@ function RoutinesPage() {
                                               >
                                                 <ArrowRightLeft className="h-3 w-3" />
                                               </button>
-                                            )}
-
-                                            {/* Set Alternate — edit mode only, only for
-                                            routines that don't already have one */}
-                                            {editMode && !variantKey && (
+                                            ) : (
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   openAlternateModal(task);
                                                 }}
                                                 aria-label={`Set alternate routine for ${parsed.cleanTitle}`}
-                                                title="Set alternate routine"
+                                                title="Alternate routine…"
                                                 className="text-muted-foreground hover:text-purple-400 p-1 -m-0.5 transition-colors"
                                               >
                                                 <Shuffle className="h-3 w-3" />
@@ -1898,15 +1896,16 @@ function RoutinesPage() {
                         </span>
 
                         <div className="flex items-center gap-1.5">
-                          {/* Alternate swap — both modes */}
-                          {task.variant_key && (
+                          {/* Unified Alternate button — both modes: opens the
+                          alternate modal when none exists, swaps once it does. */}
+                          {task.variant_key ? (
                             <button
                               onClick={() => {
                                 const vkey = task.variant_key;
                                 if (!vkey) return;
                                 const other = tasks.find(
                                   (t) =>
-                                    t.variant_key === task.variant_key &&
+                                    t.variant_key === vkey &&
                                     t.is_active !== task.is_active,
                                 );
                                 if (!other) return;
@@ -1921,6 +1920,14 @@ function RoutinesPage() {
                               title="Switch alternate routine"
                             >
                               <Shuffle className="h-3 w-3" /> Swap
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => openAlternateModal(task)}
+                              className="flex items-center gap-1 rounded-md bg-secondary/60 hover:bg-secondary px-2 py-1 text-[11px] text-muted-foreground hover:text-purple-400 transition-colors"
+                              title="Alternate routine…"
+                            >
+                              <Shuffle className="h-3 w-3" /> Alternate
                             </button>
                           )}
 
@@ -1943,13 +1950,6 @@ function RoutinesPage() {
 
                           {editMode && (
                             <>
-                              <button
-                                onClick={() => openAlternateModal(task)}
-                                className="text-muted-foreground hover:text-purple-400 transition-colors p-1"
-                                title="Set alternate routine"
-                              >
-                                <Shuffle className="h-3.5 w-3.5" />
-                              </button>
                               <button
                                 onClick={() => openEditModal(task)}
                                 className="text-muted-foreground hover:text-foreground transition-colors p-1"
