@@ -18,6 +18,7 @@ import {
   ChevronUp,
   Circle,
   FileText,
+  MoreHorizontal,
   Pencil,
   Plus,
   Sparkles,
@@ -44,6 +45,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
