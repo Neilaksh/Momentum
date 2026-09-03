@@ -424,7 +424,7 @@ function GoalsPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
         {/* New Goal Form */}
         <form
-          className="h-fit space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm"
+          className="h-fit space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5"
           onSubmit={(e) => {
             e.preventDefault();
             if (!title.trim()) return;
@@ -525,7 +525,7 @@ function GoalsPage() {
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Sort Goals By:
               </span>
-              <div className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 p-1 text-xs">
+              <div className="flex w-full items-center gap-1 overflow-x-auto rounded-lg border border-border bg-secondary/40 p-1 text-xs [scrollbar-width:none] sm:w-auto [&::-webkit-scrollbar]:hidden">
                 {[
                   { id: "default", label: "Default" },
                   { id: "priority", label: "🔴 Priority" },
@@ -535,7 +535,7 @@ function GoalsPage() {
                   <button
                     key={s.id}
                     onClick={() => setSortBy(s.id as any)}
-                    className={`rounded-md px-2.5 py-1 transition-colors ${
+                    className={`whitespace-nowrap rounded-md px-2.5 py-1 transition-colors ${
                       sortBy === s.id
                         ? "bg-card font-medium text-foreground shadow-xs"
                         : "text-muted-foreground hover:text-foreground"

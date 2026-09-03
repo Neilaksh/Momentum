@@ -512,7 +512,7 @@ function UnifiedTasksPage() {
       {/* Top Analytics Row: Dedicated Day Pie Chart (Left) + Week Overview Chart (Right) */}
       <div className="mt-6 grid gap-6 lg:grid-cols-[340px_1fr]">
         {/* Left: Selected Day Pie Chart & XP Breakdown */}
-        <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
@@ -562,7 +562,7 @@ function UnifiedTasksPage() {
         </section>
 
         {/* Right: Week Overview Visual Chart */}
-        <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-4">
               <div>
@@ -700,7 +700,7 @@ function UnifiedTasksPage() {
       </div>
 
       {/* Focused Day Task Management Panel */}
-      <section ref={focusPanelRef} className="mt-6 scroll-mt-20 rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <section ref={focusPanelRef} className="mt-6 scroll-mt-20 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
           <div>
             <div className="flex items-center gap-2">
@@ -836,7 +836,12 @@ function UnifiedTasksPage() {
                       : "border-border/80 bg-secondary/40 hover:border-primary/50"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  {/* Mobile: the row splits into a title line + a meta/actions
+                      line so nothing overflows the card. md+: contents wrappers
+                      dissolve and every element sits in the original single
+                      flex row — desktop layout is pixel-identical. */}
+                  <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                     <button
                       disabled={goalLocked || isActiveDayPast}
                       onClick={() => toggle.mutate({ id: t.id, completed: !t.completed_at })}
@@ -918,6 +923,11 @@ function UnifiedTasksPage() {
                       </span>
                     )}
 
+                    </div>
+
+                    {/* Mobile second line: badges left, actions right. */}
+                    <div className="flex flex-wrap items-center gap-1.5 md:contents">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:contents">
                     {t.subject_id && subjectsMap.get(t.subject_id) && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                         <span
@@ -935,6 +945,8 @@ function UnifiedTasksPage() {
                       </span>
                     )}
 
+                    </div>
+                    <div className="ml-auto flex items-center gap-0.5 md:contents">
                     {!isActiveDayPast && filteredActiveTasks.length > 1 && (
                       <div className="flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <button
@@ -1085,6 +1097,8 @@ function UnifiedTasksPage() {
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
+                    </div>
+                  </div>
                   </div>
 
                   {/* Task note preview if not expanded */}
