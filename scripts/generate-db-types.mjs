@@ -33,6 +33,7 @@ const schema = {
     id: ["uuid", false, true],
     is_stale: ["boolean", false, true],
     progress_pct: ["integer", false, true],
+    priority: ["text", true, false],
     rollover_count: ["integer", false, true],
     routine_task_id: ["uuid", true, false],
     sort_order: ["integer", false, true],

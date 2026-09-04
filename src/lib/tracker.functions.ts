@@ -21,6 +21,7 @@ import {
   toISODate,
   type GoalHabitSnapshot,
   type GoalHabitStat,
+  type GoalPriority,
   type GoalProgress,
 } from "./tracker-shared";
 import { parseHabitTitle } from "./habits-shared";
@@ -208,13 +209,20 @@ export const updateDayTaskDescription = createServerFn({ method: "POST" })
 export const addDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: { date: string; title: string; goalId?: string | null; subjectId?: string | null }) =>
+    (input: {
+      date: string;
+      title: string;
+      goalId?: string | null;
+      subjectId?: string | null;
+      priority?: GoalPriority | null;
+    }) =>
       z
         .object({
           date: z.string(),
           title: z.string().min(1).max(200),
           goalId: z.string().nullable().optional(),
           subjectId: z.string().nullable().optional(),
+          priority: z.enum(["High", "Med", "Low"]).nullable().optional(),
         })
         .parse(input),
   )
@@ -246,11 +254,66 @@ export const addDayTask = createServerFn({ method: "POST" })
         source: "oneoff",
         goal_id: data.goalId ?? null,
         subject_id: data.subjectId ?? null,
+        priority: data.priority ?? null,
         sort_order: 1000,
       })
       .select("*")
       .maybeSingle();
     return { task: row };
+  });
+
+/**
+ * Set (or clear) a day task's priority — the task-section counterpart of the
+ * goal priority selector. Priority is plain metadata, NOT identity-bearing
+ * (unlike the title, which keys rollover chains and dedupe), so this updates
+ * the visible row only; future rollover copies inherit it via the carry-forward
+ * pass in tracker.server.ts.
+ */
+export const setDayTaskPriority = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; priority: GoalPriority | null }) =>
+    z
+      .object({ id: z.string().uuid(), priority: z.enum(["High", "Med", "Low"]).nullable() })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+
+    const { data: taskRow } = await supabase
+      .from("day_tasks")
+      .select("id, goal_id, task_date")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!taskRow) throw new Error("Task not found.");
+
+    // Past-day tasks are locked: history is read-only. (Mirrors toggleDayTask /
+    // renameDayTask — the UI hides the edit control; this is the server backstop.)
+    if (taskRow.task_date && taskRow.task_date < toISODate(new Date())) {
+      throw new Error("Tasks from past days are locked and cannot be changed.");
+    }
+
+    // Completed-goal tasks are locked as well — their frozen rollover history
+    // must never be modified. (Mirrors toggleDayTask / renameDayTask.)
+    if (taskRow.goal_id) {
+      const { data: goalRow } = await supabase
+        .from("goals")
+        .select("status")
+        .eq("id", taskRow.goal_id)
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if (goalRow?.status === "completed") {
+        throw new Error("This task belongs to a completed goal and is locked.");
+      }
+    }
+
+    const { error } = await supabase
+      .from("day_tasks")
+      .update({ priority: data.priority })
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return { success: true };
   });
 
 export const deleteDayTask = createServerFn({ method: "POST" })

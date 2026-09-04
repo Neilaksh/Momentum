@@ -53,7 +53,7 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
 
   const { data } = await supabase
     .from("day_tasks")
-    .select("id, task_date, title, description, source, sort_order, routine_task_id, goal_id, subject_id, completed_at, progress_pct, rollover_count, is_stale")
+    .select("id, task_date, title, description, source, sort_order, routine_task_id, goal_id, subject_id, priority, completed_at, progress_pct, rollover_count, is_stale")
     .eq("user_id", userId)
     .lte("task_date", todayISO);
 
@@ -162,6 +162,7 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
       routine_task_id: t.routine_task_id ?? null,
       goal_id: t.goal_id ?? null,
       subject_id: t.subject_id ?? null,
+      priority: t.priority ?? null,
       progress_pct: t.progress_pct ?? 0,
       rollover_count: newCount,
     });

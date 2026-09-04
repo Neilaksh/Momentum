@@ -23,6 +23,7 @@ export type Database = {
           id: string
           is_stale: boolean
           progress_pct: number
+          priority: string | null
           rollover_count: number
           routine_task_id: string | null
           sort_order: number
@@ -41,6 +42,7 @@ export type Database = {
           id?: string
           is_stale?: boolean
           progress_pct?: number
+          priority?: string | null
           rollover_count?: number
           routine_task_id?: string | null
           sort_order?: number
@@ -59,6 +61,7 @@ export type Database = {
           id?: string
           is_stale?: boolean
           progress_pct?: number
+          priority?: string | null
           rollover_count?: number
           routine_task_id?: string | null
           sort_order?: number

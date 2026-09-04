@@ -70,6 +70,7 @@ import {
   rescheduleDayTask,
   toggleDayTask,
   updateDayTaskDescription,
+  setDayTaskPriority,
 } from "@/lib/tracker.functions";
 import { getSubjects } from "@/lib/subjects.functions";
 import { subjectColorHex, type Subject } from "@/lib/subjects-shared";
@@ -89,6 +90,7 @@ import {
   pctComplete,
   startOfWeek,
   toISODate,
+  type GoalPriority,
   type WeekData,
 } from "@/lib/tracker-shared";
 import type { Database } from "@/integrations/supabase/types";
@@ -216,18 +218,41 @@ function UnifiedTasksPage() {
   });
 
   // Inline title editing (pencil icon → small modal). The server fn renames the
-  // whole rollover chain, not just the visible row.
-  const [renamingTask, setRenamingTask] = useState<{ id: string; title: string } | null>(null);
+  // whole rollover chain, not just the visible row. Priority is plain metadata
+  // (NOT identity-bearing like the title), so it's written to the visible row
+  // only — future rollover copies inherit it via the carry-forward pass.
+  const [renamingTask, setRenamingTask] = useState<{
+    id: string;
+    title: string;
+    priority: GoalPriority | null;
+  } | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  const [renamePriority, setRenamePriority] = useState<GoalPriority | null>(null);
   const renameFn = useServerFn(renameDayTask);
+  const setPriorityFn = useServerFn(setDayTaskPriority);
   const renameTask = useMutation({
-    mutationFn: (v: { id: string; title: string }) => renameFn({ data: v }),
+    mutationFn: async (v: { id: string; title: string; priority?: GoalPriority | null }) => {
+      const res = await renameFn({ data: { id: v.id, title: v.title } });
+      if (v.priority !== undefined) {
+        await setPriorityFn({ data: { id: v.id, priority: v.priority } });
+      }
+      return res;
+    },
     onSuccess: (_res, v) => {
       invalidate();
       setRenamingTask(null);
       toast.success(`Renamed to “${v.title.trim()}”`);
     },
     onError: () => toast.error("Couldn't rename task — try again."),
+  });
+  const setTaskPriority = useMutation({
+    mutationFn: (v: { id: string; priority: GoalPriority | null }) => setPriorityFn({ data: v }),
+    onSuccess: () => {
+      invalidate();
+      setRenamingTask(null);
+      toast.success("Priority updated");
+    },
+    onError: () => toast.error("Couldn't update priority — try again."),
   });
 
   const updateDescription = useMutation({
@@ -291,19 +316,26 @@ function UnifiedTasksPage() {
     });
   };
 
-  const startRenaming = (t: { id: string; title: string }) => {
-    setRenamingTask({ id: t.id, title: t.title });
+  const startRenaming = (t: { id: string; title: string; priority?: string | null }) => {
+    const p = (t.priority ?? null) as GoalPriority | null;
+    setRenamingTask({ id: t.id, title: t.title, priority: p });
     setRenameDraft(t.title);
+    setRenamePriority(p);
   };
 
   const submitRename = () => {
     if (!renamingTask) return;
     const title = renameDraft.trim();
-    if (!title || title === renamingTask.title.trim()) {
+    const priorityChanged = renamePriority !== (renamingTask.priority ?? null);
+    if ((!title || title === renamingTask.title.trim()) && !priorityChanged) {
       setRenamingTask(null);
       return;
     }
-    renameTask.mutate({ id: renamingTask.id, title });
+    if (title && title !== renamingTask.title.trim()) {
+      renameTask.mutate({ id: renamingTask.id, title, priority: renamePriority });
+    } else {
+      setTaskPriority.mutate({ id: renamingTask.id, priority: renamePriority });
+    }
   };
 
   const fetchGoals = useServerFn(getGoals);
@@ -948,6 +980,27 @@ function UnifiedTasksPage() {
                       </span>
                     )}
 
+                    {t.priority && (
+                      <span
+                        title={
+                          t.priority === "High"
+                            ? "High priority task"
+                            : t.priority === "Med"
+                              ? "Medium priority task"
+                              : "Low priority task"
+                        }
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
+                          t.priority === "High"
+                            ? "bg-red-500/15 text-red-400 border-red-500/30"
+                            : t.priority === "Med"
+                              ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                              : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        }`}
+                      >
+                        {t.priority === "High" ? "🔴 High" : t.priority === "Med" ? "🟡 Med" : "🟢 Low"}
+                      </span>
+                    )}
+
                     </div>
                     <div className="ml-auto flex items-center gap-0.5 md:contents">
                     {!isActiveDayPast && filteredActiveTasks.length > 1 && (
@@ -1330,12 +1383,40 @@ function UnifiedTasksPage() {
             autoFocus
             className="h-9 text-sm"
           />
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-muted-foreground">Priority</label>
+            <div className="grid grid-cols-4 gap-1">
+              {[
+                { val: null, label: "None" },
+                { val: "Low" as const, label: "🟢 Low" },
+                { val: "Med" as const, label: "🟡 Med" },
+                { val: "High" as const, label: "🔴 High" },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => setRenamePriority(opt.val)}
+                  className={`rounded-md py-1 text-xs font-medium border transition-colors ${
+                    renamePriority === opt.val
+                      ? "border-primary bg-primary/20 text-foreground"
+                      : "border-border/60 bg-secondary/30 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setRenamingTask(null)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={submitRename} disabled={!renameDraft.trim() || renameTask.isPending}>
-              {renameTask.isPending ? "Saving…" : "Save"}
+            <Button
+              size="sm"
+              onClick={submitRename}
+              disabled={!renameDraft.trim() || renameTask.isPending || setTaskPriority.isPending}
+            >
+              {renameTask.isPending || setTaskPriority.isPending ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
