@@ -83,6 +83,7 @@ import {
   formatMinutes,
   formatTaskDescription,
   parseISODate,
+  parseGoalTitle,
   parseRoutineTitle,
   parseTaskDescription,
   pctComplete,
@@ -314,7 +315,9 @@ function UnifiedTasksPage() {
   const goalsMap = useMemo(() => {
     const map = new Map<string, { id: string; title: string; status?: string | null }>();
     for (const g of goalsData?.goals ?? []) {
-      map.set(g.id, g);
+      // Goal titles store an encoded priority prefix "[p:High] ..." — show the
+      // clean title on the Tasks tab (priority is surfaced on the Goals tab).
+      map.set(g.id, { ...g, title: parseGoalTitle(g.title).cleanTitle });
     }
     return map;
   }, [goalsData]);

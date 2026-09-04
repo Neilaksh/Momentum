@@ -1036,7 +1036,7 @@ function GoalCard({
               {/* Delete with confirm */}
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                aria-label={`Delete ${goal.title}`}
+                aria-label={`Delete ${parsedGoal.cleanTitle}`}
                 className="text-muted-foreground hover:text-destructive p-3 -m-2 md:p-1 md:m-0 transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
@@ -1716,7 +1716,7 @@ function GoalCard({
           <Input
             value={inlineTask}
             onChange={(e) => setInlineTask(e.target.value)}
-            placeholder={`Add a task for today to "${goal.title}"...`}
+            placeholder={`Add a task for today to "${parsedGoal.cleanTitle}"...`}
             className="h-8.5 text-xs bg-background/70"
           />
           <SubjectSelect
@@ -1895,7 +1895,7 @@ function GoalCard({
             <Input
               value={scheduleTitle}
               onChange={(e) => setScheduleTitle(e.target.value)}
-              placeholder={`Task title for "${goal.title}"...`}
+              placeholder={`Task title for "${parsedGoal.cleanTitle}"...`}
               className="h-9 text-sm bg-background/70"
             />
             <div className="flex flex-wrap items-center gap-2">
@@ -1952,7 +1952,7 @@ function GoalCard({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this goal?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{goal.title}", its linked tasks, and any routine links.
+              This will permanently delete "{parsedGoal.cleanTitle}", its linked tasks, and any routine links.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

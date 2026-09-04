@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSubjectBreakdown } from "./subjects.server";
 import {
   addDays,
+  parseGoalTitle,
   parseISODate,
   startOfWeek,
   toISODate,
@@ -150,7 +151,7 @@ export async function getWeeklyReview(supabase: DB, userId: string, weekStart: s
     if (!updatedThisWeek) continue;
     weekGoals.push({
       id: g.id,
-      title: g.title,
+      title: parseGoalTitle(g.title).cleanTitle,
       status: g.status,
       color: g.color,
       isNewlyCompleted: g.status === "completed" && updatedThisWeek,
