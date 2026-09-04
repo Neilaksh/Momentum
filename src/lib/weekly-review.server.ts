@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSubjectBreakdown } from "./subjects.server";
+import { parseHabitTitle } from "./habits-shared";
 import {
   addDays,
   parseGoalTitle,
@@ -127,7 +128,7 @@ export async function getWeeklyReview(supabase: DB, userId: string, weekStart: s
     const target = Math.max(1, h.target_per_week);
     return {
       id: h.id,
-      title: h.title,
+      title: parseHabitTitle(h.title).displayTitle || h.title,
       color: h.color,
       target,
       done,

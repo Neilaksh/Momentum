@@ -404,7 +404,7 @@ function GoalsPage() {
                 )}
               </div>
               <h3 className="text-sm font-semibold text-foreground mt-0.5 truncate">
-                {recommendedGoal.title}
+                {parseGoalTitle(recommendedGoal.title).cleanTitle}
               </h3>
             </div>
           </div>
