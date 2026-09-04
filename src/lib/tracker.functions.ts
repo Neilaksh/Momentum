@@ -254,7 +254,10 @@ export const addDayTask = createServerFn({ method: "POST" })
         source: "oneoff",
         goal_id: data.goalId ?? null,
         subject_id: data.subjectId ?? null,
-        priority: data.priority ?? null,
+        // Only include the key when set: if the priority column hasn't been
+        // provisioned yet (migration pending), a `priority: null` key would
+        // make PostgREST reject the whole insert.
+        ...(data.priority ? { priority: data.priority } : {}),
         sort_order: 1000,
       })
       .select("*")

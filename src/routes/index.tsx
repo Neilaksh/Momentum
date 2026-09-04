@@ -134,6 +134,7 @@ function UnifiedTasksPage() {
   const [selectedDate, setSelectedDate] = useState(() => todayISO);
   const [draft, setDraft] = useState("");
   const [draftSubjectId, setDraftSubjectId] = useState<string | null>(searchParams.subjectId ?? null);
+  const [draftPriority, setDraftPriority] = useState<GoalPriority | null>(null);
   const [filter, setFilter] = useState<TaskFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string | null>(searchParams.subjectId ?? null);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
@@ -198,7 +199,8 @@ function UnifiedTasksPage() {
   });
 
   const addTask = useMutation({
-    mutationFn: (v: { date: string; title: string; subjectId?: string | null }) => addFn({ data: v }),
+    mutationFn: (v: { date: string; title: string; subjectId?: string | null; priority?: GoalPriority | null }) =>
+      addFn({ data: v }),
     onSuccess: () => {
       invalidate();
       toast.success("Task added");
@@ -252,7 +254,8 @@ function UnifiedTasksPage() {
       setRenamingTask(null);
       toast.success("Priority updated");
     },
-    onError: () => toast.error("Couldn't update priority — try again."),
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Couldn't update priority — try again."),
   });
 
   const updateDescription = useMutation({
@@ -1269,9 +1272,15 @@ function UnifiedTasksPage() {
             const inflightKey = addTaskKey(activeDay.date, title);
             if (addInflightKeys.current.has(inflightKey)) return;
             addInflightKeys.current.add(inflightKey);
-            addTask.mutate({ date: activeDay.date, title: draft.trim(), subjectId: draftSubjectId });
+            addTask.mutate({
+              date: activeDay.date,
+              title: draft.trim(),
+              subjectId: draftSubjectId,
+              priority: draftPriority,
+            });
             setDraft("");
             setDraftSubjectId(null);
+            setDraftPriority(null);
           }}
         >
           <Input
@@ -1294,6 +1303,18 @@ function UnifiedTasksPage() {
                 {s.name}
               </option>
             ))}
+          </select>
+          <select
+            value={draftPriority ?? ""}
+            onChange={(e) => setDraftPriority((e.target.value || null) as GoalPriority | null)}
+            aria-label="Priority (optional)"
+            className="h-10 rounded-lg border border-border bg-secondary/50 px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-32"
+            disabled={isActiveDayPast}
+          >
+            <option value="">Priority</option>
+            <option value="High">🔴 High</option>
+            <option value="Med">🟡 Med</option>
+            <option value="Low">🟢 Low</option>
           </select>
           <Button
             type="submit"
