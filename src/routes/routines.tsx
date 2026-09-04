@@ -1426,7 +1426,6 @@ function RoutinesPage() {
                     {WEEKDAY_NAMES.map((dayName, idx) => {
                       const isWeekend = idx === 5 || idx === 6;
                       const dayLoad = analytics.dayLoads[idx];
-                      const isOverloaded = dayLoad && Number(dayLoad.hours) > 8;
                       return (
                         <th
                           key={dayName}
@@ -1440,14 +1439,6 @@ function RoutinesPage() {
                               <span className="text-[10px] font-mono font-normal text-muted-foreground lowercase">
                                 {dayLoad.hours}h ({dayLoad.count} slots)
                               </span>
-                              {isOverloaded && (
-                                <span
-                                  title="Scheduled routine exceeds 8 hours"
-                                  className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 text-[9px] font-bold text-amber-500 lowercase"
-                                >
-                                  <AlertTriangle className="h-2.5 w-2.5" /> Over 8h
-                                </span>
-                              )}
                             </div>
                           )}
                         </th>
