@@ -202,7 +202,12 @@ export async function listWeeklyReviews(supabase: DB, userId: string): Promise<s
   for (const r of logs.data ?? []) addWeek(r.log_date);
   for (const r of reviews.data ?? []) addWeek(r.week_start_date);
 
-  return [...weeks].sort((a, b) => (a < b ? 1 : -1));
+  // Only weeks that have fully passed — exclude the current in-progress week
+  // (and any future-dated data).
+  const currentWeekStart = toISODate(startOfWeek(new Date()));
+  return [...weeks]
+    .filter((w) => w < currentWeekStart)
+    .sort((a, b) => (a < b ? 1 : -1));
 }
 
 /** Should we prompt the user to view last week's review (only true on a Monday). */
