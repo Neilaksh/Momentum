@@ -38,6 +38,7 @@ import {
 } from "recharts";
 import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
+import { DailyQuoteBanner } from "@/components/DailyQuoteBanner";
 import { WeeklyReviewBanner } from "@/components/WeeklyReviewBanner";
 import { ProgressRing } from "@/components/ProgressRing";
 import { PieStat } from "@/components/PieStat";
@@ -497,6 +498,9 @@ function UnifiedTasksPage() {
 
   return (
     <AppShell profile={data?.profile ?? null}>
+      {/* Daily motivational quote — one per day, changes at midnight */}
+      <DailyQuoteBanner />
+
       {/* Weekly Review banner — visible on Monday until dismissed */}
       <WeeklyReviewBanner />
 
