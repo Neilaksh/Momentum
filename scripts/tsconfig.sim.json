@@ -10,5 +10,5 @@
     "paths": { "@/*": ["src/*"] },
     "strict": false
   },
-  "include": ["simulate-rollover-rename.ts", "../src/lib/tracker.server.ts", "../src/lib/tracker-shared.ts"]
+  "include": ["simulate-rollover-rename.ts", "simulate-rollover-identity-merge.ts", "../src/lib/tracker.server.ts", "../src/lib/tracker-shared.ts"]
 }

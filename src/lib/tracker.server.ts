@@ -32,6 +32,11 @@ function taskKey(t: { title?: string | null; goal_id?: string | null; routine_ta
   return `${(t.title ?? "").trim().toLowerCase()}|${t.goal_id ?? ""}|${t.routine_task_id ?? ""}`;
 }
 
+/** Title-level identity shared by plain and goal-linked copies of the same task. */
+function titleKey(t: { title?: string | null }) {
+  return (t.title ?? "").trim().toLowerCase();
+}
+
 /** How many days in a row an uncompleted task may roll over before going stale. */
 const STALE_LIMIT = 3;
 
@@ -47,6 +52,12 @@ const STALE_LIMIT = 3;
  * further copies are created. The most recent copy is parked into today's list so
  * the user can still see and resolve it; the original stays in its original day as
  * a historical record (only the newest copy, never the original, is ever moved).
+ *
+ * Identity merge: a plain (non-goal) task and a goal-linked task with the
+ * same normalized title are treated as ONE task by this pass — they dedupe
+ * against each other for today and completing either stops both chains from
+ * rolling (lastDonePlain / lastDoneGoal). Different goals sharing a title
+ * stay independent.
  */
 async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string): Promise<number> {
   const todayISO = toISODate(new Date());
@@ -63,6 +74,14 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
   const overdue = rows.filter((r) => !r.completed_at && r.task_date < todayISO && !r.is_stale);
   if (overdue.length === 0) return 0;
 
+  // Goal-linked rows are processed before plain ones so that when both
+  // identities of a title are overdue, the goal-linked chain (which feeds goal
+  // progress) is the one that lands on today. Older rows first otherwise.
+  overdue.sort((a, b) => {
+    if (!!a.goal_id !== !!b.goal_id) return a.goal_id ? -1 : 1;
+    return a.task_date.localeCompare(b.task_date);
+  });
+
   // Goal tasks only carry forward while their goal is still active.
   const goalIds = [...new Set(overdue.map((r) => r.goal_id).filter(Boolean))] as string[];
   let activeGoalIds = new Set<string>();
@@ -78,11 +97,22 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
 
   // Latest date on which each task key was actually completed.
   const lastDone = new Map<string, string>();
+  // Title-level completion memory spanning the plain <-> goal-linked identity
+  // split: to the user, a plain copy and a goal-linked copy of the same title
+  // are the same task, so completing either must stop BOTH chains from rolling
+  // forward. Goal-vs-goal (different goals) stays independent — those are
+  // genuinely different tasks that merely share a title.
+  const lastDonePlain = new Map<string, string>(); // title -> latest plain-identity done
+  const lastDoneGoal = new Map<string, string>(); // title -> latest goal-identity done (any goal)
   for (const r of rows) {
     if (!r.completed_at) continue;
     const k = taskKey(r);
     const prev = lastDone.get(k);
     if (!prev || r.task_date > prev) lastDone.set(k, r.task_date);
+    const title = titleKey(r);
+    const byTitle = r.goal_id ? lastDoneGoal : lastDonePlain;
+    const prevTitle = byTitle.get(title);
+    if (!prevTitle || r.task_date > prevTitle) byTitle.set(title, r.task_date);
   }
 
   const todayKeys = new Set(rows.filter((r) => r.task_date === todayISO).map(taskKey));
@@ -95,6 +125,18 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
     rows
       .filter((r) => r.task_date === todayISO && r.goal_id)
       .map((r) => goalLinkKey(todayISO, r)),
+  );
+
+  // Title-level dedupe for today spanning the plain <-> goal-linked identity
+  // split: a plain task and a goal-linked task with the same title are ONE task
+  // to the user, so only one of them may exist per day. Without this guard a
+  // plain overdue row and a goal-linked overdue row of the same title EACH
+  // spawned a copy for today — the duplicate "Due" rows with differing badges.
+  const todayPlainTitles = new Set(
+    rows.filter((r) => r.task_date === todayISO && !r.goal_id).map(titleKey),
+  );
+  const todayGoalTitles = new Set(
+    rows.filter((r) => r.task_date === todayISO && r.goal_id).map(titleKey),
   );
   const dateById = new Map<string, string>(rows.map((r) => [r.id, r.task_date]));
 
@@ -115,6 +157,7 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
   for (const t of overdue) {
     if (t.goal_id && !activeGoalIds.has(t.goal_id)) continue;
     const k = taskKey(t);
+    const tTitle = titleKey(t);
     // A copy of this task already exists for today (created by an earlier pass or
     // pre-existing). Never create a second one — otherwise every week refetch
     // would spawn a fresh zero-progress duplicate while the chain is under the
@@ -124,9 +167,22 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
     // exists today (it may have a different routine_task_id, e.g. created by
     // materializeWeek or scheduleGoalTasks).
     if (t.goal_id && todayGoalKeys.has(goalLinkKey(todayISO, t))) continue;
+    // Plain <-> goal-linked merge: a copy already exists for today under the
+    // other identity with the same title. Plain rows merge against any
+    // identity; goal rows only against plain copies, so different goals
+    // sharing a title stay independent.
+    if (t.goal_id) {
+      if (todayPlainTitles.has(tTitle)) continue;
+    } else if (todayPlainTitles.has(tTitle) || todayGoalTitles.has(tTitle)) {
+      continue;
+    }
     // Already caught up on a later day — no need to keep dragging it forward.
     const done = lastDone.get(k);
     if (done && done > t.task_date) continue;
+    // Cross-identity catch-up: the OTHER identity of this title was completed
+    // on a later day. The task is already done — stop dragging this chain.
+    const doneOther = t.goal_id ? lastDonePlain.get(tTitle) : lastDoneGoal.get(tTitle);
+    if (doneOther && doneOther > t.task_date) continue;
 
     const countSoFar = t.rollover_count ?? 0;
     const becomesStale = countSoFar + 1 >= STALE_LIMIT;
@@ -137,11 +193,18 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
       // into today's list so it stays visible until the user resolves it.
       const isNewest = newestIdByKey.get(k) === t.id;
       const isOriginal = oldestIdByKey.get(k) === t.id;
+      const parkToday = isNewest && !isOriginal && !todayKeys.has(k);
+      // A parked copy lands on today — reserve the title so a same-title row of
+      // the other identity later in this pass cannot also create a copy.
+      if (parkToday) {
+        if (t.goal_id) todayGoalTitles.add(tTitle);
+        else todayPlainTitles.add(tTitle);
+      }
       toUpdate.push({
         id: t.id,
         rollover_count: Math.max(countSoFar, STALE_LIMIT),
         is_stale: true,
-        parkToday: isNewest && !isOriginal && !todayKeys.has(k),
+        parkToday,
       });
       continue;
     }
@@ -151,6 +214,8 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
     const newCount = countSoFar + 1;
     todayKeys.add(k);
     todayGoalKeys.add(goalLinkKey(todayISO, t));
+    if (t.goal_id) todayGoalTitles.add(tTitle);
+    else todayPlainTitles.add(tTitle);
     toUpdate.push({ id: t.id, rollover_count: newCount, is_stale: false });
     toInsert.push({
       user_id: userId,
@@ -201,7 +266,16 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
       .eq("user_id", userId)
       .eq("task_date", todayISO);
     const freshKeys = new Set((freshToday ?? []).map(taskKey));
-    const pending = toInsert.filter((r) => !freshKeys.has(taskKey(r)));
+    // Same plain <-> goal-linked title merge as above, re-checked against fresh
+    // state so a concurrent pass cannot slip a duplicate past the snapshot.
+    const freshPlainTitles = new Set((freshToday ?? []).filter((r) => !r.goal_id).map(titleKey));
+    const freshGoalTitles = new Set((freshToday ?? []).filter((r) => !!r.goal_id).map(titleKey));
+    const pending = toInsert.filter((r) => {
+      if (freshKeys.has(taskKey(r))) return false;
+      const rTitle = titleKey(r);
+      if (r.goal_id) return !freshPlainTitles.has(rTitle);
+      return !freshPlainTitles.has(rTitle) && !freshGoalTitles.has(rTitle);
+    });
     if (pending.length > 0) {
       await supabase.from("day_tasks").insert(pending);
     }
