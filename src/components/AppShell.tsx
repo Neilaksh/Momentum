@@ -30,7 +30,7 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
           {/* Mobile: full-width, non-wrapping, horizontally scrollable pill row
               (scrollbar hidden, bleeding to the screen edges). Desktop (md+):
               original inline layout, unchanged. */}
-          <nav className="order-last -mx-4 flex w-full flex-nowrap items-center gap-1 overflow-x-auto px-4 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6 md:order-none md:mx-0 md:w-auto md:px-0 md:overflow-visible">
+          <nav className="order-last -mx-4 flex w-full flex-nowrap items-center gap-1 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6 md:order-none md:mx-0 md:w-auto md:px-0 md:overflow-visible">
             {NAV.map((item) => (
               <Link
                 key={item.to}
@@ -38,7 +38,7 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
                 activeOptions={{ exact: item.to === "/" }}
                 activeProps={{ className: "bg-secondary text-foreground" }}
                 inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
-                className="rounded-full px-3 py-1.5 transition-colors"
+                className="rounded-full px-2.5 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm font-medium transition-colors whitespace-nowrap shrink-0"
               >
                 {item.label}
               </Link>

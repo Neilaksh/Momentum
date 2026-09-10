@@ -620,7 +620,7 @@ function UnifiedTasksPage() {
         </section>
 
         {/* Right: Week Overview Visual Chart */}
-        <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
+        <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6 overflow-hidden min-w-0">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-4">
               <div>
@@ -702,7 +702,7 @@ function UnifiedTasksPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
           {days$.map((d, i) => {
             const isSelected = d.date === selectedDate;
             const isDayToday = d.date === todayISO;
@@ -715,38 +715,41 @@ function UnifiedTasksPage() {
               <button
                 key={d.date}
                 onClick={() => setSelectedDate(d.date)}
-                className={`flex flex-col items-center justify-between rounded-xl border p-3 text-left transition-all ${
+                className={`flex flex-col items-center justify-between rounded-xl border p-1.5 sm:p-3 text-center transition-all ${
                   isSelected
                     ? "border-primary bg-primary/10 shadow-sm shadow-primary/20 ring-1 ring-primary"
                     : "border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/40"
                 }`}
               >
                 <div className="flex w-full items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider">
+                  <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate">
                     {WEEKDAY_NAMES[i]!.slice(0, 3)}
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5 sm:gap-1">
                     {hasExam && (
                       <span title="Exam scheduled on this day" className="text-primary flex items-center">
-                        <GraduationCap className="h-3.5 w-3.5" />
+                        <GraduationCap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       </span>
                     )}
                     {isDayToday && (
-                      <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-                        Today
-                      </span>
+                      <>
+                        <span className="hidden sm:inline-block rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                          Today
+                        </span>
+                        <span className="sm:hidden h-1.5 w-1.5 rounded-full bg-primary shrink-0" title="Today" />
+                      </>
                     )}
                     {isComplete && !isDayToday && (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                      <CheckCircle2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-primary" />
                     )}
                   </div>
                 </div>
 
-                <div className="my-1.5 text-lg font-bold num">
+                <div className="my-0.5 sm:my-1.5 text-sm sm:text-lg font-bold num">
                   {parseISODate(d.date).getDate()}
                 </div>
 
-                <div className="flex items-center gap-1.5 w-full">
+                <div className="flex items-center gap-1 w-full">
                   <div className="h-1 flex-1 rounded-full bg-secondary overflow-hidden">
                     <div
                       className="h-full bg-primary transition-all duration-300"
@@ -755,7 +758,7 @@ function UnifiedTasksPage() {
                       }}
                     />
                   </div>
-                  <span className="num text-[10px] text-muted-foreground">
+                  <span className="hidden sm:inline num text-[10px] text-muted-foreground">
                     {dayDone}/{dayTotal}
                   </span>
                 </div>
@@ -766,7 +769,7 @@ function UnifiedTasksPage() {
       </div>
 
       {/* Focused Day Task Management Panel */}
-      <section ref={focusPanelRef} className="mt-6 scroll-mt-20 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
+      <section ref={focusPanelRef} className="mt-6 scroll-mt-28 sm:scroll-mt-24 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
           <div>
             <div className="flex items-center gap-2">
@@ -1315,35 +1318,37 @@ function UnifiedTasksPage() {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={`Add a task for ${activeWeekdayName}...`}
-            className="h-10 min-w-0 flex-1 text-sm"
+            className="h-10 min-w-0 flex-1 text-base md:text-sm"
             disabled={isActiveDayPast}
           />
-          <select
-            value={draftSubjectId ?? ""}
-            onChange={(e) => setDraftSubjectId(e.target.value || null)}
-            aria-label="Subject (optional)"
-            className="h-10 rounded-lg border border-border bg-secondary/50 px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-44"
-            disabled={isActiveDayPast}
-          >
-            <option value="">No subject</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={draftPriority ?? ""}
-            onChange={(e) => setDraftPriority((e.target.value || null) as GoalPriority | null)}
-            aria-label="Priority (optional)"
-            className="h-10 rounded-lg border border-border bg-secondary/50 px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-32"
-            disabled={isActiveDayPast}
-          >
-            <option value="">Priority</option>
-            <option value="High">🔴 High</option>
-            <option value="Med">🟡 Med</option>
-            <option value="Low">🟢 Low</option>
-          </select>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <select
+              value={draftSubjectId ?? ""}
+              onChange={(e) => setDraftSubjectId(e.target.value || null)}
+              aria-label="Subject (optional)"
+              className="h-10 w-full rounded-lg border border-border bg-secondary/50 px-2.5 text-base md:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-44"
+              disabled={isActiveDayPast}
+            >
+              <option value="">No subject</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={draftPriority ?? ""}
+              onChange={(e) => setDraftPriority((e.target.value || null) as GoalPriority | null)}
+              aria-label="Priority (optional)"
+              className="h-10 w-full rounded-lg border border-border bg-secondary/50 px-2.5 text-base md:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-32"
+              disabled={isActiveDayPast}
+            >
+              <option value="">Priority</option>
+              <option value="High">🔴 High</option>
+              <option value="Med">🟡 Med</option>
+              <option value="Low">🟢 Low</option>
+            </select>
+          </div>
           <Button
             type="submit"
             className="h-10 shrink-0 gap-1.5 px-4"
@@ -1502,7 +1507,7 @@ function DayCard({
   return (
     <article
       onClick={onSelectDay}
-      className={`group flex flex-col justify-between rounded-2xl border bg-card p-5 transition-all cursor-pointer hover:border-primary/60 hover:shadow-md ${
+      className={`group flex flex-col justify-between rounded-2xl border bg-card p-4 sm:p-5 transition-all cursor-pointer hover:border-primary/60 hover:shadow-md ${
         isSelected
           ? "border-primary shadow-[0_0_0_1px_var(--primary)] ring-1 ring-primary"
           : isToday
@@ -1533,8 +1538,8 @@ function DayCard({
           </div>
         </div>
 
-        <div className="my-3 flex justify-center">
-          <ProgressRing value={pct} size={76} stroke={7} />
+        <div className="my-2.5 sm:my-3 flex justify-center">
+          <ProgressRing value={pct} size={68} stroke={6} />
         </div>
 
         <div className="mb-2 flex items-center justify-between text-[11px] text-muted-foreground">
@@ -1545,7 +1550,7 @@ function DayCard({
         </div>
 
         {/* Read-only Task List */}
-        <ul className="space-y-1.5 my-2 max-h-48 overflow-y-auto pr-1">
+        <ul className="space-y-1.5 my-2 max-h-40 sm:max-h-48 overflow-y-auto pr-1">
           {tasks.length === 0 && (
             <li className="text-xs text-muted-foreground py-2 italic text-center">
               No tasks scheduled.
