@@ -12,15 +12,6 @@ export function ProgressRing({ value, size = 88, stroke = 8, label, className }:
   const clamped = Math.max(0, Math.min(100, value));
   const offset = circumference - (clamped / 100) * circumference;
 
-  const fontClass =
-    size <= 32
-      ? "text-[10px] font-bold"
-      : size <= 44
-        ? "text-xs font-semibold"
-        : size <= 80
-          ? "text-sm font-semibold"
-          : "text-base font-bold";
-
   return (
     <div className={`relative inline-flex shrink-0 items-center justify-center ${className ?? ""}`}>
       <svg width={size} height={size} className="-rotate-90">
@@ -44,11 +35,9 @@ export function ProgressRing({ value, size = 88, stroke = 8, label, className }:
           className="stroke-primary transition-[stroke-dashoffset] duration-500 ease-out"
         />
       </svg>
-      {label !== "" && (
-        <span className={`num absolute text-foreground ${fontClass}`}>
-          {label ?? `${Math.round(clamped)}%`}
-        </span>
-      )}
+      <span className="num absolute text-sm font-semibold text-foreground">
+        {label ?? `${Math.round(clamped)}%`}
+      </span>
     </div>
   );
 }
