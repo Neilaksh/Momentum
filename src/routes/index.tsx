@@ -19,6 +19,8 @@ import {
   Circle,
   FileText,
   GraduationCap,
+  LayoutGrid,
+  Columns,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -144,6 +146,7 @@ function UnifiedTasksPage() {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [estDrafts, setEstDrafts] = useState<Record<string, string>>({});
+  const [weekViewMode, setWeekViewMode] = useState<"compact" | "cards">("compact");
   const focusPanelRef = useRef<HTMLElement>(null);
   // (date, title) pairs of add-task requests currently in flight, so a
   // double-click / double-Enter can never create duplicate rows.
@@ -1368,7 +1371,7 @@ function UnifiedTasksPage() {
 
       {/* Full 7-Day Week Board Section (View Only) */}
       <section className="mt-10">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold tracking-tight">Full Week Schedule</h2>
@@ -1377,35 +1380,144 @@ function UnifiedTasksPage() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Read-only 7-day overview. Click any day card or day tab above to focus and edit its tasks.
+              Read-only 7-day overview. Click any day to focus and manage its tasks.
             </p>
+          </div>
+
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 p-1 text-xs">
+            <button
+              onClick={() => setWeekViewMode("compact")}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors ${
+                weekViewMode === "compact"
+                  ? "bg-card text-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              <span>Overview</span>
+            </button>
+            <button
+              onClick={() => setWeekViewMode("cards")}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors ${
+                weekViewMode === "cards"
+                  ? "bg-card text-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Columns className="h-3.5 w-3.5" />
+              <span>Cards</span>
+            </button>
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {days$.map((day, i) => {
-            const isSelected = day.date === selectedDate;
-            const isDayToday = day.date === todayISO;
+        {weekViewMode === "compact" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
+            {days$.map((day, i) => {
+              const isSelected = day.date === selectedDate;
+              const isDayToday = day.date === todayISO;
+              const pct = pctComplete(day.tasks);
+              const doneCount = day.tasks.filter((t) => t.completed_at).length;
+              const dayTotal = day.tasks.length;
+              const isComplete = dayTotal > 0 && doneCount === dayTotal;
+              const hasExam = examDatesSet.has(day.date);
 
-            return (
-              <DayCard
-                key={day.date}
-                name={WEEKDAY_NAMES[i]!}
-                date={day.date}
-                isToday={isDayToday}
-                isPast={day.date < todayISO}
-                isSelected={isSelected}
-                tasks={day.tasks}
-                chainCompletedIds={chainCompletedIds}
-                onSelectDay={() => {
-                  setSelectedDate(day.date);
-                  setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-                }}
-              />
+              return (
+                <button
+                  key={day.date}
+                  onClick={() => {
+                    setSelectedDate(day.date);
+                    setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  }}
+                  className={`flex sm:flex-col items-center justify-between gap-3 rounded-xl border p-3 text-left transition-all hover:border-primary/50 ${
+                    isSelected
+                      ? "border-primary bg-primary/10 ring-1 ring-primary shadow-sm"
+                      : isDayToday
+                        ? "border-primary/40 bg-card"
+                        : "border-border bg-card hover:bg-secondary/30"
+                  }`}
+                >
+                  <div className="flex sm:w-full items-center justify-between gap-2 min-w-0">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold uppercase tracking-wider">
+                          {WEEKDAY_NAMES[i]!.slice(0, 3)}
+                        </span>
+                        {isDayToday && (
+                          <span className="rounded-full bg-primary/20 px-1.5 py-0.2 text-[9px] font-bold text-primary uppercase">
+                            Today
+                          </span>
+                        )}
+                        {hasExam && (
+                          <span title="Exam scheduled" className="text-primary flex items-center">
+                            <GraduationCap className="h-3.5 w-3.5" />
+                          </span>
+                        )}
+                      </div>
+                      <span className="num text-[11px] text-muted-foreground">
+                        {formatDayDate(day.date)}
+                      </span>
+                    </div>
 
-            );
-          })}
-        </div>
+                    <div className="hidden sm:flex items-center">
+                      {isComplete && (
+                        <span className="text-[10px] text-primary font-semibold">100%</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex sm:w-full sm:flex-col items-center sm:items-stretch gap-3 sm:gap-2 shrink-0">
+                    <div className="flex flex-col sm:flex-row items-end sm:items-center sm:justify-between">
+                      <span className="num text-xs font-bold text-foreground sm:order-last">
+                        {pct}%
+                      </span>
+                      <span className="num text-[10px] text-muted-foreground">
+                        {doneCount}/{dayTotal} done
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="sm:hidden flex items-center justify-center">
+                        <ProgressRing value={pct} size={36} stroke={3.5} />
+                      </div>
+                      <div className="hidden sm:block h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                        <div
+                          className="h-full bg-primary transition-all duration-300"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <ChevronRight className="sm:hidden h-4 w-4 text-muted-foreground/50" />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex sm:grid gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible pb-3 sm:pb-0 snap-x snap-mandatory sm:grid-cols-2 xl:grid-cols-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
+            {days$.map((day, i) => {
+              const isSelected = day.date === selectedDate;
+              const isDayToday = day.date === todayISO;
+
+              return (
+                <div key={day.date} className="w-[85vw] max-w-[320px] shrink-0 snap-center sm:w-auto">
+                  <DayCard
+                    name={WEEKDAY_NAMES[i]!}
+                    date={day.date}
+                    isToday={isDayToday}
+                    isPast={day.date < todayISO}
+                    isSelected={isSelected}
+                    tasks={day.tasks}
+                    chainCompletedIds={chainCompletedIds}
+                    onSelectDay={() => {
+                      setSelectedDate(day.date);
+                      setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* Rename-task modal (pencil icon on a task row) */}
