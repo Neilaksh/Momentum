@@ -514,7 +514,11 @@ function UnifiedTasksPage() {
       <WeeklyReviewBanner />
 
       {/* Upcoming Exam Schedule Glance Bar */}
-      <UpcomingExamsGlanceBar subjects={subjects} onSelectDate={setSelectedDate} />
+      <UpcomingExamsGlanceBar
+        subjects={subjects}
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+      />
 
       {/* Header: Week Switcher & Jump to Today */}
       <div className="flex flex-wrap items-end justify-between gap-4">

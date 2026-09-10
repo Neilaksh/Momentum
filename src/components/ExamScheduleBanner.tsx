@@ -21,35 +21,47 @@ import {
   type ExamSchedule,
 } from "@/lib/exam-schedules-shared";
 import { useExamSchedules } from "@/lib/exam-schedules-store";
-import { formatDayDate, toISODate } from "@/lib/tracker-shared";
+import { formatDayDate, toISODate, parseISODate } from "@/lib/tracker-shared";
 import { ExamScheduleDialog } from "./ExamScheduleDialog";
 
-interface ExamScheduleBannerProps {
+export interface UpcomingExamsGlanceBarProps {
   subjects: Subject[];
-  selectedDate: string;
+  selectedDate?: string;
   onSelectDate?: (date: string) => void;
 }
 
 /**
  * Renders the top Upcoming Exams Glance Bar across the dashboard.
+ * - Automatically dismisses any exam as soon as its deadline passes.
+ * - When viewing future days, only shows exams on or after the viewed day (past exams become invisible).
+ * - If no upcoming exams exist for the viewed day, the glance bar becomes invisible.
  */
 export function UpcomingExamsGlanceBar({
   subjects,
+  selectedDate,
   onSelectDate,
-}: {
-  subjects: Subject[];
-  onSelectDate?: (date: string) => void;
-}) {
+}: UpcomingExamsGlanceBarProps) {
   const { exams } = useExamSchedules();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 30000);
-    return () => clearInterval(timer);
+    const updateTime = () => setCurrentTime(new Date());
+    const timer = setInterval(updateTime, 10000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") updateTime();
+    };
+
+    window.addEventListener("focus", updateTime);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", updateTime);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   const subjectsMap = useMemo(() => {
@@ -58,7 +70,19 @@ export function UpcomingExamsGlanceBar({
     return map;
   }, [subjects]);
 
-  const upcoming = useMemo(() => getUpcomingExams(exams, currentTime, 5), [exams, currentTime]);
+  const upcoming = useMemo(
+    () => getUpcomingExams(exams, currentTime, 5, selectedDate),
+    [exams, currentTime, selectedDate],
+  );
+
+  const referenceDate = useMemo(() => {
+    const todayStr = toISODate(currentTime);
+    const activeDate = selectedDate || todayStr;
+    if (activeDate > todayStr) {
+      return parseISODate(activeDate);
+    }
+    return currentTime;
+  }, [selectedDate, currentTime]);
 
   if (upcoming.length === 0) {
     return (
@@ -124,7 +148,7 @@ export function UpcomingExamsGlanceBar({
           <div className="mt-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {upcoming.map((exam) => {
               const subject = exam.subject_id ? subjectsMap.get(exam.subject_id) : null;
-              const countdown = getDaysUntilExam(exam.exam_date, currentTime);
+              const countdown = getDaysUntilExam(exam.exam_date, referenceDate);
               const formattedTime = formatExamTime(exam.start_time, exam.end_time);
 
               return (
