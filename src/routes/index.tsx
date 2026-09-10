@@ -19,15 +19,15 @@ import {
   Circle,
   FileText,
   GraduationCap,
-  LayoutGrid,
-  Columns,
   MoreHorizontal,
+  MoreVertical,
   Pencil,
   Plus,
   Sparkles,
   Target,
   Trash2,
   Zap,
+  BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -146,7 +146,7 @@ function UnifiedTasksPage() {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [estDrafts, setEstDrafts] = useState<Record<string, string>>({});
-  const [weekViewMode, setWeekViewMode] = useState<"compact" | "cards">("compact");
+  const [showCharts, setShowCharts] = useState(false);
   const focusPanelRef = useRef<HTMLElement>(null);
   // (date, title) pairs of add-task requests currently in flight, so a
   // double-click / double-Enter can never create duplicate rows.
@@ -510,13 +510,9 @@ function UnifiedTasksPage() {
 
   return (
     <AppShell profile={data?.profile ?? null}>
-      {/* Daily motivational quote — one per day, changes at midnight */}
+      {/* Slim Announcements Tray — quote + weekly review + exams in compact stack */}
       <DailyQuoteBanner />
-
-      {/* Weekly Review banner — visible on Monday until dismissed */}
       <WeeklyReviewBanner />
-
-      {/* Upcoming Exam Schedule Glance Bar */}
       <UpcomingExamsGlanceBar
         subjects={subjects}
         selectedDate={selectedDate}
@@ -524,28 +520,28 @@ function UnifiedTasksPage() {
       />
 
       {/* Header: Week Switcher & Jump to Today */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight">Tasks Dashboard</h1>
-            <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-primary">
-              Daily & Weekly
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Tasks</h1>
+            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+              Weekly
             </span>
           </div>
-          <p className="num mt-1 text-sm text-muted-foreground">
-            Week of {formatDayDate(weekStart)} — {formatDayDate(weekEnd)}
+          <p className="num mt-0.5 text-xs text-muted-foreground">
+            {formatDayDate(weekStart)} — {formatDayDate(weekEnd)}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Button
             variant="outline"
             size="icon"
             onClick={() => shiftWeek(-1)}
             aria-label="Previous week"
-            className="h-9 w-9"
+            className="h-8 w-8"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="outline"
@@ -554,221 +550,224 @@ function UnifiedTasksPage() {
               setWeekStart(curWeekStart);
               setSelectedDate(todayISO);
             }}
-            className="h-9 text-xs font-medium"
+            className="h-8 text-xs font-medium px-3"
           >
-            This Week
+            Today
           </Button>
           <Button
             variant="outline"
             size="icon"
             onClick={() => shiftWeek(1)}
             aria-label="Next week"
-            className="h-9 w-9"
+            className="h-8 w-8"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
 
-      {/* Top Analytics Row: Dedicated Day Pie Chart (Left) + Week Overview Chart (Right) */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-        {/* Left: Selected Day Pie Chart & XP Breakdown */}
-        <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
-                {isActiveDayToday ? "Today's Pie Chart" : `${activeWeekdayName}'s Pie Chart`}
-              </span>
-              {isPerfectActive && (
-                <span className="flex items-center gap-1 rounded-full bg-primary/20 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                  <Sparkles className="h-3 w-3" /> Perfect Day
-                </span>
-              )}
-            </div>
-
-            <div className="my-4 flex justify-center">
-              <PieStat
-                done={doneActive}
-                total={activeTasks.length}
-                label={isActiveDayToday ? "Today's Tasks" : `${activeWeekdayName} Tasks`}
-                caption={`${doneActive} of ${activeTasks.length} tasks completed`}
-                size={175}
-                showTooltip={true}
-              />
-            </div>
-
-            <div className="space-y-2 rounded-xl bg-secondary/30 p-3.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Completed</span>
-                <span className="num font-semibold text-foreground">{doneActive}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Remaining</span>
-                <span className="num font-semibold text-foreground">{remainingActive}</span>
-              </div>
-              <div className="border-t border-border/60 pt-2 flex justify-between font-medium">
-                <span className="text-primary flex items-center gap-1">
-                  <Zap className="h-3.5 w-3.5" /> Day XP Gained
-                </span>
-                <span className="num font-bold text-primary">+{activeDayXpEarned} XP</span>
-              </div>
-            </div>
-          </div>
-
-          {isPerfectActive && (
-            <div className="mt-4 rounded-xl border border-primary/40 bg-primary/10 p-3 text-center text-xs font-semibold text-primary animate-pulse">
-              🌟 Perfect Day! All {activeTasks.length} tasks completed (+{XP_PERFECT_DAY} Bonus XP)
-            </div>
-          )}
-        </section>
-
-        {/* Right: Week Overview Visual Chart */}
-        <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6 overflow-hidden min-w-0">
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-4">
-              <div>
-                <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
-                  Week Overall Progress
-                </p>
-                <p className="num mt-1 text-2xl font-semibold">
-                  {doneCount} / {allTasks.length}
-                </p>
-                <p className="text-xs text-muted-foreground">tasks completed this week ({weekPct}%)</p>
-              </div>
-            </div>
-
-            <div className="text-xs text-muted-foreground max-w-xs">
-              Click on any day tab below or bar in the chart to immediately focus and manage tasks for that day.
-            </div>
-          </div>
-
-          <div className="mt-4 h-36 min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                margin={{ top: 8, right: 8, bottom: 0, left: -24 }}
-                onClick={(e) => {
-                  if (e && e.activePayload && e.activePayload.length) {
-                    const payload = e.activePayload[0]?.payload;
-                    if (payload?.date) setSelectedDate(payload.date);
-                  }
-                }}
-              >
-                <CartesianGrid vertical={false} stroke="var(--border)" />
-                <XAxis
-                  dataKey="day"
-                  tickLine={false}
-                  axisLine={false}
-                  fontSize={11}
-                  stroke="var(--muted-foreground)"
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tickLine={false}
-                  axisLine={false}
-                  fontSize={11}
-                  stroke="var(--muted-foreground)"
-                />
-                <Tooltip
-                  cursor={{ fill: "var(--secondary)" }}
-                  contentStyle={{
-                    background: "var(--popover)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 12,
-                    fontSize: 12,
-                  }}
-                  formatter={(val: any, _name: any, item: any) => [
-                    `${val} of ${item?.payload?.total ?? 0} tasks done`,
-                    "Completions",
-                  ]}
-                />
-                <Bar
-                  dataKey="done"
-                  fill="var(--primary)"
-                  radius={[6, 6, 0, 0]}
-                  className="cursor-pointer"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      </div>
-
-      {/* 7-Day Switcher Tabs Bar */}
-      <div className="mt-8">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
-            Select Day to Focus
-          </h2>
-          <span className="text-xs text-muted-foreground">
-            Active: <strong>{activeWeekdayName}, {formatDayDate(activeDay.date)}</strong>
-          </span>
-        </div>
-
-        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+      {/* ── Unified Interactive Week Hub ── */}
+      <div className="mt-5">
+        <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
           {days$.map((d, i) => {
             const isSelected = d.date === selectedDate;
             const isDayToday = d.date === todayISO;
             const hasExam = examDatesSet.has(d.date);
             const dayDone = d.tasks.filter((t) => t.completed_at).length;
             const dayTotal = d.tasks.length;
+            const dayPct = dayTotal ? Math.round((dayDone / dayTotal) * 100) : 0;
             const isComplete = dayTotal > 0 && dayDone === dayTotal;
 
             return (
               <button
                 key={d.date}
-                onClick={() => setSelectedDate(d.date)}
-                className={`flex flex-col items-center justify-between rounded-xl border p-1.5 sm:p-3 text-center transition-all ${
+                onClick={() => {
+                  setSelectedDate(d.date);
+                  setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                }}
+                className={`relative flex flex-col items-center gap-0.5 rounded-xl border p-1.5 sm:p-2.5 text-center transition-all ${
                   isSelected
                     ? "border-primary bg-primary/10 shadow-sm shadow-primary/20 ring-1 ring-primary"
-                    : "border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/40"
+                    : isDayToday
+                      ? "border-primary/40 bg-card hover:bg-primary/5"
+                      : "border-border/60 bg-card hover:border-primary/40 hover:bg-secondary/30"
                 }`}
               >
-                <div className="flex w-full items-center justify-between">
-                  <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate">
-                    {WEEKDAY_NAMES[i]!.slice(0, 3)}
-                  </span>
-                  <div className="flex items-center gap-0.5 sm:gap-1">
-                    {hasExam && (
-                      <span title="Exam scheduled on this day" className="text-primary flex items-center">
-                        <GraduationCap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                      </span>
-                    )}
-                    {isDayToday && (
-                      <>
-                        <span className="hidden sm:inline-block rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-                          Today
-                        </span>
-                        <span className="sm:hidden h-1.5 w-1.5 rounded-full bg-primary shrink-0" title="Today" />
-                      </>
-                    )}
-                    {isComplete && !isDayToday && (
-                      <CheckCircle2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-primary" />
-                    )}
-                  </div>
+                {/* Day label */}
+                <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-wider ${
+                  isSelected ? "text-primary" : "text-muted-foreground"
+                }`}>
+                  {WEEKDAY_NAMES[i]!.slice(0, 3)}
+                </span>
+
+                {/* Date number with mini progress ring */}
+                <div className="relative my-0.5">
+                  <ProgressRing value={dayPct} size={32} stroke={2.5} label={String(parseISODate(d.date).getDate())} className="text-[11px] sm:text-xs" />
                 </div>
 
-                <div className="my-0.5 sm:my-1.5 text-sm sm:text-lg font-bold num">
-                  {parseISODate(d.date).getDate()}
+                {/* Indicators row */}
+                <div className="flex items-center gap-0.5 min-h-[14px]">
+                  {isDayToday && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" title="Today" />
+                  )}
+                  {hasExam && (
+                    <GraduationCap className="h-3 w-3 text-primary" />
+                  )}
+                  {isComplete && (
+                    <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                  )}
                 </div>
 
-                <div className="flex items-center gap-1 w-full">
-                  <div className="h-1 flex-1 rounded-full bg-secondary overflow-hidden">
-                    <div
-                      className="h-full bg-primary transition-all duration-300"
-                      style={{
-                        width: `${dayTotal ? Math.round((dayDone / dayTotal) * 100) : 0}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="hidden sm:inline num text-[10px] text-muted-foreground">
-                    {dayDone}/{dayTotal}
-                  </span>
-                </div>
+                {/* Task count */}
+                <span className="hidden sm:block num text-[9px] text-muted-foreground">
+                  {dayDone}/{dayTotal}
+                </span>
               </button>
             );
           })}
         </div>
+      </div>
+
+      {/* ── Compact Stats Bar + Toggleable Charts ── */}
+      <div className="mt-4">
+        {/* Compact summary row — always visible */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          <div className="flex items-center gap-4">
+            {/* Today's progress mini */}
+            <div className="flex items-center gap-2.5">
+              <PieStat
+                done={doneActive}
+                total={activeTasks.length}
+                label={isActiveDayToday ? "Today" : activeWeekdayName.slice(0, 3)}
+                caption=""
+                size={44}
+                showTooltip={false}
+              />
+              <div>
+                <p className="text-xs font-semibold">
+                  {doneActive}/{activeTasks.length} <span className="text-muted-foreground font-normal">tasks</span>
+                </p>
+                <p className="num text-[10px] text-muted-foreground">
+                  {isActiveDayToday ? "Today" : activeWeekdayName} · {activeTasks.length ? Math.round((doneActive / activeTasks.length) * 100) : 0}%
+                </p>
+              </div>
+            </div>
+
+            {/* Separator */}
+            <div className="hidden sm:block h-8 w-px bg-border" />
+
+            {/* Week progress */}
+            <div className="hidden sm:flex items-center gap-2.5">
+              <div className="flex flex-col">
+                <p className="text-xs font-semibold">
+                  {doneCount}/{allTasks.length} <span className="text-muted-foreground font-normal">weekly</span>
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="h-1.5 w-20 rounded-full bg-secondary overflow-hidden">
+                    <div className="h-full bg-primary transition-all duration-300" style={{ width: `${weekPct}%` }} />
+                  </div>
+                  <span className="num text-[10px] text-muted-foreground">{weekPct}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* XP badge */}
+            {activeDayXpEarned > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                <Zap className="h-3 w-3" /> +{activeDayXpEarned} XP
+              </span>
+            )}
+            {isPerfectActive && (
+              <span className="flex items-center gap-1 rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                <Sparkles className="h-3 w-3" /> Perfect
+              </span>
+            )}
+          </div>
+
+          {/* Chart toggle */}
+          <button
+            onClick={() => setShowCharts(!showCharts)}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            {showCharts ? "Hide Charts" : "Show Charts"}
+            <ChevronDown className={`h-3 w-3 transition-transform ${showCharts ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+
+        {/* Expandable charts panel */}
+        {showCharts && (
+          <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)] animate-in slide-in-from-top-2 duration-200">
+            {/* Day Pie Chart */}
+            <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-semibold tracking-wider uppercase text-muted-foreground">
+                  {isActiveDayToday ? "Today's Breakdown" : `${activeWeekdayName}'s Breakdown`}
+                </span>
+              </div>
+              <div className="flex justify-center">
+                <PieStat
+                  done={doneActive}
+                  total={activeTasks.length}
+                  label={isActiveDayToday ? "Today" : activeWeekdayName}
+                  caption={`${doneActive} of ${activeTasks.length} completed`}
+                  size={140}
+                  showTooltip={true}
+                />
+              </div>
+              <div className="mt-3 space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Completed</span>
+                  <span className="num font-semibold">{doneActive}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Remaining</span>
+                  <span className="num font-semibold">{remainingActive}</span>
+                </div>
+                <div className="border-t border-border/60 pt-1.5 flex justify-between font-medium">
+                  <span className="text-primary flex items-center gap-1">
+                    <Zap className="h-3 w-3" /> XP
+                  </span>
+                  <span className="num font-bold text-primary">+{activeDayXpEarned}</span>
+                </div>
+              </div>
+            </section>
+
+            {/* Week Bar Chart */}
+            <section className="rounded-xl border border-border bg-card p-4 shadow-sm overflow-hidden min-w-0">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-semibold tracking-wider uppercase text-muted-foreground">
+                  Week Progress
+                </span>
+                <span className="num text-xs text-muted-foreground">{doneCount}/{allTasks.length} done ({weekPct}%)</span>
+              </div>
+              <div className="h-32 min-w-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={chartData}
+                    margin={{ top: 8, right: 8, bottom: 0, left: -24 }}
+                    onClick={(e) => {
+                      if (e && e.activePayload && e.activePayload.length) {
+                        const payload = e.activePayload[0]?.payload;
+                        if (payload?.date) setSelectedDate(payload.date);
+                      }
+                    }}
+                  >
+                    <CartesianGrid vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="day" tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
+                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
+                    <Tooltip
+                      cursor={{ fill: "var(--secondary)" }}
+                      contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }}
+                      formatter={(val: any, _name: any, item: any) => [`${val} of ${item?.payload?.total ?? 0} tasks done`, "Completions"]}
+                    />
+                    <Bar dataKey="done" fill="var(--primary)" radius={[6, 6, 0, 0]} className="cursor-pointer" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
 
       {/* Focused Day Task Management Panel */}
@@ -1039,9 +1038,11 @@ function UnifiedTasksPage() {
                     )}
 
                     </div>
-                    <div className="ml-auto flex items-center gap-0.5 md:contents">
+
+                    {/* ── Desktop inline actions (hover-reveal) ── */}
+                    <div className="ml-auto hidden md:flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     {!isActiveDayPast && filteredActiveTasks.length > 1 && (
-                      <div className="flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      <>
                         <button
                           disabled={filteredActiveTasks.findIndex((x) => x.id === t.id) === 0}
                           onClick={() => moveTask(t.id, "up")}
@@ -1063,7 +1064,7 @@ function UnifiedTasksPage() {
                         >
                           <ArrowDown className="h-3.5 w-3.5" />
                         </button>
-                      </div>
+                      </>
                     )}
 
                     {!isActiveDayPast && !goalLocked && !t.completed_at && (
@@ -1072,9 +1073,9 @@ function UnifiedTasksPage() {
                           <button
                             aria-label={`Reschedule ${t.title}`}
                             title="Reschedule / snooze to another day"
-                            className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground hover:text-amber-400"
+                            className="p-1 text-muted-foreground hover:text-amber-400 transition-colors"
                           >
-                            <CalendarClock className="h-4 w-4" />
+                            <CalendarClock className="h-3.5 w-3.5" />
                           </button>
                         </PopoverTrigger>
                         <PopoverContent align="end" className="w-56 p-3 space-y-2">
@@ -1082,10 +1083,7 @@ function UnifiedTasksPage() {
                             Reschedule Task
                           </p>
                           <div className="grid gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="justify-start text-xs h-8 px-2"
+                            <Button variant="ghost" size="sm" className="justify-start text-xs h-8 px-2"
                               onClick={() => {
                                 const tomorrow = toISODate(addDays(parseISODate(activeDay.date), 1));
                                 rescheduleTask.mutate({ id: t.id, targetDate: tomorrow });
@@ -1093,10 +1091,7 @@ function UnifiedTasksPage() {
                             >
                               👉 Tomorrow ({formatDayDate(toISODate(addDays(parseISODate(activeDay.date), 1))).slice(0, 3)})
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="justify-start text-xs h-8 px-2"
+                            <Button variant="ghost" size="sm" className="justify-start text-xs h-8 px-2"
                               onClick={() => {
                                 const inTwoDays = toISODate(addDays(parseISODate(activeDay.date), 2));
                                 rescheduleTask.mutate({ id: t.id, targetDate: inTwoDays });
@@ -1104,10 +1099,7 @@ function UnifiedTasksPage() {
                             >
                               👉 In 2 days
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="justify-start text-xs h-8 px-2"
+                            <Button variant="ghost" size="sm" className="justify-start text-xs h-8 px-2"
                               onClick={() => {
                                 const nextWeek = toISODate(addDays(parseISODate(activeDay.date), 7));
                                 rescheduleTask.mutate({ id: t.id, targetDate: nextWeek });
@@ -1120,10 +1112,7 @@ function UnifiedTasksPage() {
                             <label className="text-[10px] uppercase text-muted-foreground block mb-1">
                               Pick Specific Date
                             </label>
-                            <Input
-                              type="date"
-                              min={todayISO}
-                              defaultValue={activeDay.date}
+                            <Input type="date" min={todayISO} defaultValue={activeDay.date}
                               onChange={(e) => {
                                 const val = e.target.value;
                                 if (val && val >= todayISO) {
@@ -1142,54 +1131,120 @@ function UnifiedTasksPage() {
                       onClick={() => toggleNote(t)}
                       aria-label={t.description ? "Edit note" : "Add note"}
                       title={t.description ? "View / edit note" : "Add note"}
-                      className={`p-3 -m-2 md:p-1 md:m-0 transition-opacity ${
+                      className={`p-1 transition-colors ${
                         t.description
                           ? "text-primary"
-                          : "text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:text-primary"
+                          : "text-muted-foreground hover:text-primary"
                       }`}
                     >
-                      <FileText className="h-4 w-4" />
+                      <FileText className="h-3.5 w-3.5" />
                     </button>
 
                     <button
                       disabled={goalLocked || isActiveDayPast}
                       onClick={() => startRenaming(t)}
-                      aria-label={
-                        goalLocked
-                          ? `${t.title} cannot be renamed because its goal is completed`
-                          : isActiveDayPast
-                            ? `Past day — ${t.title} cannot be renamed`
-                            : `Rename ${t.title}`
-                      }
-                      title={
-                        goalLocked
-                          ? "Goal completed — task locked"
-                          : isActiveDayPast
-                            ? "Past day — tasks are read-only"
-                            : "Rename task"
-                      }
-                      className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
+                      title="Rename task"
+                      className={`p-1 text-muted-foreground transition-colors ${
                         goalLocked || isActiveDayPast ? "cursor-not-allowed" : "hover:text-primary"
                       }`}
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="h-3.5 w-3.5" />
                     </button>
 
                     <button
                       disabled={isActiveDayPast}
                       onClick={() => removeTask.mutate({ id: t.id })}
-                      aria-label={
-                        isActiveDayPast
-                          ? `Past day — ${t.title} cannot be deleted`
-                          : `Delete ${t.title}`
-                      }
-                      title={isActiveDayPast ? "Past day — tasks are read-only" : undefined}
-                      className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
+                      title={isActiveDayPast ? "Past day — read-only" : "Delete task"}
+                      className={`p-1 text-muted-foreground transition-colors ${
                         isActiveDayPast ? "cursor-not-allowed" : "hover:text-destructive"
                       }`}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
+                    </div>
+
+                    {/* ── Mobile: compact ••• action menu ── */}
+                    <div className="ml-auto flex items-center gap-1 md:hidden">
+                      {/* Note indicator — always visible if task has a note */}
+                      {t.description && parseTaskDescription(t.description).note && (
+                        <button
+                          onClick={() => toggleNote(t)}
+                          className="p-1.5 text-primary"
+                          aria-label="View note"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+
+                      {!isActiveDayPast && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+                              aria-label="Task actions"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            {!goalLocked && (
+                              <DropdownMenuItem onClick={() => toggleNote(t)}>
+                                <FileText className="h-3.5 w-3.5 mr-2" />
+                                {t.description ? "Edit Note" : "Add Note"}
+                              </DropdownMenuItem>
+                            )}
+                            {!goalLocked && (
+                              <DropdownMenuItem onClick={() => startRenaming(t)}>
+                                <Pencil className="h-3.5 w-3.5 mr-2" />
+                                Rename
+                              </DropdownMenuItem>
+                            )}
+                            {!goalLocked && !t.completed_at && (
+                              <>
+                                <DropdownMenuItem onClick={() => {
+                                  const tomorrow = toISODate(addDays(parseISODate(activeDay.date), 1));
+                                  rescheduleTask.mutate({ id: t.id, targetDate: tomorrow });
+                                }}>
+                                  <CalendarClock className="h-3.5 w-3.5 mr-2" />
+                                  Reschedule → Tomorrow
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                  const nextWeek = toISODate(addDays(parseISODate(activeDay.date), 7));
+                                  rescheduleTask.mutate({ id: t.id, targetDate: nextWeek });
+                                }}>
+                                  <CalendarClock className="h-3.5 w-3.5 mr-2" />
+                                  Reschedule → Next Week
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {filteredActiveTasks.length > 1 && (
+                              <>
+                                <DropdownMenuItem
+                                  disabled={filteredActiveTasks.findIndex((x) => x.id === t.id) === 0}
+                                  onClick={() => moveTask(t.id, "up")}
+                                >
+                                  <ArrowUp className="h-3.5 w-3.5 mr-2" />
+                                  Move Up
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={filteredActiveTasks.findIndex((x) => x.id === t.id) === filteredActiveTasks.length - 1}
+                                  onClick={() => moveTask(t.id, "down")}
+                                >
+                                  <ArrowDown className="h-3.5 w-3.5 mr-2" />
+                                  Move Down
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            <DropdownMenuItem
+                              onClick={() => removeTask.mutate({ id: t.id })}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </div>
                   </div>
@@ -1369,156 +1424,7 @@ function UnifiedTasksPage() {
         )}
       </section>
 
-      {/* Full 7-Day Week Board Section (View Only) */}
-      <section className="mt-10">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold tracking-tight">Full Week Schedule</h2>
-              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                View Only
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Read-only 7-day overview. Click any day to focus and manage its tasks.
-            </p>
-          </div>
 
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 p-1 text-xs">
-            <button
-              onClick={() => setWeekViewMode("compact")}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors ${
-                weekViewMode === "compact"
-                  ? "bg-card text-foreground shadow-xs font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              <span>Overview</span>
-            </button>
-            <button
-              onClick={() => setWeekViewMode("cards")}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors ${
-                weekViewMode === "cards"
-                  ? "bg-card text-foreground shadow-xs font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Columns className="h-3.5 w-3.5" />
-              <span>Cards</span>
-            </button>
-          </div>
-        </div>
-
-        {weekViewMode === "compact" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
-            {days$.map((day, i) => {
-              const isSelected = day.date === selectedDate;
-              const isDayToday = day.date === todayISO;
-              const pct = pctComplete(day.tasks);
-              const doneCount = day.tasks.filter((t) => t.completed_at).length;
-              const dayTotal = day.tasks.length;
-              const isComplete = dayTotal > 0 && doneCount === dayTotal;
-              const hasExam = examDatesSet.has(day.date);
-
-              return (
-                <button
-                  key={day.date}
-                  onClick={() => {
-                    setSelectedDate(day.date);
-                    setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-                  }}
-                  className={`flex sm:flex-col items-center justify-between gap-3 rounded-xl border p-3 text-left transition-all hover:border-primary/50 ${
-                    isSelected
-                      ? "border-primary bg-primary/10 ring-1 ring-primary shadow-sm"
-                      : isDayToday
-                        ? "border-primary/40 bg-card"
-                        : "border-border bg-card hover:bg-secondary/30"
-                  }`}
-                >
-                  <div className="flex sm:w-full items-center justify-between gap-2 min-w-0">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold uppercase tracking-wider">
-                          {WEEKDAY_NAMES[i]!.slice(0, 3)}
-                        </span>
-                        {isDayToday && (
-                          <span className="rounded-full bg-primary/20 px-1.5 py-0.2 text-[9px] font-bold text-primary uppercase">
-                            Today
-                          </span>
-                        )}
-                        {hasExam && (
-                          <span title="Exam scheduled" className="text-primary flex items-center">
-                            <GraduationCap className="h-3.5 w-3.5" />
-                          </span>
-                        )}
-                      </div>
-                      <span className="num text-[11px] text-muted-foreground">
-                        {formatDayDate(day.date)}
-                      </span>
-                    </div>
-
-                    <div className="hidden sm:flex items-center">
-                      {isComplete && (
-                        <span className="text-[10px] text-primary font-semibold">100%</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex sm:w-full sm:flex-col items-center sm:items-stretch gap-3 sm:gap-2 shrink-0">
-                    <div className="flex flex-col sm:flex-row items-end sm:items-center sm:justify-between">
-                      <span className="num text-xs font-bold text-foreground sm:order-last">
-                        {pct}%
-                      </span>
-                      <span className="num text-[10px] text-muted-foreground">
-                        {doneCount}/{dayTotal} done
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="sm:hidden flex items-center justify-center">
-                        <ProgressRing value={pct} size={36} stroke={3.5} />
-                      </div>
-                      <div className="hidden sm:block h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-                        <div
-                          className="h-full bg-primary transition-all duration-300"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <ChevronRight className="sm:hidden h-4 w-4 text-muted-foreground/50" />
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="flex sm:grid gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible pb-3 sm:pb-0 snap-x snap-mandatory sm:grid-cols-2 xl:grid-cols-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
-            {days$.map((day, i) => {
-              const isSelected = day.date === selectedDate;
-              const isDayToday = day.date === todayISO;
-
-              return (
-                <div key={day.date} className="w-[85vw] max-w-[320px] shrink-0 snap-center sm:w-auto">
-                  <DayCard
-                    name={WEEKDAY_NAMES[i]!}
-                    date={day.date}
-                    isToday={isDayToday}
-                    isPast={day.date < todayISO}
-                    isSelected={isSelected}
-                    tasks={day.tasks}
-                    chainCompletedIds={chainCompletedIds}
-                    onSelectDay={() => {
-                      setSelectedDate(day.date);
-                      setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
 
       {/* Rename-task modal (pencil icon on a task row) */}
       <Dialog
@@ -1591,140 +1497,6 @@ function UnifiedTasksPage() {
   );
 }
 
-function DayCard({
-  name,
-  date,
-  isToday,
-  isPast,
-  isSelected,
-  tasks,
-  chainCompletedIds,
-  onSelectDay,
-}: {
-  name: string;
-  date: string;
-  isToday: boolean;
-  isPast?: boolean;
-  isSelected: boolean;
-  tasks: Database["public"]["Tables"]["day_tasks"]["Row"][];
-  // Ids of tasks whose rollover chain contains a completed copy (display-only
-  // badge signal — does not affect this card's counts or percentages).
-  chainCompletedIds: Set<string>;
-  onSelectDay: () => void;
-}) {
 
-  const pct = pctComplete(tasks);
-  const doneCount = tasks.filter((t) => t.completed_at).length;
-
-  return (
-    <article
-      onClick={onSelectDay}
-      className={`group flex flex-col justify-between rounded-2xl border bg-card p-4 sm:p-5 transition-all cursor-pointer hover:border-primary/60 hover:shadow-md ${
-        isSelected
-          ? "border-primary shadow-[0_0_0_1px_var(--primary)] ring-1 ring-primary"
-          : isToday
-            ? "border-primary/50"
-            : "border-border"
-      }`}
-    >
-      <div>
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-base font-semibold tracking-tight group-hover:text-primary transition-colors">
-              {name}
-            </h3>
-            <p className="num text-xs text-muted-foreground">{formatDayDate(date)}</p>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {isToday && (
-              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase text-primary">
-                Today
-              </span>
-            )}
-            {isSelected && (
-              <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                Focused
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="my-2.5 sm:my-3 flex justify-center">
-          <ProgressRing value={pct} size={68} stroke={6} />
-        </div>
-
-        <div className="mb-2 flex items-center justify-between text-[11px] text-muted-foreground">
-          <span className="num font-medium">
-            {doneCount} of {tasks.length} done
-          </span>
-          <span className="num font-semibold text-foreground">{pct}%</span>
-        </div>
-
-        {/* Read-only Task List */}
-        <ul className="space-y-1.5 my-2 max-h-40 sm:max-h-48 overflow-y-auto pr-1">
-          {tasks.length === 0 && (
-            <li className="text-xs text-muted-foreground py-2 italic text-center">
-              No tasks scheduled.
-            </li>
-          )}
-          {tasks.map((t) => (
-            <li
-              key={t.id}
-              className="flex flex-col gap-0.5 rounded-lg px-2 py-1 text-xs transition-colors bg-secondary/20"
-            >
-              <div className="flex items-start gap-2">
-                <div className="mt-0.5 shrink-0">
-                  {t.completed_at ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                  ) : (
-                    <Circle className="h-3.5 w-3.5 text-muted-foreground/60" />
-                  )}
-                </div>
-                <span
-                  className={`flex-1 leading-snug truncate ${
-                    t.completed_at ? "text-muted-foreground line-through" : "text-foreground"
-                  }`}
-                >
-                  {parseRoutineTitle(t.title).displayTitle}
-                </span>
-                {isPast && !t.completed_at && (
-                  t.is_stale ? (
-                    <span className="shrink-0 rounded-full bg-amber-500/15 border border-amber-600/40 dark:border-amber-400/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                      Stale
-                    </span>
-                  ) : chainCompletedIds.has(t.id) ? (
-                    // Frozen original whose rollover copy was completed elsewhere:
-                    // swap "Due" for the existing "Completed late" badge. Display
-                    // only — the row stays read-only and this day's stats are
-                    // computed from t.completed_at, which is untouched.
-                    <span className="shrink-0 rounded-full bg-secondary/70 border border-border/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Completed late
-                    </span>
-                  ) : (
-                    <span className="shrink-0 rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
-                      Due
-                    </span>
-                  )
-                )}
-                {t.completed_at && (t.rollover_count ?? 0) > 0 && (
-                  <span className="shrink-0 rounded-full bg-secondary/70 border border-border/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Completed late
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Focus day action footer */}
-      <div className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground group-hover:text-primary transition-colors">
-        <span>{isSelected ? "Currently active in editor" : "Click card to focus & edit"}</span>
-        <ChevronRight className="h-3.5 w-3.5 transform group-hover:translate-x-1 transition-transform" />
-      </div>
-    </article>
-  );
-}
 
 
