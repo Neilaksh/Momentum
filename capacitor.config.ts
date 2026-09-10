@@ -3,7 +3,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.neilaksh.momentum',
   appName: 'Momentum',
-  webDir: 'dist',
+  webDir: 'public',
   server: {
     url: 'https://momentum-lifesync.lovable.app',
     cleartext: true,
