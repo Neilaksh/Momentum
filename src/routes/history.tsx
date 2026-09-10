@@ -237,7 +237,10 @@ function HistoryPage() {
     }
 
     // Best week by done count
-    const bestWeek = sorted.reduce((best, w) => (w.done > best.done ? w : best), sorted[0]);
+    const firstWeek = sorted[0];
+    const bestWeek = firstWeek
+      ? sorted.reduce((best, w) => (w.done > best.done ? w : best), firstWeek)
+      : undefined;
     if (bestWeek && bestWeek.done > 0) {
       // Only add if not already a perfect-week milestone
       const alreadyPerfect = bestWeek.total > 0 && bestWeek.done === bestWeek.total;
@@ -259,9 +262,10 @@ function HistoryPage() {
         rolloverCount++;
       }
     }
-    if (rolloverCount >= 3) {
+    const lastWeek = sorted[sorted.length - 1];
+    if (rolloverCount >= 3 && lastWeek) {
       events.push({
-        date: sorted[sorted.length - 1].weekStart,
+        date: lastWeek.weekStart,
         label: `Resilient tracker — pushed through ${rolloverCount} partial weeks 💪`,
         icon: "flame",
         color: "text-orange-400",
@@ -269,9 +273,9 @@ function HistoryPage() {
     }
 
     // Longest current streak from profile
-    if ((profile?.best_streak ?? 0) >= 7) {
+    if ((profile?.best_streak ?? 0) >= 7 && lastWeek) {
       events.push({
-        date: sorted[sorted.length - 1].weekStart,
+        date: lastWeek.weekStart,
         label: `${profile!.best_streak}-day personal streak record 🔥`,
         icon: "star",
         color: "text-rose-400",
@@ -279,9 +283,9 @@ function HistoryPage() {
     }
 
     // First tracked week
-    if (sorted.length > 0) {
+    if (firstWeek) {
       events.push({
-        date: sorted[0].weekStart,
+        date: firstWeek.weekStart,
         label: "First week tracked — the journey begins! 🌱",
         icon: "star",
         color: "text-emerald-400",

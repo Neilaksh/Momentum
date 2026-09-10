@@ -7,7 +7,9 @@ import {
   Archive,
   ArchiveRestore,
   BookOpen,
+  CalendarDays,
   Check,
+  GraduationCap,
   Palette,
   Plus,
   RefreshCw,
@@ -20,6 +22,9 @@ import { AppShell } from "@/components/AppShell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ExamScheduleDialog } from "@/components/ExamScheduleDialog";
+import { useExamSchedules } from "@/lib/exam-schedules-store";
+import { getDaysUntilExam, getUpcomingExams } from "@/lib/exam-schedules-shared";
 import {
   checkSubjectUsage,
   createSubject,
@@ -136,6 +141,14 @@ function SubjectsPage() {
   });
 
   const subjects = data?.subjects ?? [];
+
+  // Exam Schedules integration
+  const { exams } = useExamSchedules();
+  const [examDialogOpen, setExamDialogOpen] = useState(false);
+  const [examDialogSubjectId, setExamDialogSubjectId] = useState<string | null>(null);
+  const [examDialogMode, setExamDialogMode] = useState<"list" | "create">("list");
+
+  const upcomingExams = useMemo(() => getUpcomingExams(exams, new Date()), [exams]);
 
   const [archivedIds, setArchivedIds] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
@@ -267,11 +280,32 @@ function SubjectsPage() {
 
   return (
     <AppShell profile={weekData?.profile ?? null}>
-      <div className="flex items-center gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight">Manage Subjects</h1>
-        <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-primary">
-          {subjects.length} subject{subjects.length !== 1 ? "s" : ""}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-semibold tracking-tight">Manage Subjects</h1>
+          <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-primary">
+            {subjects.length} subject{subjects.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setExamDialogSubjectId(null);
+            setExamDialogMode("list");
+            setExamDialogOpen(true);
+          }}
+          className="gap-2 border-primary/30 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors"
+        >
+          <GraduationCap className="h-4 w-4" />
+          Exam Schedule
+          {upcomingExams.length > 0 && (
+            <span className="rounded-full bg-primary/20 px-1.5 py-0.2 text-[10px] font-bold">
+              {upcomingExams.length} upcoming
+            </span>
+          )}
+        </Button>
       </div>
       <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
         Subjects are color-coded buckets you can attach to tasks and routines to keep related work
@@ -472,14 +506,29 @@ function SubjectsPage() {
 
                   {/* Quick Shortcut: Log a task under this subject */}
                   {!isArchived && (
-                    <Link
-                      to="/"
-                      search={{ subjectId: s.id }}
+                    <a
+                      href={`/?subjectId=${encodeURIComponent(s.id)}`}
                       className="flex items-center gap-1 rounded-lg bg-primary/10 border border-primary/20 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
                       title={`Log a new task under ${s.name}`}
                     >
                       <Plus className="h-3 w-3" /> Log Task
-                    </Link>
+                    </a>
+                  )}
+
+                  {/* Schedule Exam under this subject */}
+                  {!isArchived && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExamDialogSubjectId(s.id);
+                        setExamDialogMode("create");
+                        setExamDialogOpen(true);
+                      }}
+                      className="flex items-center gap-1 rounded-lg bg-secondary/50 hover:bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                      title={`Schedule an exam for ${s.name}`}
+                    >
+                      <GraduationCap className="h-3.5 w-3.5 text-primary" /> Schedule Exam
+                    </button>
                   )}
 
                   <button
@@ -546,6 +595,36 @@ function SubjectsPage() {
                   colorHex={subjectColorHex(s.color)}
                 />
 
+                {/* Upcoming Exam Indicator if scheduled for this subject */}
+                {(() => {
+                  const subjectUpcoming = upcomingExams.filter((e) => e.subject_id === s.id);
+                  if (subjectUpcoming.length === 0) return null;
+                  const nextExam = subjectUpcoming[0];
+                  if (!nextExam) return null;
+                  const countdown = getDaysUntilExam(nextExam.exam_date);
+                  return (
+                    <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/5 border border-primary/20 px-3 py-2 text-xs">
+                      <div className="flex items-center gap-2 truncate">
+                        <GraduationCap className="h-4 w-4 text-primary shrink-0" />
+                        <span className="font-semibold text-foreground truncate">
+                          Exam: {nextExam.title}
+                        </span>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                          countdown.isToday
+                            ? "bg-primary text-primary-foreground animate-pulse"
+                            : countdown.isTomorrow
+                              ? "bg-amber-500/20 text-amber-500"
+                              : "bg-secondary text-primary"
+                        }`}
+                      >
+                        {countdown.label}
+                      </span>
+                    </div>
+                  );
+                })()}
+
                 {isBlocked && blockedDelete && (
                   <div className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
@@ -563,6 +642,14 @@ function SubjectsPage() {
           })}
         </div>
       </div>
+
+      <ExamScheduleDialog
+        open={examDialogOpen}
+        onOpenChange={setExamDialogOpen}
+        subjects={subjects}
+        initialSubjectId={examDialogSubjectId}
+        initialMode={examDialogMode}
+      />
     </AppShell>
   );
 }

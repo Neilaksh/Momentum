@@ -18,6 +18,7 @@ import {
   ChevronUp,
   Circle,
   FileText,
+  GraduationCap,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -40,6 +41,8 @@ import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
 import { DailyQuoteBanner } from "@/components/DailyQuoteBanner";
 import { WeeklyReviewBanner } from "@/components/WeeklyReviewBanner";
+import { UpcomingExamsGlanceBar } from "@/components/ExamScheduleBanner";
+import { useExamSchedules } from "@/lib/exam-schedules-store";
 import { ProgressRing } from "@/components/ProgressRing";
 import { PieStat } from "@/components/PieStat";
 import { Input } from "@/components/ui/input";
@@ -97,9 +100,6 @@ import {
 import type { Database } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    subjectId: typeof search.subjectId === "string" ? search.subjectId : undefined,
-  }),
   head: () => ({
     meta: [
       { title: "Tasks — Daily & Weekly Task Tracker with Day Pie Chart" },
@@ -129,15 +129,18 @@ type TaskFilter = "all" | "pending" | "completed";
 const addTaskKey = (date: string, title: string) => `${date}::${title}`;
 
 function UnifiedTasksPage() {
-  const searchParams = Route.useSearch();
+  const [initialSubjectFilter] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("subjectId");
+  });
   const [weekStart, setWeekStart] = useState(() => toISODate(startOfWeek(new Date())));
   const todayISO = toISODate(new Date());
   const [selectedDate, setSelectedDate] = useState(() => todayISO);
   const [draft, setDraft] = useState("");
-  const [draftSubjectId, setDraftSubjectId] = useState<string | null>(searchParams.subjectId ?? null);
+  const [draftSubjectId, setDraftSubjectId] = useState<string | null>(initialSubjectFilter);
   const [draftPriority, setDraftPriority] = useState<GoalPriority | null>(null);
   const [filter, setFilter] = useState<TaskFilter>("all");
-  const [subjectFilter, setSubjectFilter] = useState<string | null>(searchParams.subjectId ?? null);
+  const [subjectFilter, setSubjectFilter] = useState<string | null>(initialSubjectFilter);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [estDrafts, setEstDrafts] = useState<Record<string, string>>({});
@@ -148,11 +151,11 @@ function UnifiedTasksPage() {
   const qc = useQueryClient();
 
   useEffect(() => {
-    if (searchParams.subjectId) {
-      setDraftSubjectId(searchParams.subjectId);
-      setSubjectFilter(searchParams.subjectId);
+    if (initialSubjectFilter) {
+      setDraftSubjectId(initialSubjectFilter);
+      setSubjectFilter(initialSubjectFilter);
     }
-  }, [searchParams.subjectId]);
+  }, [initialSubjectFilter]);
 
   const fetchWeek = useServerFn(getWeek);
   const fetchSubjectsFn = useServerFn(getSubjects);
@@ -371,6 +374,10 @@ function UnifiedTasksPage() {
   // If the filtered subject was deleted, fall back to "All" instead of an empty list.
   const activeSubjectFilter = subjectFilter && subjectsMap.has(subjectFilter) ? subjectFilter : null;
 
+  // Exam Schedules integration
+  const { exams } = useExamSchedules();
+  const examDatesSet = useMemo(() => new Set(exams.map((e) => e.exam_date)), [exams]);
+
   const days = data?.days ?? [];
   // Include direct tasks AND goal-linked repeating tasks (only unlinked routine schedule blocks stay in Routines tab)
   const days$ = days.map((d) => ({
@@ -472,9 +479,11 @@ function UnifiedTasksPage() {
     if (direction === "up" && index === 0) return;
     if (direction === "down" && index === list.length - 1) return;
     const targetIndex = direction === "up" ? index - 1 : index + 1;
-    const temp = list[index];
-    list[index] = list[targetIndex];
-    list[targetIndex] = temp;
+    const currentTask = list[index];
+    const targetTask = list[targetIndex];
+    if (!currentTask || !targetTask) return;
+    list[index] = targetTask;
+    list[targetIndex] = currentTask;
     reorderTask.mutate({ date: selectedDate, orderedIds: list.map((t) => t.id) });
   };
 
@@ -503,6 +512,9 @@ function UnifiedTasksPage() {
 
       {/* Weekly Review banner — visible on Monday until dismissed */}
       <WeeklyReviewBanner />
+
+      {/* Upcoming Exam Schedule Glance Bar */}
+      <UpcomingExamsGlanceBar subjects={subjects} onSelectDate={setSelectedDate} />
 
       {/* Header: Week Switcher & Jump to Today */}
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -690,6 +702,7 @@ function UnifiedTasksPage() {
           {days$.map((d, i) => {
             const isSelected = d.date === selectedDate;
             const isDayToday = d.date === todayISO;
+            const hasExam = examDatesSet.has(d.date);
             const dayDone = d.tasks.filter((t) => t.completed_at).length;
             const dayTotal = d.tasks.length;
             const isComplete = dayTotal > 0 && dayDone === dayTotal;
@@ -708,14 +721,21 @@ function UnifiedTasksPage() {
                   <span className="text-[11px] font-semibold uppercase tracking-wider">
                     {WEEKDAY_NAMES[i]!.slice(0, 3)}
                   </span>
-                  {isDayToday && (
-                    <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-                      Today
-                    </span>
-                  )}
-                  {isComplete && !isDayToday && (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                  )}
+                  <div className="flex items-center gap-1">
+                    {hasExam && (
+                      <span title="Exam scheduled on this day" className="text-primary flex items-center">
+                        <GraduationCap className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                    {isDayToday && (
+                      <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                        Today
+                      </span>
+                    )}
+                    {isComplete && !isDayToday && (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                    )}
+                  </div>
                 </div>
 
                 <div className="my-1.5 text-lg font-bold num">

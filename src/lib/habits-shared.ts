@@ -39,7 +39,7 @@ export type ParsedHabitTitle = {
   cleanTitle: string;
   displayTitle: string;
   rawTitle: string;
-  timeTag?: string;
+  timeTag?: string | undefined;
 };
 
 /**
