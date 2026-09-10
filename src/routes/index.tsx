@@ -567,7 +567,7 @@ function UnifiedTasksPage() {
       </div>
 
       {/* ── Unified Interactive Week Hub ── */}
-      <div className="mt-5">
+      <div className="mt-4">
         <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
           {days$.map((d, i) => {
             const isSelected = d.date === selectedDate;
@@ -585,7 +585,7 @@ function UnifiedTasksPage() {
                   setSelectedDate(d.date);
                   setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
                 }}
-                className={`relative flex flex-col items-center gap-0.5 rounded-xl border p-1.5 sm:p-2.5 text-center transition-all ${
+                className={`relative flex flex-col items-center gap-0.5 rounded-xl border py-2 px-0.5 sm:py-2.5 sm:px-2 text-center transition-all ${
                   isSelected
                     ? "border-primary bg-primary/10 shadow-sm shadow-primary/20 ring-1 ring-primary"
                     : isDayToday
@@ -602,19 +602,19 @@ function UnifiedTasksPage() {
 
                 {/* Date number with mini progress ring */}
                 <div className="relative my-0.5">
-                  <ProgressRing value={dayPct} size={32} stroke={2.5} label={String(parseISODate(d.date).getDate())} className="text-[11px] sm:text-xs" />
+                  <ProgressRing value={dayPct} size={32} stroke={2.5} label={String(parseISODate(d.date).getDate())} />
                 </div>
 
                 {/* Indicators row */}
-                <div className="flex items-center gap-0.5 min-h-[14px]">
+                <div className="flex items-center justify-center gap-0.5 h-3 mt-0.5">
                   {isDayToday && (
                     <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" title="Today" />
                   )}
                   {hasExam && (
-                    <GraduationCap className="h-3 w-3 text-primary" />
+                    <GraduationCap className="h-3 w-3 text-primary shrink-0" />
                   )}
                   {isComplete && (
-                    <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                    <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
                   )}
                 </div>
 
@@ -629,56 +629,39 @@ function UnifiedTasksPage() {
       </div>
 
       {/* ── Compact Stats Bar + Toggleable Charts ── */}
-      <div className="mt-4">
-        {/* Compact summary row — always visible */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex items-center gap-4">
-            {/* Today's progress mini */}
-            <div className="flex items-center gap-2.5">
-              <PieStat
-                done={doneActive}
-                total={activeTasks.length}
-                label={isActiveDayToday ? "Today" : activeWeekdayName.slice(0, 3)}
-                caption=""
-                size={44}
-                showTooltip={false}
+      <div className="mt-3">
+        {/* Compact summary row — single sleek line, zero mobile clutter */}
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-border/80 bg-card/90 px-3 py-2 sm:px-4 sm:py-2.5 shadow-sm">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+            {/* Week progress indicator */}
+            <div className="flex items-center gap-2">
+              <ProgressRing
+                value={weekPct}
+                size={26}
+                stroke={3}
+                label=""
               />
-              <div>
-                <p className="text-xs font-semibold">
-                  {doneActive}/{activeTasks.length} <span className="text-muted-foreground font-normal">tasks</span>
-                </p>
-                <p className="num text-[10px] text-muted-foreground">
-                  {isActiveDayToday ? "Today" : activeWeekdayName} · {activeTasks.length ? Math.round((doneActive / activeTasks.length) * 100) : 0}%
-                </p>
+              <div className="flex flex-col">
+                <span className="num text-xs font-semibold leading-tight text-foreground">
+                  {doneCount}/{allTasks.length} <span className="text-[10px] font-normal text-muted-foreground">week</span>
+                </span>
+                <span className="num text-[10px] text-muted-foreground leading-tight">
+                  {weekPct}% completed
+                </span>
               </div>
             </div>
 
             {/* Separator */}
-            <div className="hidden sm:block h-8 w-px bg-border" />
-
-            {/* Week progress */}
-            <div className="hidden sm:flex items-center gap-2.5">
-              <div className="flex flex-col">
-                <p className="text-xs font-semibold">
-                  {doneCount}/{allTasks.length} <span className="text-muted-foreground font-normal">weekly</span>
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <div className="h-1.5 w-20 rounded-full bg-secondary overflow-hidden">
-                    <div className="h-full bg-primary transition-all duration-300" style={{ width: `${weekPct}%` }} />
-                  </div>
-                  <span className="num text-[10px] text-muted-foreground">{weekPct}%</span>
-                </div>
-              </div>
-            </div>
+            <div className="h-5 w-px bg-border/80 shrink-0" />
 
             {/* XP badge */}
             {activeDayXpEarned > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] sm:text-[11px] font-bold text-primary shrink-0">
                 <Zap className="h-3 w-3" /> +{activeDayXpEarned} XP
               </span>
             )}
             {isPerfectActive && (
-              <span className="flex items-center gap-1 rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+              <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary shrink-0">
                 <Sparkles className="h-3 w-3" /> Perfect
               </span>
             )}
@@ -686,12 +669,13 @@ function UnifiedTasksPage() {
 
           {/* Chart toggle */}
           <button
+            type="button"
             onClick={() => setShowCharts(!showCharts)}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 rounded-lg border border-border/70 bg-secondary/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-secondary/80 hover:text-foreground transition-all shrink-0"
           >
-            <BarChart3 className="h-3.5 w-3.5" />
-            {showCharts ? "Hide Charts" : "Show Charts"}
-            <ChevronDown className={`h-3 w-3 transition-transform ${showCharts ? "rotate-180" : ""}`} />
+            <BarChart3 className="h-3.5 w-3.5 text-primary" />
+            <span className="text-[11px] font-medium">{showCharts ? "Hide Charts" : "Charts"}</span>
+            <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${showCharts ? "rotate-180" : ""}`} />
           </button>
         </div>
 
