@@ -31,64 +31,11 @@ function saveToLocalStorage(exams: ExamSchedule[]) {
   }
 }
 
-let hasWarnedMissingTable = false;
-
-function mergeExamsById(local: ExamSchedule[], remote: ExamSchedule[]): ExamSchedule[] {
-  const mergedMap = new Map<string, ExamSchedule>();
-  for (const item of local) mergedMap.set(item.id, item);
-  for (const item of remote) mergedMap.set(item.id, item);
-  return Array.from(mergedMap.values()).sort(
-    (a, b) =>
-      a.exam_date.localeCompare(b.exam_date) ||
-      (a.start_time ?? "").localeCompare(b.start_time ?? ""),
-  );
-}
-
-/**
- * Pulls the current user's exam schedules from Supabase.
- * Returns the remote rows, or `null` when the table isn't available yet
- * (migration not applied) or the query fails.
- */
-async function fetchRemoteExams(userId: string): Promise<ExamSchedule[] | null> {
-  try {
-    const { data, error } = await (supabase as any)
-      .from("exam_schedules")
-      .select("*")
-      .eq("user_id", userId)
-      .order("exam_date", { ascending: true });
-
-    if (error) {
-      const code = (error as { code?: string })?.code;
-      const message = (error as { message?: string })?.message ?? String(error);
-      const tableMissing =
-        code === "PGRST205" ||
-        code === "42P01" ||
-        /could not find the table|does not exist/i.test(message);
-      if (tableMissing) {
-        if (!hasWarnedMissingTable) {
-          hasWarnedMissingTable = true;
-          console.warn(
-            "[exam-schedules] The 'exam_schedules' table does not exist in Supabase yet — running local-only. " +
-              "Apply supabase/migrations/20260910000000_add_exam_schedules.sql to enable cloud sync across devices.",
-          );
-        }
-      } else {
-        console.warn("[exam-schedules] Supabase sync query failed", message);
-      }
-      return null;
-    }
-
-    return Array.isArray(data) ? (data as ExamSchedule[]) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function useExamSchedules() {
   const [exams, setExams] = useState<ExamSchedule[]>(loadFromLocalStorage);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Keep state in sync across components, tabs and the Capacitor WebView.
+  // Sync state across components and browser tabs
   useEffect(() => {
     const handleUpdate = (e: Event) => {
       const customEvent = e as CustomEvent<ExamSchedule[]>;
@@ -111,55 +58,44 @@ export function useExamSchedules() {
     // Initial load from storage to ensure consistency
     setExams(loadFromLocalStorage());
 
-    return () => {
-      window.removeEventListener(EVENT_NAME, handleUpdate);
-      window.removeEventListener("storage", handleStorage);
-    };
-  }, []);
-
-  // Cloud sync: pull remote exams into localStorage whenever the user is signed
-  // in. Re-runs on auth changes and when the app regains focus, so a freshly
-  // installed Android app (empty WebView localStorage) picks up exams that were
-  // saved from the web app or another device.
-  useEffect(() => {
+    // Optional background sync with Supabase if table is created
     let isMounted = true;
-
-    const runSync = async () => {
+    async function syncSupabase() {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData?.session?.user?.id;
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id;
         if (!userId) return;
 
-        const remote = await fetchRemoteExams(userId);
-        if (!isMounted || remote === null) return;
+        // Try querying exam_schedules if table exists
+        const { data, error } = await (supabase as any)
+          .from("exam_schedules")
+          .select("*")
+          .eq("user_id", userId)
+          .order("exam_date", { ascending: true });
 
-        const merged = mergeExamsById(loadFromLocalStorage(), remote);
-        setExams(merged);
-        saveToLocalStorage(merged);
+        if (!error && Array.isArray(data) && data.length > 0 && isMounted) {
+          // Merge local and remote
+          const local = loadFromLocalStorage();
+          const mergedMap = new Map<string, ExamSchedule>();
+          for (const item of local) mergedMap.set(item.id, item);
+          for (const item of data) mergedMap.set(item.id, item);
+          const merged = Array.from(mergedMap.values()).sort((a, b) =>
+            a.exam_date.localeCompare(b.exam_date),
+          );
+          setExams(merged);
+          saveToLocalStorage(merged);
+        }
       } catch {
-        // Network / auth hiccup - local storage remains the source of truth.
+        // Table not present or network offline - fallback to local storage seamlessly
       }
-    };
+    }
 
-    void runSync();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-      void runSync();
-    });
-    const unlisten = authListener.subscription.unsubscribe.bind(authListener.subscription);
-
-    const handleVisible = () => {
-      if (document.visibilityState === "visible") void runSync();
-    };
-    const handleFocus = () => void runSync();
-    document.addEventListener("visibilitychange", handleVisible);
-    window.addEventListener("focus", handleFocus);
+    void syncSupabase();
 
     return () => {
       isMounted = false;
-      unlisten();
-      document.removeEventListener("visibilitychange", handleVisible);
-      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener(EVENT_NAME, handleUpdate);
+      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 
