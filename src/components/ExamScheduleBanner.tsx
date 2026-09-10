@@ -98,10 +98,10 @@ export function UpcomingExamsGlanceBar({
 
   return (
     <>
-      <div className="mb-4 rounded-xl border border-primary/20 bg-gradient-to-r from-primary/10 via-card to-card p-3 sm:p-3.5 shadow-sm transition-all">
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
+      <div className="mb-6 rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/10 via-card to-card p-4 shadow-sm transition-all sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/20 text-primary shrink-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/20 text-primary">
               <GraduationCap className="h-4 w-4" />
             </div>
             <div>
@@ -113,7 +113,7 @@ export function UpcomingExamsGlanceBar({
                   {upcoming.length} upcoming
                 </span>
               </div>
-              <p className="hidden sm:block text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Upcoming tests and examinations linked to your subjects.
               </p>
             </div>

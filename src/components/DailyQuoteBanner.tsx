@@ -99,13 +99,13 @@ export function DailyQuoteBanner() {
   const quote = QUOTES[index]!;
 
   return (
-    <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-border/60 bg-card/80 px-3.5 py-2.5">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Quote className="h-3.5 w-3.5" />
+    <div className="mb-6 flex items-start gap-3 rounded-2xl border border-border bg-card p-4">
+      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+        <Quote className="h-4 w-4" />
       </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium italic text-foreground/90 line-clamp-1">&ldquo;{quote.text}&rdquo;</p>
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+      <div className="min-w-0">
+        <p className="text-sm font-medium italic text-foreground">&ldquo;{quote.text}&rdquo;</p>
+        <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           — {quote.author}
         </p>
       </div>
