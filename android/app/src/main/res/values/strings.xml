@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Momentum</string>
-    <string name="title_activity_main">Momentum</string>
-    <string name="package_name">com.neilaksh.momentum</string>
-    <string name="custom_url_scheme">com.neilaksh.momentum</string>
-</resources>
