@@ -93,13 +93,18 @@ function SubjectActivityMiniChart({
           const dayName = ["M", "T", "W", "T", "F", "S", "S"][i];
           const heightPct = d.total > 0 ? Math.max(25, Math.round((d.done / maxTotal) * 100)) : 15;
           return (
-            <div key={d.date} className="flex flex-col items-center gap-0.5" title={`${d.done}/${d.total} tasks done`}>
+            <div
+              key={d.date}
+              className="flex flex-col items-center gap-0.5"
+              title={`${d.done}/${d.total} tasks done`}
+            >
               <div className="w-2.5 h-4 bg-secondary/80 rounded-xs flex items-end overflow-hidden">
                 <div
                   className="w-full transition-all rounded-xs"
                   style={{
                     height: `${heightPct}%`,
-                    backgroundColor: d.done > 0 ? colorHex : d.total > 0 ? "rgba(255,255,255,0.2)" : "transparent",
+                    backgroundColor:
+                      d.done > 0 ? colorHex : d.total > 0 ? "rgba(255,255,255,0.2)" : "transparent",
                   }}
                 />
               </div>
@@ -229,8 +234,7 @@ function SubjectsPage() {
       invalidate();
       toast.success("Subject created!");
     },
-    onError: (err) =>
-      toast.error(err instanceof Error ? err.message : "Couldn't create subject."),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't create subject."),
   });
 
   const update = useMutation({
@@ -240,8 +244,7 @@ function SubjectsPage() {
       invalidate();
       toast.success("Subject updated!");
     },
-    onError: (err) =>
-      toast.error(err instanceof Error ? err.message : "Couldn't update subject."),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't update subject."),
   });
 
   const remove = useMutation({
@@ -252,8 +255,7 @@ function SubjectsPage() {
       invalidate();
       toast.info("Subject deleted");
     },
-    onError: (err) =>
-      toast.error(err instanceof Error ? err.message : "Couldn't delete subject."),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't delete subject."),
   });
 
   /** Check usage first: block deletion when tasks reference this subject. */
@@ -272,9 +274,7 @@ function SubjectsPage() {
       setBlockedDelete(null);
       setConfirmDeleteId(subject.id);
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Couldn't check subject usage. Try again.",
-      );
+      toast.error(err instanceof Error ? err.message : "Couldn't check subject usage. Try again.");
     }
   }
 
@@ -462,7 +462,9 @@ function SubjectsPage() {
                       type="button"
                       className="flex-1 gap-2"
                       disabled={update.isPending || !editName.trim()}
-                      onClick={() => update.mutate({ id: s.id, name: editName.trim(), color: editColor })}
+                      onClick={() =>
+                        update.mutate({ id: s.id, name: editName.trim(), color: editColor })
+                      }
                     >
                       {update.isPending ? (
                         <RefreshCw className="h-4 w-4 animate-spin" />

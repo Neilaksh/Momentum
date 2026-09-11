@@ -87,11 +87,7 @@ export function UpcomingExamsGlanceBar({
   if (upcoming.length === 0) {
     return (
       <>
-        <ExamScheduleDialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          subjects={subjects}
-        />
+        <ExamScheduleDialog open={dialogOpen} onOpenChange={setDialogOpen} subjects={subjects} />
       </>
     );
   }
@@ -225,11 +221,7 @@ export function UpcomingExamsGlanceBar({
         )}
       </div>
 
-      <ExamScheduleDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        subjects={subjects}
-      />
+      <ExamScheduleDialog open={dialogOpen} onOpenChange={setDialogOpen} subjects={subjects} />
     </>
   );
 }
@@ -310,9 +302,7 @@ export function FocusedDayExamCard({
                     )}
                   </div>
 
-                  <h3 className="text-lg font-bold tracking-tight text-foreground">
-                    {exam.title}
-                  </h3>
+                  <h3 className="text-lg font-bold tracking-tight text-foreground">{exam.title}</h3>
 
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground pt-0.5">
                     {formattedTime && (
@@ -356,11 +346,7 @@ export function FocusedDayExamCard({
         })}
       </div>
 
-      <ExamScheduleDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        subjects={subjects}
-      />
+      <ExamScheduleDialog open={dialogOpen} onOpenChange={setDialogOpen} subjects={subjects} />
     </>
   );
 }

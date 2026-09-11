@@ -53,7 +53,12 @@ export function WeeklyReviewBanner() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => markSeen.mutate(status.weekStart)} className="gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => markSeen.mutate(status.weekStart)}
+            className="gap-1.5"
+          >
             <X className="h-4 w-4" />
             Not now
           </Button>

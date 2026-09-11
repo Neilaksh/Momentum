@@ -50,7 +50,14 @@ import { getHistory, resetTrackerData } from "@/lib/tracker.functions";
 import { getSubjectBreakdown } from "@/lib/subjects.functions";
 import { subjectColorHex, type SubjectBreakdownEntry } from "@/lib/subjects-shared";
 import { listWeeklyReviews } from "@/lib/weekly-review.functions";
-import { formatDayDate, levelProgress, parseISODate, toISODate, XP_PER_TASK, type Profile } from "@/lib/tracker-shared";
+import {
+  formatDayDate,
+  levelProgress,
+  parseISODate,
+  toISODate,
+  XP_PER_TASK,
+  type Profile,
+} from "@/lib/tracker-shared";
 
 export const Route = createFileRoute("/history")({
   head: () => ({
@@ -185,13 +192,7 @@ function HistoryPage() {
     const headers = ["Week Start", "Formatted Date", "Tasks Total", "Tasks Done", "Completion %"];
     const rows = weeks.map((w) => {
       const pct = w.total ? Math.round((w.done / w.total) * 100) : 0;
-      return [
-        w.weekStart,
-        `"${formatDayDate(w.weekStart)}"`,
-        w.total,
-        w.done,
-        `${pct}%`,
-      ].join(",");
+      return [w.weekStart, `"${formatDayDate(w.weekStart)}"`, w.total, w.done, `${pct}%`].join(",");
     });
     const csvContent = [headers.join(","), ...rows].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -222,7 +223,12 @@ function HistoryPage() {
   const milestones = useMemo(() => {
     if (weeks.length === 0) return [];
     const sorted = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
-    const events: { date: string; label: string; icon: "trophy" | "flame" | "star" | "medal"; color: string }[] = [];
+    const events: {
+      date: string;
+      label: string;
+      icon: "trophy" | "flame" | "star" | "medal";
+      color: string;
+    }[] = [];
 
     // Perfect weeks (100%)
     for (const w of sorted) {
@@ -301,7 +307,9 @@ function HistoryPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">History & Analytics</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Every week you've tracked so far and tracker settings.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Every week you've tracked so far and tracker settings.
+          </p>
         </div>
         {weeks.length > 0 && (
           <Button
@@ -316,7 +324,12 @@ function HistoryPage() {
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatCard icon={<Zap className="h-4 w-4" />} label="Level" value={`${lp.level}`} sub={`${profile?.total_xp ?? 0} XP total`} />
+        <StatCard
+          icon={<Zap className="h-4 w-4" />}
+          label="Level"
+          value={`${lp.level}`}
+          sub={`${profile?.total_xp ?? 0} XP total`}
+        />
         <StatCard
           icon={<Flame className="h-4 w-4" />}
           label="Current streak"
@@ -490,7 +503,8 @@ function HistoryPage() {
         <div className="mt-6 rounded-2xl border border-border/80 bg-card p-4 text-xs text-muted-foreground flex items-center justify-between">
           <span>
             📊 <strong>Multi-week trend chart:</strong> Keep tracking tasks! The week-over-week
-            completion rate &amp; XP breakdown graph will appear once you have at least 2 weeks of activity.
+            completion rate &amp; XP breakdown graph will appear once you have at least 2 weeks of
+            activity.
           </span>
         </div>
       ) : null}
@@ -592,23 +606,35 @@ function HistoryPage() {
         <section className="mt-6 rounded-2xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 mb-4">
             <Trophy className="h-4 w-4 text-amber-400" />
-            <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Milestones</p>
-            <span className="ml-auto text-[10px] text-muted-foreground">{milestones.length} achievement{milestones.length !== 1 ? "s" : ""}</span>
+            <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
+              Milestones
+            </p>
+            <span className="ml-auto text-[10px] text-muted-foreground">
+              {milestones.length} achievement{milestones.length !== 1 ? "s" : ""}
+            </span>
           </div>
           <ol className="relative border-l border-border/60 space-y-4 pl-5">
             {milestones.map((m, i) => {
-              const Icon = m.icon === "trophy" ? Trophy
-                : m.icon === "flame" ? Flame
-                : m.icon === "medal" ? Medal
-                : Star;
+              const Icon =
+                m.icon === "trophy"
+                  ? Trophy
+                  : m.icon === "flame"
+                    ? Flame
+                    : m.icon === "medal"
+                      ? Medal
+                      : Star;
               return (
                 <li key={i} className="relative">
-                  <span className={`absolute -left-[1.6rem] flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card ${m.color}`}>
+                  <span
+                    className={`absolute -left-[1.6rem] flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card ${m.color}`}
+                  >
                     <Icon className="h-3 w-3" />
                   </span>
                   <div className="rounded-lg bg-secondary/30 px-3 py-2">
                     <p className="text-xs font-medium text-foreground">{m.label}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Week of {formatDayDate(m.date)}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Week of {formatDayDate(m.date)}
+                    </p>
                   </div>
                 </li>
               );
@@ -621,7 +647,9 @@ function HistoryPage() {
       <section className="mt-6 rounded-2xl border border-border bg-card p-5">
         <div className="flex items-center gap-2">
           <CalendarRange className="h-4 w-4 text-primary" />
-          <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Weekly Reviews</p>
+          <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
+            Weekly Reviews
+          </p>
         </div>
         {reviewWeeks.length === 0 ? (
           <p className="mt-3 text-xs text-muted-foreground">
@@ -673,9 +701,12 @@ function HistoryPage() {
                       stroke={8}
                     />
                     <div className="min-w-0">
-                      <p className="num text-sm font-semibold">Week of {formatDayDate(w.weekStart)}</p>
+                      <p className="num text-sm font-semibold">
+                        Week of {formatDayDate(w.weekStart)}
+                      </p>
                       <p className="num text-xs text-muted-foreground">
-                        {w.done} / {w.total} tasks ({w.total ? Math.round((w.done / w.total) * 100) : 0}%)
+                        {w.done} / {w.total} tasks (
+                        {w.total ? Math.round((w.done / w.total) * 100) : 0}%)
                       </p>
                     </div>
                   </article>
@@ -695,15 +726,12 @@ function HistoryPage() {
               <h2 className="text-base font-semibold">Danger Zone: Delete All Tracker Data</h2>
             </div>
             <p className="mt-1 text-xs text-muted-foreground max-w-xl">
-              Permanently delete all your daily tasks, habits, check-in history, goals, and reset your XP, level, and streaks back to zero.
+              Permanently delete all your daily tasks, habits, check-in history, goals, and reset
+              your XP, level, and streaks back to zero.
             </p>
           </div>
 
-          <Button
-            variant="destructive"
-            onClick={() => setShowConfirmReset(true)}
-            className="gap-2"
-          >
+          <Button variant="destructive" onClick={() => setShowConfirmReset(true)} className="gap-2">
             <Trash2 className="h-4 w-4" />
             <span>Delete All Tracker Data</span>
           </Button>
@@ -716,8 +744,8 @@ function HistoryPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete all tracker data?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete all your daily tasks, habits, check-in history, goals, and reset your
-              XP, level, and streaks back to zero. This action cannot be undone.
+              This will permanently delete all your daily tasks, habits, check-in history, goals,
+              and reset your XP, level, and streaks back to zero. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -743,5 +771,3 @@ function HistoryPage() {
     </AppShell>
   );
 }
-
-

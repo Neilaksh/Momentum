@@ -28,7 +28,11 @@ export async function ensureProfile(supabase: DB, userId: string): Promise<Profi
 }
 
 /** Key identifying "the same task" across days. */
-function taskKey(t: { title?: string | null; goal_id?: string | null; routine_task_id?: string | null }) {
+function taskKey(t: {
+  title?: string | null;
+  goal_id?: string | null;
+  routine_task_id?: string | null;
+}) {
   return `${(t.title ?? "").trim().toLowerCase()}|${t.goal_id ?? ""}|${t.routine_task_id ?? ""}`;
 }
 
@@ -64,7 +68,9 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
 
   const { data } = await supabase
     .from("day_tasks")
-    .select("id, task_date, title, description, source, sort_order, routine_task_id, goal_id, subject_id, priority, completed_at, progress_pct, rollover_count, is_stale")
+    .select(
+      "id, task_date, title, description, source, sort_order, routine_task_id, goal_id, subject_id, priority, completed_at, progress_pct, rollover_count, is_stale",
+    )
     .eq("user_id", userId)
     .lte("task_date", todayISO);
 
@@ -122,9 +128,7 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
   // routine_task_id (or none). Key on goal + title so the rollover never adds a
   // second row for a goal task that already exists today.
   const todayGoalKeys = new Set(
-    rows
-      .filter((r) => r.task_date === todayISO && r.goal_id)
-      .map((r) => goalLinkKey(todayISO, r)),
+    rows.filter((r) => r.task_date === todayISO && r.goal_id).map((r) => goalLinkKey(todayISO, r)),
   );
 
   // Title-level dedupe for today spanning the plain <-> goal-linked identity
@@ -146,13 +150,16 @@ async function carryForwardIncompleteTasksInternal(supabase: DB, userId: string)
   for (const t of overdue) {
     const k = taskKey(t);
     const oldest = oldestIdByKey.get(k);
-    if (!oldest || (dateById.get(t.id) ?? "") < (dateById.get(oldest) ?? "")) oldestIdByKey.set(k, t.id);
+    if (!oldest || (dateById.get(t.id) ?? "") < (dateById.get(oldest) ?? ""))
+      oldestIdByKey.set(k, t.id);
     const newest = newestIdByKey.get(k);
-    if (!newest || (dateById.get(t.id) ?? "") > (dateById.get(newest) ?? "")) newestIdByKey.set(k, t.id);
+    if (!newest || (dateById.get(t.id) ?? "") > (dateById.get(newest) ?? ""))
+      newestIdByKey.set(k, t.id);
   }
 
   const toInsert: TablesInsert<"day_tasks">[] = [];
-  const toUpdate: { id: string; rollover_count: number; is_stale: boolean; parkToday?: boolean }[] = [];
+  const toUpdate: { id: string; rollover_count: number; is_stale: boolean; parkToday?: boolean }[] =
+    [];
 
   for (const t of overdue) {
     if (t.goal_id && !activeGoalIds.has(t.goal_id)) continue;
@@ -307,14 +314,11 @@ function runRolloverExclusive<T>(userId: string, fn: () => Promise<T>): Promise<
 
 /** Carry-forward pass, serialized per user (see rolloverQueues above). */
 export function carryForwardIncompleteTasks(supabase: DB, userId: string): Promise<number> {
-  return runRolloverExclusive(userId, () =>
-    carryForwardIncompleteTasksInternal(supabase, userId),
-  );
+  return runRolloverExclusive(userId, () => carryForwardIncompleteTasksInternal(supabase, userId));
 }
 
 /** @deprecated kept for compatibility — now copies forward instead of moving. */
 export const rolloverIncompleteGoalTasks = carryForwardIncompleteTasks;
-
 
 /**
  * ROUTINE MATERIALIZATION IS DISABLED (product decision): the Routines tab is now a
@@ -370,9 +374,7 @@ async function materializeWeekInternal(supabase: DB, userId: string, weekStart: 
   // or via another routine entry with a different/null routine_task_id. Key on
   // goal + title so we never materialize a second row for the same goal task.
   const haveGoal = new Set(
-    (existing ?? [])
-      .filter((r) => r.goal_id)
-      .map((r) => goalLinkKey(r.task_date, r)),
+    (existing ?? []).filter((r) => r.goal_id).map((r) => goalLinkKey(r.task_date, r)),
   );
 
   const rows: TablesInsert<"day_tasks">[] = [];
@@ -383,7 +385,10 @@ async function materializeWeekInternal(supabase: DB, userId: string, weekStart: 
     const parsed = parseRoutineTitle(rt.title);
     // Habits linked to goals are tracked in the Habits/Goals tabs and must not create task items in the Tasks section
     if (parsed.habitId && parsed.habitId !== "none") continue;
-    const goalKey = goalLinkKey(date, { goal_id: rt.goal_id, title: parsed.displayTitle || rt.title });
+    const goalKey = goalLinkKey(date, {
+      goal_id: rt.goal_id,
+      title: parsed.displayTitle || rt.title,
+    });
     if (rt.goal_id && haveGoal.has(goalKey)) continue;
     haveGoal.add(goalKey);
     rows.push({
@@ -405,9 +410,7 @@ async function materializeWeekInternal(supabase: DB, userId: string, weekStart: 
 
 /** Weekly materialization, serialized per user (same queue as the rollover pass). */
 export function materializeWeek(supabase: DB, userId: string, weekStart: string) {
-  return runRolloverExclusive(userId, () =>
-    materializeWeekInternal(supabase, userId, weekStart),
-  );
+  return runRolloverExclusive(userId, () => materializeWeekInternal(supabase, userId, weekStart));
 }
 
 export async function loadWeek(supabase: DB, userId: string, weekStart: string): Promise<WeekData> {
@@ -496,7 +499,9 @@ export async function recomputeStats(supabase: DB, userId: string): Promise<Prof
 
   const today = new Date();
   const todayISO = toISODate(today);
-  const yesterdayISO = toISODate(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1));
+  const yesterdayISO = toISODate(
+    new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1),
+  );
   const last = activeDays[activeDays.length - 1];
   const current = last === todayISO || last === yesterdayISO ? run : 0;
 

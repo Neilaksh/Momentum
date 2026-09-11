@@ -19,7 +19,7 @@ export const getSubjects = createServerFn({ method: "POST" })
 
 export const createSubject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { name: string; color: string }) =>
+  .validator((input: { name: string; color: string }) =>
     z.object({ name: z.string().min(1).max(120), color: z.string().min(1).max(40) }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -29,7 +29,7 @@ export const createSubject = createServerFn({ method: "POST" })
 
 export const updateSubject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; name?: string; color?: string }) =>
+  .validator((input: { id: string; name?: string; color?: string }) =>
     z
       .object({
         id: z.string(),
@@ -48,7 +48,7 @@ export const updateSubject = createServerFn({ method: "POST" })
 
 export const checkSubjectUsage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
+  .validator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     const usage = await countSubjectUsage(context.supabase, context.userId, data.id);
     return { usage };
@@ -56,7 +56,7 @@ export const checkSubjectUsage = createServerFn({ method: "POST" })
 
 export const deleteSubject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
+  .validator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     await deleteSubjectRow(context.supabase, context.userId, data.id);
     return { ok: true };
@@ -64,7 +64,7 @@ export const deleteSubject = createServerFn({ method: "POST" })
 
 export const getSubjectBreakdown = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { fromDate: string; toDate?: string }) =>
+  .validator((input: { fromDate: string; toDate?: string }) =>
     z.object({ fromDate: z.string(), toDate: z.string().optional() }).parse(input),
   )
   .handler(async ({ data, context }) => {

@@ -688,8 +688,7 @@ function RoutinesPage() {
   });
 
   const moveSlotMutation = useMutation({
-    mutationFn: (vars: { id: string; title: string; weekday: number }) =>
-      updateFn({ data: vars }),
+    mutationFn: (vars: { id: string; title: string; weekday: number }) => updateFn({ data: vars }),
     onSuccess: (_, vars) => {
       invalidate();
       const parsed = parseRoutineTitle(vars.title);
@@ -700,11 +699,7 @@ function RoutinesPage() {
     onError: () => toast.error("Failed to move routine slot"),
   });
 
-  const handleMoveRoutineSlot = (
-    taskId: string,
-    targetWeekday: number,
-    targetTimeSlot: string,
-  ) => {
+  const handleMoveRoutineSlot = (taskId: string, targetWeekday: number, targetTimeSlot: string) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
     const parsed = parseRoutineTitle(task.title);
@@ -913,7 +908,12 @@ function RoutinesPage() {
           weekday: t.weekday % 7,
           title: t.title,
           isActive: t.is_active ?? t.isActive ?? true,
-          sortOrder: typeof t.sort_order === "number" ? t.sort_order : typeof t.sortOrder === "number" ? t.sortOrder : undefined,
+          sortOrder:
+            typeof t.sort_order === "number"
+              ? t.sort_order
+              : typeof t.sortOrder === "number"
+                ? t.sortOrder
+                : undefined,
         }));
 
       if (formattedItems.length === 0) {
@@ -1140,7 +1140,7 @@ function RoutinesPage() {
     setCustomTimeSlots([]);
     try {
       localStorage.removeItem(slotsKeyFor(activeVariant));
-    localStorage.removeItem(slotOrderKeyFor(activeVariant));
+      localStorage.removeItem(slotOrderKeyFor(activeVariant));
     } catch {}
     clearMutation.mutate();
     toast.success("All time slots and routines cleared");
@@ -1272,9 +1272,7 @@ function RoutinesPage() {
               className="gap-1.5"
               disabled={switchVariantMutation.isPending}
               onClick={() =>
-                switchVariantMutation.mutate(
-                  activeVariant === "primary" ? "alternate" : "primary",
-                )
+                switchVariantMutation.mutate(activeVariant === "primary" ? "alternate" : "primary")
               }
               title="Switch between your Primary and Alternate weekly routines"
             >
@@ -1540,7 +1538,8 @@ function RoutinesPage() {
                                 onDrop={(e) => {
                                   e.preventDefault();
                                   setDragOverCellKey(null);
-                                  const tId = e.dataTransfer.getData("text/plain") || draggingTaskId;
+                                  const tId =
+                                    e.dataTransfer.getData("text/plain") || draggingTaskId;
                                   if (tId) {
                                     handleMoveRoutineSlot(tId, dayIdx, timeSlot);
                                     setDraggingTaskId(null);
@@ -1565,23 +1564,33 @@ function RoutinesPage() {
                                       <div
                                         key={task.id}
                                         draggable={editMode}
-                                        onDragStart={editMode ? (e) => {
-                                          e.stopPropagation();
-                                          setDraggingTaskId(task.id);
-                                          e.dataTransfer.setData("text/plain", task.id);
-                                          e.dataTransfer.effectAllowed = "move";
-                                        } : undefined}
-                                        onDragEnd={editMode ? () => {
-                                          setDraggingTaskId(null);
-                                          setDragOverCellKey(null);
-                                        } : undefined}
+                                        onDragStart={
+                                          editMode
+                                            ? (e) => {
+                                                e.stopPropagation();
+                                                setDraggingTaskId(task.id);
+                                                e.dataTransfer.setData("text/plain", task.id);
+                                                e.dataTransfer.effectAllowed = "move";
+                                              }
+                                            : undefined
+                                        }
+                                        onDragEnd={
+                                          editMode
+                                            ? () => {
+                                                setDraggingTaskId(null);
+                                                setDragOverCellKey(null);
+                                              }
+                                            : undefined
+                                        }
                                         onClick={editMode ? () => openEditModal(task) : undefined}
                                         className={`relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] transition-all ${
                                           editMode
                                             ? "group/item hover:scale-[1.02] hover:shadow-md cursor-grab active:cursor-grabbing"
                                             : "hover:shadow-xs"
                                         } ${!task.is_active ? "opacity-40 grayscale" : ""} ${
-                                          isThisDragging ? "opacity-30 scale-95 border-dashed border-primary" : ""
+                                          isThisDragging
+                                            ? "opacity-30 scale-95 border-dashed border-primary"
+                                            : ""
                                         }`}
                                       >
                                         {/* Category colour accent: thin left stripe carries the
@@ -1632,20 +1641,20 @@ function RoutinesPage() {
 
                                             {/* Move Slot Popover — edit mode only */}
                                             {editMode && (
-                                            <MoveRoutineSlotPopover
-                                              task={task}
-                                              allTimeSlots={allTimeSlots}
-                                              onMove={handleMoveRoutineSlot}
-                                            >
-                                              <button
-                                                type="button"
-                                                onClick={(e) => e.stopPropagation()}
-                                                title="Move routine slot to another day / time slot"
-                                                className="text-muted-foreground hover:text-foreground p-1 -m-0.5 transition-colors"
+                                              <MoveRoutineSlotPopover
+                                                task={task}
+                                                allTimeSlots={allTimeSlots}
+                                                onMove={handleMoveRoutineSlot}
                                               >
-                                                <ArrowRightLeft className="h-3 w-3" />
-                                              </button>
-                                            </MoveRoutineSlotPopover>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  title="Move routine slot to another day / time slot"
+                                                  className="text-muted-foreground hover:text-foreground p-1 -m-0.5 transition-colors"
+                                                >
+                                                  <ArrowRightLeft className="h-3 w-3" />
+                                                </button>
+                                              </MoveRoutineSlotPopover>
                                             )}
 
                                             {editMode && (
@@ -1847,19 +1856,19 @@ function RoutinesPage() {
                         <div className="flex items-center gap-1.5">
                           {/* Move Slot Popover — edit mode only */}
                           {editMode && (
-                          <MoveRoutineSlotPopover
-                            task={task}
-                            allTimeSlots={allTimeSlots}
-                            onMove={handleMoveRoutineSlot}
-                          >
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 rounded-md bg-secondary/60 hover:bg-secondary px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                              title="Move to another day or time slot"
+                            <MoveRoutineSlotPopover
+                              task={task}
+                              allTimeSlots={allTimeSlots}
+                              onMove={handleMoveRoutineSlot}
                             >
-                              <ArrowRightLeft className="h-3 w-3" /> Move
-                            </button>
-                          </MoveRoutineSlotPopover>
+                              <button
+                                type="button"
+                                className="flex items-center gap-1 rounded-md bg-secondary/60 hover:bg-secondary px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                                title="Move to another day or time slot"
+                              >
+                                <ArrowRightLeft className="h-3 w-3" /> Move
+                              </button>
+                            </MoveRoutineSlotPopover>
                           )}
 
                           {editMode && (
@@ -2007,9 +2016,7 @@ function RoutinesPage() {
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                  {editingTask
-                    ? "Edit Routine Slot"
-                    : "Add Routine Slot"}
+                {editingTask ? "Edit Routine Slot" : "Add Routine Slot"}
               </h3>
               <button
                 onClick={closeModal}
@@ -2157,7 +2164,11 @@ function RoutinesPage() {
                   Block Color Override
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {(Object.entries(COLOR_PALETTE) as Array<[ColorKey, typeof COLOR_PALETTE[ColorKey]]>).map(([key, palette]) => (
+                  {(
+                    Object.entries(COLOR_PALETTE) as Array<
+                      [ColorKey, (typeof COLOR_PALETTE)[ColorKey]]
+                    >
+                  ).map(([key, palette]) => (
                     <button
                       key={key}
                       type="button"

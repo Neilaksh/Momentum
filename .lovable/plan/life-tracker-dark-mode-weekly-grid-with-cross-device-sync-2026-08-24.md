@@ -7,6 +7,7 @@ A gamified weekly task tracker inspired by the spreadsheet in your video: a row 
 **Auth (`/auth`)** — email + password sign up / sign in, with password reset. Everything else requires an account.
 
 **Week board (`/`)** — the main screen.
+
 - Seven day cards in a horizontally scrolling row (stacked on mobile), each showing the date, a donut ring with % complete, and its checklist with tick boxes.
 - Add a one-off task to any single day inline.
 - Header: week navigation (prev / this week / next), overall completion donut ("34 / 60 completed"), and a bar chart of tasks completed per day.
@@ -33,6 +34,7 @@ Dark mode only: near-black background, layered charcoal cards with subtle border
 Lovable Cloud (auth + Postgres) provides the sync — data lives server-side, so signing in on phone and laptop shows the same state.
 
 Tables (all RLS-scoped to `auth.uid()`, with grants):
+
 - `profiles` — display name, total XP, level, current/best streak
 - `goals` — title, description, target date, status
 - `routine_tasks` — weekday (0–6), title, order, optional `goal_id`, active flag

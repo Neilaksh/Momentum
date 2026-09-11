@@ -30,15 +30,7 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
 import { DailyQuoteBanner } from "@/components/DailyQuoteBanner";
@@ -190,7 +182,11 @@ function UnifiedTasksPage() {
             ...d,
             tasks: d.tasks.map((t) =>
               t.id === v.id
-                ? { ...t, completed_at: v.completed ? new Date().toISOString() : null, progress_pct: v.completed ? 100 : t.progress_pct }
+                ? {
+                    ...t,
+                    completed_at: v.completed ? new Date().toISOString() : null,
+                    progress_pct: v.completed ? 100 : t.progress_pct,
+                  }
                 : t,
             ),
           })),
@@ -206,8 +202,12 @@ function UnifiedTasksPage() {
   });
 
   const addTask = useMutation({
-    mutationFn: (v: { date: string; title: string; subjectId?: string | null; priority?: GoalPriority | null }) =>
-      addFn({ data: v }),
+    mutationFn: (v: {
+      date: string;
+      title: string;
+      subjectId?: string | null;
+      priority?: GoalPriority | null;
+    }) => addFn({ data: v }),
     onSuccess: () => {
       invalidate();
       toast.success("Task added");
@@ -286,8 +286,7 @@ function UnifiedTasksPage() {
           : "All tasks completed!",
       );
     },
-    onError: (err) =>
-      toast.error(err instanceof Error ? err.message : "Couldn't complete tasks."),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't complete tasks."),
   });
 
   const reorderFn = useServerFn(reorderDayTasks);
@@ -307,8 +306,7 @@ function UnifiedTasksPage() {
       void qc.invalidateQueries({ queryKey: ["goals"] });
       toast.success(`Rescheduled to ${formatDayDate(vars.targetDate)}`);
     },
-    onError: (err: any) =>
-      toast.error(err?.message || "Couldn't reschedule task."),
+    onError: (err: any) => toast.error(err?.message || "Couldn't reschedule task."),
   });
 
   const toggleNote = (t: { id: string; description: string | null }) => {
@@ -375,7 +373,8 @@ function UnifiedTasksPage() {
     return map;
   }, [subjects]);
   // If the filtered subject was deleted, fall back to "All" instead of an empty list.
-  const activeSubjectFilter = subjectFilter && subjectsMap.has(subjectFilter) ? subjectFilter : null;
+  const activeSubjectFilter =
+    subjectFilter && subjectsMap.has(subjectFilter) ? subjectFilter : null;
 
   // Exam Schedules integration
   const { exams } = useExamSchedules();
@@ -449,7 +448,9 @@ function UnifiedTasksPage() {
     const { estMinutes } = parseTaskDescription(t.description);
     return sum + (estMinutes ?? 0);
   }, 0);
-  const routineActiveCount = days.find((d) => d.date === selectedDate)?.tasks.filter((t) => t.source === "routine").length ?? 0;
+  const routineActiveCount =
+    days.find((d) => d.date === selectedDate)?.tasks.filter((t) => t.source === "routine").length ??
+    0;
   const oneOffActiveCount = activeTasks.length;
   const isPerfectActive = activeTasks.length > 0 && doneActive === activeTasks.length;
   const activeDayXpEarned = doneActive * XP_PER_TASK + (isPerfectActive ? XP_PERFECT_DAY : 0);
@@ -633,12 +634,15 @@ function UnifiedTasksPage() {
                 <p className="num mt-1 text-2xl font-semibold">
                   {doneCount} / {allTasks.length}
                 </p>
-                <p className="text-xs text-muted-foreground">tasks completed this week ({weekPct}%)</p>
+                <p className="text-xs text-muted-foreground">
+                  tasks completed this week ({weekPct}%)
+                </p>
               </div>
             </div>
 
             <div className="text-xs text-muted-foreground max-w-xs">
-              Click on any day tab below or bar in the chart to immediately focus and manage tasks for that day.
+              Click on any day tab below or bar in the chart to immediately focus and manage tasks
+              for that day.
             </div>
           </div>
 
@@ -701,7 +705,10 @@ function UnifiedTasksPage() {
             Select Day to Focus
           </h2>
           <span className="text-xs text-muted-foreground">
-            Active: <strong>{activeWeekdayName}, {formatDayDate(activeDay.date)}</strong>
+            Active:{" "}
+            <strong>
+              {activeWeekdayName}, {formatDayDate(activeDay.date)}
+            </strong>
           </span>
         </div>
 
@@ -730,7 +737,10 @@ function UnifiedTasksPage() {
                   </span>
                   <div className="flex items-center gap-0.5 sm:gap-1">
                     {hasExam && (
-                      <span title="Exam scheduled on this day" className="text-primary flex items-center">
+                      <span
+                        title="Exam scheduled on this day"
+                        className="text-primary flex items-center"
+                      >
                         <GraduationCap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       </span>
                     )}
@@ -739,7 +749,10 @@ function UnifiedTasksPage() {
                         <span className="hidden sm:inline-block rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                           Today
                         </span>
-                        <span className="sm:hidden h-1.5 w-1.5 rounded-full bg-primary shrink-0" title="Today" />
+                        <span
+                          className="sm:hidden h-1.5 w-1.5 rounded-full bg-primary shrink-0"
+                          title="Today"
+                        />
                       </>
                     )}
                     {isComplete && !isDayToday && (
@@ -772,7 +785,10 @@ function UnifiedTasksPage() {
       </div>
 
       {/* Focused Day Task Management Panel */}
-      <section ref={focusPanelRef} className="mt-6 scroll-mt-28 sm:scroll-mt-24 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
+      <section
+        ref={focusPanelRef}
+        className="mt-6 scroll-mt-28 sm:scroll-mt-24 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
           <div>
             <div className="flex items-center gap-2">
@@ -781,7 +797,8 @@ function UnifiedTasksPage() {
               </h2>
             </div>
             <p className="num text-xs text-muted-foreground mt-0.5">
-              {formatDayDate(activeDay.date)} · {doneActive} of {activeTasks.length} completed ({activeTasks.length ? Math.round((doneActive / activeTasks.length) * 100) : 0}%)
+              {formatDayDate(activeDay.date)} · {doneActive} of {activeTasks.length} completed (
+              {activeTasks.length ? Math.round((doneActive / activeTasks.length) * 100) : 0}%)
               {totalEstMinutes > 0 && (
                 <span className="ml-2 inline-flex items-center gap-1 text-primary/80">
                   · ⏱ ~{formatMinutes(totalEstMinutes)} planned
@@ -897,396 +914,430 @@ function UnifiedTasksPage() {
           ) : (
             <ul className="space-y-2">
               {filteredActiveTasks.map((t) => {
-                const goalLocked =
-                  !!t.goal_id && goalsMap.get(t.goal_id)?.status === "completed";
+                const goalLocked = !!t.goal_id && goalsMap.get(t.goal_id)?.status === "completed";
                 return (
-                <li
-                  key={t.id}
-                  className={`group flex flex-col gap-1.5 rounded-xl border p-3 transition-all ${
-                    t.completed_at
-                      ? "border-border/40 bg-secondary/20 opacity-80"
-                      : "border-border/80 bg-secondary/40 hover:border-primary/50"
-                  }`}
-                >
-                  {/* Mobile: the row splits into a title line + a meta/actions
+                  <li
+                    key={t.id}
+                    className={`group flex flex-col gap-1.5 rounded-xl border p-3 transition-all ${
+                      t.completed_at
+                        ? "border-border/40 bg-secondary/20 opacity-80"
+                        : "border-border/80 bg-secondary/40 hover:border-primary/50"
+                    }`}
+                  >
+                    {/* Mobile: the row splits into a title line + a meta/actions
                       line so nothing overflows the card. md+: contents wrappers
                       dissolve and every element sits in the original single
                       flex row — desktop layout is pixel-identical. */}
-                  <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                    <button
-                      disabled={goalLocked || isActiveDayPast}
-                      onClick={() => toggle.mutate({ id: t.id, completed: !t.completed_at })}
-                      aria-label={
-                        goalLocked
-                          ? `${t.title} is locked because its goal is completed`
-                          : isActiveDayPast
-                            ? `${t.title} is locked because it belongs to a past day`
-                            : t.completed_at
-                              ? `Mark ${t.title} incomplete`
-                              : `Mark ${t.title} complete`
-                      }
-                      title={
-                        goalLocked
-                          ? "Goal completed — task locked"
-                          : isActiveDayPast
-                            ? "Past day — tasks are read-only"
-                            : undefined
-                      }
-                      className={`flex shrink-0 items-center justify-center rounded-md p-2 -m-2 md:p-0 md:m-0 transition-all ${
-                        goalLocked || isActiveDayPast ? "cursor-not-allowed" : ""
-                      }`}
-                    >
-                      <span
-                        className={`flex h-6 w-6 items-center justify-center rounded-md border transition-all ${
-                          goalLocked || isActiveDayPast
-                            ? "border-border/60 bg-secondary/40 text-muted-foreground opacity-60"
-                            : t.completed_at
-                              ? "border-emerald-500/40 bg-emerald-500/20"
-                              : "border-border hover:border-primary"
-                        }`}
-                      >
-                        {t.completed_at && (
-                          <svg
-                            viewBox="0 0 12 12"
-                            className="h-3.5 w-3.5 stroke-emerald-400"
-                            fill="none"
-                            strokeWidth={2.5}
-                          >
-                            <path d="M2.5 6.3l2.4 2.4 4.6-5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </span>
-                    </button>
-
-                    <span
-                      className={`flex-1 text-sm font-medium transition-all ${
-                        t.completed_at ? "text-muted-foreground line-through" : "text-foreground"
-                      }`}
-                    >
-                      {parseRoutineTitle(t.title).displayTitle}
-                    </span>
-
-                    {!t.completed_at && activeDay.date < todayISO && (
-                      t.is_stale ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-600/40 dark:border-amber-400/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                          <AlertTriangle className="h-3 w-3" />
-                          Stale
-                        </span>
-                      ) : chainCompletedIds.has(t.id) ? (
-                        // Frozen original whose rollover copy was completed
-                        // elsewhere: swap "Due" for the existing "Completed late"
-                        // badge. Display only — the row stays read-only and this
-                        // panel's stats read t.completed_at, which is untouched.
-                        <span className="rounded-full bg-secondary/70 border border-border/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Completed late
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
-                          <AlertTriangle className="h-3 w-3" />
-                          Due
-                        </span>
-                      )
-                    )}
-
-                    {t.completed_at && t.rollover_count > 0 && (
-                      <span className="rounded-full bg-secondary/70 border border-border/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Completed late
-                      </span>
-                    )}
-
-                    </div>
-
-                    {/* Mobile second line: badges left, actions right. */}
-                    <div className="flex flex-wrap items-center gap-1.5 md:contents">
-                    <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:contents">
-                    {t.subject_id && subjectsMap.get(t.subject_id) && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        <span
-                          className="h-2 w-2 rounded-full shrink-0"
-                          style={{ background: subjectColorHex(subjectsMap.get(t.subject_id)!.color) }}
-                        />
-                        <span className="max-w-[100px] truncate">{subjectsMap.get(t.subject_id)!.name}</span>
-                      </span>
-                    )}
-
-                    {t.goal_id && goalsMap.get(t.goal_id) && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                        <Target className="h-2.5 w-2.5" />
-                        <span className="max-w-[120px] truncate">{goalsMap.get(t.goal_id)?.title}</span>
-                      </span>
-                    )}
-
-                    {t.priority && (
-                      <span
-                        title={
-                          t.priority === "High"
-                            ? "High priority task"
-                            : t.priority === "Med"
-                              ? "Medium priority task"
-                              : "Low priority task"
-                        }
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
-                          t.priority === "High"
-                            ? "bg-red-500/15 text-red-400 border-red-500/30"
-                            : t.priority === "Med"
-                              ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
-                              : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                        }`}
-                      >
-                        {t.priority === "High" ? "🔴 High" : t.priority === "Med" ? "🟡 Med" : "🟢 Low"}
-                      </span>
-                    )}
-
-                    </div>
-                    <div className="ml-auto flex items-center gap-0.5 md:contents">
-                    {!isActiveDayPast && filteredActiveTasks.length > 1 && (
-                      <div className="flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                    <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <button
-                          disabled={filteredActiveTasks.findIndex((x) => x.id === t.id) === 0}
-                          onClick={() => moveTask(t.id, "up")}
-                          aria-label={`Move ${t.title} up`}
-                          title="Move task up"
-                          className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <ArrowUp className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          disabled={
-                            filteredActiveTasks.findIndex((x) => x.id === t.id) ===
-                            filteredActiveTasks.length - 1
-                          }
-                          onClick={() => moveTask(t.id, "down")}
-                          aria-label={`Move ${t.title} down`}
-                          title="Move task down"
-                          className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <ArrowDown className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
-
-                    {!isActiveDayPast && !goalLocked && !t.completed_at && (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button
-                            aria-label={`Reschedule ${t.title}`}
-                            title="Reschedule / snooze to another day"
-                            className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground hover:text-amber-400"
-                          >
-                            <CalendarClock className="h-4 w-4" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent align="end" className="w-56 p-3 space-y-2">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            Reschedule Task
-                          </p>
-                          <div className="grid gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="justify-start text-xs h-8 px-2"
-                              onClick={() => {
-                                const tomorrow = toISODate(addDays(parseISODate(activeDay.date), 1));
-                                rescheduleTask.mutate({ id: t.id, targetDate: tomorrow });
-                              }}
-                            >
-                              👉 Tomorrow ({formatDayDate(toISODate(addDays(parseISODate(activeDay.date), 1))).slice(0, 3)})
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="justify-start text-xs h-8 px-2"
-                              onClick={() => {
-                                const inTwoDays = toISODate(addDays(parseISODate(activeDay.date), 2));
-                                rescheduleTask.mutate({ id: t.id, targetDate: inTwoDays });
-                              }}
-                            >
-                              👉 In 2 days
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="justify-start text-xs h-8 px-2"
-                              onClick={() => {
-                                const nextWeek = toISODate(addDays(parseISODate(activeDay.date), 7));
-                                rescheduleTask.mutate({ id: t.id, targetDate: nextWeek });
-                              }}
-                            >
-                              👉 Next Week (+7d)
-                            </Button>
-                          </div>
-                          <div className="pt-2 border-t border-border/60">
-                            <label className="text-[10px] uppercase text-muted-foreground block mb-1">
-                              Pick Specific Date
-                            </label>
-                            <Input
-                              type="date"
-                              min={todayISO}
-                              defaultValue={activeDay.date}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (val && val >= todayISO) {
-                                  rescheduleTask.mutate({ id: t.id, targetDate: val });
-                                }
-                              }}
-                              className="h-7 text-xs px-2"
-                            />
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    )}
-
-                    <button
-                      disabled={goalLocked || isActiveDayPast}
-                      onClick={() => toggleNote(t)}
-                      aria-label={t.description ? "Edit note" : "Add note"}
-                      title={t.description ? "View / edit note" : "Add note"}
-                      className={`p-3 -m-2 md:p-1 md:m-0 transition-opacity ${
-                        t.description
-                          ? "text-primary"
-                          : "text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:text-primary"
-                      }`}
-                    >
-                      <FileText className="h-4 w-4" />
-                    </button>
-
-                    <button
-                      disabled={goalLocked || isActiveDayPast}
-                      onClick={() => startRenaming(t)}
-                      aria-label={
-                        goalLocked
-                          ? `${t.title} cannot be renamed because its goal is completed`
-                          : isActiveDayPast
-                            ? `Past day — ${t.title} cannot be renamed`
-                            : `Rename ${t.title}`
-                      }
-                      title={
-                        goalLocked
-                          ? "Goal completed — task locked"
-                          : isActiveDayPast
-                            ? "Past day — tasks are read-only"
-                            : "Rename task"
-                      }
-                      className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
-                        goalLocked || isActiveDayPast ? "cursor-not-allowed" : "hover:text-primary"
-                      }`}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-
-                    <button
-                      disabled={isActiveDayPast}
-                      onClick={() => removeTask.mutate({ id: t.id })}
-                      aria-label={
-                        isActiveDayPast
-                          ? `Past day — ${t.title} cannot be deleted`
-                          : `Delete ${t.title}`
-                      }
-                      title={isActiveDayPast ? "Past day — tasks are read-only" : undefined}
-                      className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
-                        isActiveDayPast ? "cursor-not-allowed" : "hover:text-destructive"
-                      }`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                    </div>
-                  </div>
-                  </div>
-
-                  {/* Task note preview if not expanded */}
-                  {(t.description && parseTaskDescription(t.description).note) && !expandedNotes.has(t.id) && (
-                    <div
-                      onClick={() => !isActiveDayPast && toggleNote(t)}
-                      className="ml-9 cursor-pointer text-xs text-muted-foreground line-clamp-1 hover:text-foreground transition-colors"
-                      title="Click to expand note"
-                    >
-                      📝 {parseTaskDescription(t.description).note}
-                    </div>
-                  )}
-                  {/* Effort estimate badge when note is not expanded */}
-                  {parseTaskDescription(t.description).estMinutes != null && !expandedNotes.has(t.id) && (
-                    <div className="ml-9 mt-0.5">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                        ⏱ {formatMinutes(parseTaskDescription(t.description).estMinutes!)} est.
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Expandable note editor */}
-                  {expandedNotes.has(t.id) && (
-                    <div className="ml-9 mt-1 rounded-lg border border-border/80 bg-background/90 p-2.5 shadow-sm">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] font-semibold text-muted-foreground">Task Note & Estimate</span>
-                        <button
-                          type="button"
-                          onClick={() => toggleNote(t)}
-                          className="text-[11px] text-muted-foreground hover:text-foreground"
-                        >
-                          Close
-                        </button>
-                      </div>
-                      <Textarea
-                        value={noteDrafts[t.id] ?? ""}
-                        onChange={(e) =>
-                          setNoteDrafts((d) => ({ ...d, [t.id]: e.target.value }))
-                        }
-                        placeholder="Add details, links, or notes for this task..."
-                        className="min-h-[60px] text-xs resize-none bg-secondary/30"
-                        disabled={goalLocked || isActiveDayPast}
-                      />
-                      {/* Effort estimate row */}
-                      <div className="mt-2 flex items-center gap-2">
-                        <label className="text-[11px] text-muted-foreground shrink-0">⏱ Est. mins:</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={1440}
-                          value={estDrafts[t.id] ?? ""}
-                          onChange={(e) => setEstDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
-                          placeholder="e.g. 30"
                           disabled={goalLocked || isActiveDayPast}
-                          className="h-7 w-24 rounded-md border border-border bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
-                        <span className="text-[11px] text-muted-foreground">minutes (optional)</span>
+                          onClick={() => toggle.mutate({ id: t.id, completed: !t.completed_at })}
+                          aria-label={
+                            goalLocked
+                              ? `${t.title} is locked because its goal is completed`
+                              : isActiveDayPast
+                                ? `${t.title} is locked because it belongs to a past day`
+                                : t.completed_at
+                                  ? `Mark ${t.title} incomplete`
+                                  : `Mark ${t.title} complete`
+                          }
+                          title={
+                            goalLocked
+                              ? "Goal completed — task locked"
+                              : isActiveDayPast
+                                ? "Past day — tasks are read-only"
+                                : undefined
+                          }
+                          className={`flex shrink-0 items-center justify-center rounded-md p-2 -m-2 md:p-0 md:m-0 transition-all ${
+                            goalLocked || isActiveDayPast ? "cursor-not-allowed" : ""
+                          }`}
+                        >
+                          <span
+                            className={`flex h-6 w-6 items-center justify-center rounded-md border transition-all ${
+                              goalLocked || isActiveDayPast
+                                ? "border-border/60 bg-secondary/40 text-muted-foreground opacity-60"
+                                : t.completed_at
+                                  ? "border-emerald-500/40 bg-emerald-500/20"
+                                  : "border-border hover:border-primary"
+                            }`}
+                          >
+                            {t.completed_at && (
+                              <svg
+                                viewBox="0 0 12 12"
+                                className="h-3.5 w-3.5 stroke-emerald-400"
+                                fill="none"
+                                strokeWidth={2.5}
+                              >
+                                <path
+                                  d="M2.5 6.3l2.4 2.4 4.6-5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            )}
+                          </span>
+                        </button>
+
+                        <span
+                          className={`flex-1 text-sm font-medium transition-all ${
+                            t.completed_at
+                              ? "text-muted-foreground line-through"
+                              : "text-foreground"
+                          }`}
+                        >
+                          {parseRoutineTitle(t.title).displayTitle}
+                        </span>
+
+                        {!t.completed_at &&
+                          activeDay.date < todayISO &&
+                          (t.is_stale ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-600/40 dark:border-amber-400/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                              <AlertTriangle className="h-3 w-3" />
+                              Stale
+                            </span>
+                          ) : chainCompletedIds.has(t.id) ? (
+                            // Frozen original whose rollover copy was completed
+                            // elsewhere: swap "Due" for the existing "Completed late"
+                            // badge. Display only — the row stays read-only and this
+                            // panel's stats read t.completed_at, which is untouched.
+                            <span className="rounded-full bg-secondary/70 border border-border/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Completed late
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
+                              <AlertTriangle className="h-3 w-3" />
+                              Due
+                            </span>
+                          ))}
+
+                        {t.completed_at && t.rollover_count > 0 && (
+                          <span className="rounded-full bg-secondary/70 border border-border/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            Completed late
+                          </span>
+                        )}
                       </div>
-                      <div className="mt-2 flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2.5 text-xs"
-                          onClick={() => toggleNote(t)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="h-7 px-2.5 text-xs"
-                          disabled={goalLocked || isActiveDayPast || updateDescription.isPending}
-                          onClick={() => {
-                            const rawEst = estDrafts[t.id]?.trim();
-                            const parsedEst = rawEst ? parseInt(rawEst, 10) : null;
-                            const estMinutes = parsedEst && parsedEst > 0 ? parsedEst : null;
-                            updateDescription.mutate({
-                              id: t.id,
-                              description: (noteDrafts[t.id] ?? "").trim() || null,
-                              estMinutes,
-                            });
-                            setExpandedNotes((prev) => {
-                              const next = new Set(prev);
-                              next.delete(t.id);
-                              return next;
-                            });
-                          }}
-                        >
-                          Save
-                        </Button>
+
+                      {/* Mobile second line: badges left, actions right. */}
+                      <div className="flex flex-wrap items-center gap-1.5 md:contents">
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:contents">
+                          {t.subject_id && subjectsMap.get(t.subject_id) && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              <span
+                                className="h-2 w-2 rounded-full shrink-0"
+                                style={{
+                                  background: subjectColorHex(subjectsMap.get(t.subject_id)!.color),
+                                }}
+                              />
+                              <span className="max-w-[100px] truncate">
+                                {subjectsMap.get(t.subject_id)!.name}
+                              </span>
+                            </span>
+                          )}
+
+                          {t.goal_id && goalsMap.get(t.goal_id) && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                              <Target className="h-2.5 w-2.5" />
+                              <span className="max-w-[120px] truncate">
+                                {goalsMap.get(t.goal_id)?.title}
+                              </span>
+                            </span>
+                          )}
+
+                          {t.priority && (
+                            <span
+                              title={
+                                t.priority === "High"
+                                  ? "High priority task"
+                                  : t.priority === "Med"
+                                    ? "Medium priority task"
+                                    : "Low priority task"
+                              }
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
+                                t.priority === "High"
+                                  ? "bg-red-500/15 text-red-400 border-red-500/30"
+                                  : t.priority === "Med"
+                                    ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                                    : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                              }`}
+                            >
+                              {t.priority === "High"
+                                ? "🔴 High"
+                                : t.priority === "Med"
+                                  ? "🟡 Med"
+                                  : "🟢 Low"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="ml-auto flex items-center gap-0.5 md:contents">
+                          {!isActiveDayPast && filteredActiveTasks.length > 1 && (
+                            <div className="flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                              <button
+                                disabled={filteredActiveTasks.findIndex((x) => x.id === t.id) === 0}
+                                onClick={() => moveTask(t.id, "up")}
+                                aria-label={`Move ${t.title} up`}
+                                title="Move task up"
+                                className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <ArrowUp className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                disabled={
+                                  filteredActiveTasks.findIndex((x) => x.id === t.id) ===
+                                  filteredActiveTasks.length - 1
+                                }
+                                onClick={() => moveTask(t.id, "down")}
+                                aria-label={`Move ${t.title} down`}
+                                title="Move task down"
+                                className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <ArrowDown className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
+
+                          {!isActiveDayPast && !goalLocked && !t.completed_at && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  aria-label={`Reschedule ${t.title}`}
+                                  title="Reschedule / snooze to another day"
+                                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground hover:text-amber-400"
+                                >
+                                  <CalendarClock className="h-4 w-4" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent align="end" className="w-56 p-3 space-y-2">
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                  Reschedule Task
+                                </p>
+                                <div className="grid gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="justify-start text-xs h-8 px-2"
+                                    onClick={() => {
+                                      const tomorrow = toISODate(
+                                        addDays(parseISODate(activeDay.date), 1),
+                                      );
+                                      rescheduleTask.mutate({ id: t.id, targetDate: tomorrow });
+                                    }}
+                                  >
+                                    👉 Tomorrow (
+                                    {formatDayDate(
+                                      toISODate(addDays(parseISODate(activeDay.date), 1)),
+                                    ).slice(0, 3)}
+                                    )
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="justify-start text-xs h-8 px-2"
+                                    onClick={() => {
+                                      const inTwoDays = toISODate(
+                                        addDays(parseISODate(activeDay.date), 2),
+                                      );
+                                      rescheduleTask.mutate({ id: t.id, targetDate: inTwoDays });
+                                    }}
+                                  >
+                                    👉 In 2 days
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="justify-start text-xs h-8 px-2"
+                                    onClick={() => {
+                                      const nextWeek = toISODate(
+                                        addDays(parseISODate(activeDay.date), 7),
+                                      );
+                                      rescheduleTask.mutate({ id: t.id, targetDate: nextWeek });
+                                    }}
+                                  >
+                                    👉 Next Week (+7d)
+                                  </Button>
+                                </div>
+                                <div className="pt-2 border-t border-border/60">
+                                  <label className="text-[10px] uppercase text-muted-foreground block mb-1">
+                                    Pick Specific Date
+                                  </label>
+                                  <Input
+                                    type="date"
+                                    min={todayISO}
+                                    defaultValue={activeDay.date}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val && val >= todayISO) {
+                                        rescheduleTask.mutate({ id: t.id, targetDate: val });
+                                      }
+                                    }}
+                                    className="h-7 text-xs px-2"
+                                  />
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
+
+                          <button
+                            disabled={goalLocked || isActiveDayPast}
+                            onClick={() => toggleNote(t)}
+                            aria-label={t.description ? "Edit note" : "Add note"}
+                            title={t.description ? "View / edit note" : "Add note"}
+                            className={`p-3 -m-2 md:p-1 md:m-0 transition-opacity ${
+                              t.description
+                                ? "text-primary"
+                                : "text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:text-primary"
+                            }`}
+                          >
+                            <FileText className="h-4 w-4" />
+                          </button>
+
+                          <button
+                            disabled={goalLocked || isActiveDayPast}
+                            onClick={() => startRenaming(t)}
+                            aria-label={
+                              goalLocked
+                                ? `${t.title} cannot be renamed because its goal is completed`
+                                : isActiveDayPast
+                                  ? `Past day — ${t.title} cannot be renamed`
+                                  : `Rename ${t.title}`
+                            }
+                            title={
+                              goalLocked
+                                ? "Goal completed — task locked"
+                                : isActiveDayPast
+                                  ? "Past day — tasks are read-only"
+                                  : "Rename task"
+                            }
+                            className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
+                              goalLocked || isActiveDayPast
+                                ? "cursor-not-allowed"
+                                : "hover:text-primary"
+                            }`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+
+                          <button
+                            disabled={isActiveDayPast}
+                            onClick={() => removeTask.mutate({ id: t.id })}
+                            aria-label={
+                              isActiveDayPast
+                                ? `Past day — ${t.title} cannot be deleted`
+                                : `Delete ${t.title}`
+                            }
+                            title={isActiveDayPast ? "Past day — tasks are read-only" : undefined}
+                            className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
+                              isActiveDayPast ? "cursor-not-allowed" : "hover:text-destructive"
+                            }`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  )}
-                </li>
+
+                    {/* Task note preview if not expanded */}
+                    {t.description &&
+                      parseTaskDescription(t.description).note &&
+                      !expandedNotes.has(t.id) && (
+                        <div
+                          onClick={() => !isActiveDayPast && toggleNote(t)}
+                          className="ml-9 cursor-pointer text-xs text-muted-foreground line-clamp-1 hover:text-foreground transition-colors"
+                          title="Click to expand note"
+                        >
+                          📝 {parseTaskDescription(t.description).note}
+                        </div>
+                      )}
+                    {/* Effort estimate badge when note is not expanded */}
+                    {parseTaskDescription(t.description).estMinutes != null &&
+                      !expandedNotes.has(t.id) && (
+                        <div className="ml-9 mt-0.5">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                            ⏱ {formatMinutes(parseTaskDescription(t.description).estMinutes!)} est.
+                          </span>
+                        </div>
+                      )}
+
+                    {/* Expandable note editor */}
+                    {expandedNotes.has(t.id) && (
+                      <div className="ml-9 mt-1 rounded-lg border border-border/80 bg-background/90 p-2.5 shadow-sm">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-semibold text-muted-foreground">
+                            Task Note & Estimate
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleNote(t)}
+                            className="text-[11px] text-muted-foreground hover:text-foreground"
+                          >
+                            Close
+                          </button>
+                        </div>
+                        <Textarea
+                          value={noteDrafts[t.id] ?? ""}
+                          onChange={(e) => setNoteDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
+                          placeholder="Add details, links, or notes for this task..."
+                          className="min-h-[60px] text-xs resize-none bg-secondary/30"
+                          disabled={goalLocked || isActiveDayPast}
+                        />
+                        {/* Effort estimate row */}
+                        <div className="mt-2 flex items-center gap-2">
+                          <label className="text-[11px] text-muted-foreground shrink-0">
+                            ⏱ Est. mins:
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={1440}
+                            value={estDrafts[t.id] ?? ""}
+                            onChange={(e) =>
+                              setEstDrafts((d) => ({ ...d, [t.id]: e.target.value }))
+                            }
+                            placeholder="e.g. 30"
+                            disabled={goalLocked || isActiveDayPast}
+                            className="h-7 w-24 rounded-md border border-border bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                          />
+                          <span className="text-[11px] text-muted-foreground">
+                            minutes (optional)
+                          </span>
+                        </div>
+                        <div className="mt-2 flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2.5 text-xs"
+                            onClick={() => toggleNote(t)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 px-2.5 text-xs"
+                            disabled={goalLocked || isActiveDayPast || updateDescription.isPending}
+                            onClick={() => {
+                              const rawEst = estDrafts[t.id]?.trim();
+                              const parsedEst = rawEst ? parseInt(rawEst, 10) : null;
+                              const estMinutes = parsedEst && parsedEst > 0 ? parsedEst : null;
+                              updateDescription.mutate({
+                                id: t.id,
+                                description: (noteDrafts[t.id] ?? "").trim() || null,
+                                estMinutes,
+                              });
+                              setExpandedNotes((prev) => {
+                                const next = new Set(prev);
+                                next.delete(t.id);
+                                return next;
+                              });
+                            }}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
                 );
               })}
             </ul>
@@ -1426,7 +1477,14 @@ function UnifiedTasksPage() {
                   key={day.date}
                   onClick={() => {
                     setSelectedDate(day.date);
-                    setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                    setTimeout(
+                      () =>
+                        focusPanelRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        }),
+                      50,
+                    );
                   }}
                   className={`flex sm:flex-col items-center justify-between gap-3 rounded-xl border p-3 text-left transition-all hover:border-primary/50 ${
                     isSelected
@@ -1499,7 +1557,10 @@ function UnifiedTasksPage() {
               const isDayToday = day.date === todayISO;
 
               return (
-                <div key={day.date} className="w-[85vw] max-w-[320px] shrink-0 snap-center sm:w-auto">
+                <div
+                  key={day.date}
+                  className="w-[85vw] max-w-[320px] shrink-0 snap-center sm:w-auto"
+                >
                   <DayCard
                     name={WEEKDAY_NAMES[i]!}
                     date={day.date}
@@ -1510,7 +1571,14 @@ function UnifiedTasksPage() {
                     chainCompletedIds={chainCompletedIds}
                     onSelectDay={() => {
                       setSelectedDate(day.date);
-                      setTimeout(() => focusPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                      setTimeout(
+                        () =>
+                          focusPanelRef.current?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                          }),
+                        50,
+                      );
                     }}
                   />
                 </div>
@@ -1612,7 +1680,6 @@ function DayCard({
   chainCompletedIds: Set<string>;
   onSelectDay: () => void;
 }) {
-
   const pct = pctComplete(tasks);
   const doneCount = tasks.filter((t) => t.completed_at).length;
 
@@ -1688,8 +1755,9 @@ function DayCard({
                 >
                   {parseRoutineTitle(t.title).displayTitle}
                 </span>
-                {isPast && !t.completed_at && (
-                  t.is_stale ? (
+                {isPast &&
+                  !t.completed_at &&
+                  (t.is_stale ? (
                     <span className="shrink-0 rounded-full bg-amber-500/15 border border-amber-600/40 dark:border-amber-400/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                       Stale
                     </span>
@@ -1705,8 +1773,7 @@ function DayCard({
                     <span className="shrink-0 rounded-full bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
                       Due
                     </span>
-                  )
-                )}
+                  ))}
                 {t.completed_at && (t.rollover_count ?? 0) > 0 && (
                   <span className="shrink-0 rounded-full bg-secondary/70 border border-border/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     Completed late
@@ -1726,5 +1793,3 @@ function DayCard({
     </article>
   );
 }
-
-

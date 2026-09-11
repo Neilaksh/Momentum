@@ -348,7 +348,6 @@ export function formatGoalTitle(cleanTitle: string, priority: GoalPriority | nul
   return `[p:${priority}] ${clean}`;
 }
 
-
 export function weekDates(weekStartISO: string): string[] {
   const start = parseISODate(weekStartISO);
   return Array.from({ length: 7 }, (_, i) => toISODate(addDays(start, i)));

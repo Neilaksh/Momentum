@@ -100,13 +100,7 @@ const QUICK_HABIT_PRESETS = [
   { title: "😴 8 Hours Sleep", target: 7, time: "Night" },
 ] as const;
 
-const TIME_TAG_OPTIONS = [
-  "Anytime",
-  "Morning",
-  "Afternoon",
-  "Evening",
-  "Night",
-] as const;
+const TIME_TAG_OPTIONS = ["Anytime", "Morning", "Afternoon", "Evening", "Night"] as const;
 
 type HabitFilter = "all" | "due_today" | "done_today" | "streaks";
 
@@ -152,10 +146,14 @@ function HabitYearHeatmapDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span>{parseHabitTitle(stat.habit.title).displayTitle}</span>
-            <span className="text-xs font-normal text-muted-foreground">· {currentYear} Activity Heatmap</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              · {currentYear} Activity Heatmap
+            </span>
           </DialogTitle>
           <DialogDescription>
-            {stat.yearDone} total check-ins in {currentYear} · {stat.streak > 0 ? `${stat.streak} day streak` : "No active streak"} · Click any cell to log or remove a check-in.
+            {stat.yearDone} total check-ins in {currentYear} ·{" "}
+            {stat.streak > 0 ? `${stat.streak} day streak` : "No active streak"} · Click any cell to
+            log or remove a check-in.
           </DialogDescription>
         </DialogHeader>
 
@@ -206,9 +204,15 @@ function HabitYearHeatmapDialog({
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground border-t border-border/60 pt-3">
             <div className="flex items-center gap-4">
-              <span><strong>{stat.yearDone}</strong> completed days</span>
-              <span><strong>{stat.yearPct}%</strong> yearly target</span>
-              <span><strong>{stat.habit.target_per_week}×</strong> / week goal</span>
+              <span>
+                <strong>{stat.yearDone}</strong> completed days
+              </span>
+              <span>
+                <strong>{stat.yearPct}%</strong> yearly target
+              </span>
+              <span>
+                <strong>{stat.habit.target_per_week}×</strong> / week goal
+              </span>
             </div>
             <div className="flex items-center gap-1.5 text-[11px]">
               <span>Less</span>
@@ -333,10 +337,7 @@ function HabitsPage() {
   const dates = data?.dates ?? [];
   const totals = data?.totals;
 
-  const totalStreaks = useMemo(
-    () => stats.reduce((acc, s) => acc + s.streak, 0),
-    [stats],
-  );
+  const totalStreaks = useMemo(() => stats.reduce((acc, s) => acc + s.streak, 0), [stats]);
 
   const bestStreak = useMemo(
     () => (stats.length > 0 ? Math.max(...stats.map((s) => s.streak)) : 0),
@@ -367,7 +368,8 @@ function HabitsPage() {
   }
 
   const weekEnd = toISODate(addDays(parseISODate(weekStart), 6));
-  const isWeeklyGoalAchieved = (totals?.weekDone ?? 0) >= (totals?.weekTarget ?? 1) && (totals?.weekTarget ?? 0) > 0;
+  const isWeeklyGoalAchieved =
+    (totals?.weekDone ?? 0) >= (totals?.weekTarget ?? 1) && (totals?.weekTarget ?? 0) > 0;
 
   const habitToFocus = useMemo(() => {
     const activeBehind = stats
@@ -445,14 +447,14 @@ function HabitsPage() {
             </div>
           )}
 
-          <div className={`flex w-full items-center justify-between ${isWeeklyGoalAchieved ? "mt-3" : ""}`}>
+          <div
+            className={`flex w-full items-center justify-between ${isWeeklyGoalAchieved ? "mt-3" : ""}`}
+          >
             <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <Calendar className="h-4 w-4 text-primary" />
               <span>Weekly Habit Progress</span>
             </div>
-            <span className="num text-xs font-bold text-primary">
-              {totals?.weekPct ?? 0}%
-            </span>
+            <span className="num text-xs font-bold text-primary">{totals?.weekPct ?? 0}%</span>
           </div>
 
           <div className="my-4">
@@ -482,9 +484,7 @@ function HabitsPage() {
               <TrendingUp className="h-4 w-4 text-primary" />
               <span>Year-to-Date Progress ({currentYear})</span>
             </div>
-            <span className="num text-xs font-bold text-primary">
-              {totals?.yearPct ?? 0}%
-            </span>
+            <span className="num text-xs font-bold text-primary">{totals?.yearPct ?? 0}%</span>
           </div>
 
           <div className="my-4">
@@ -562,7 +562,8 @@ function HabitsPage() {
                   Focus Habit This Week
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {habitToFocus.stat.weekDone}/{habitToFocus.stat.weekTarget} done ({habitToFocus.deficit} behind target)
+                  {habitToFocus.stat.weekDone}/{habitToFocus.stat.weekTarget} done (
+                  {habitToFocus.deficit} behind target)
                 </span>
               </div>
               <h3 className="text-sm font-semibold text-foreground mt-0.5 truncate">
@@ -609,7 +610,10 @@ function HabitsPage() {
               }}
               className="rounded-full border border-border/80 bg-secondary/30 px-3 py-1 text-xs font-medium text-foreground transition-colors hover:border-primary hover:bg-primary/10"
             >
-              {preset.title} <span className="text-muted-foreground">({preset.target}×/wk · {preset.time})</span>
+              {preset.title}{" "}
+              <span className="text-muted-foreground">
+                ({preset.target}×/wk · {preset.time})
+              </span>
             </button>
           ))}
         </div>
@@ -705,7 +709,12 @@ function HabitsPage() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Due Today ({stats.filter((s) => !s.doneDates.includes(todayISO) && s.weekDone < s.weekTarget).length})
+              Due Today (
+              {
+                stats.filter((s) => !s.doneDates.includes(todayISO) && s.weekDone < s.weekTarget)
+                  .length
+              }
+              )
             </button>
             <button
               onClick={() => setActiveFilter("done_today")}
@@ -759,7 +768,8 @@ function HabitsPage() {
           <Target className="h-10 w-10 text-muted-foreground opacity-50" />
           <h3 className="mt-4 text-base font-semibold">No habits tracked yet</h3>
           <p className="mt-1 text-xs text-muted-foreground max-w-sm">
-            Click on one of the quick presets above or type a habit name to start tracking your daily progress and building streaks.
+            Click on one of the quick presets above or type a habit name to start tracking your
+            daily progress and building streaks.
           </p>
         </div>
       ) : filteredStats.length === 0 ? (
@@ -871,7 +881,8 @@ function HabitsPage() {
                                   </span>
                                 ) : s.bestStreak !== undefined && s.bestStreak > 0 ? (
                                   <span className="num flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                                    <Award className="h-3.5 w-3.5 text-amber-400" /> Best: {s.bestStreak}d
+                                    <Award className="h-3.5 w-3.5 text-amber-400" /> Best:{" "}
+                                    {s.bestStreak}d
                                   </span>
                                 ) : null}
 
@@ -978,7 +989,8 @@ function HabitsPage() {
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center justify-between text-xs text-muted-foreground">
                       <span className="num">
-                        <strong>{s.weekDone}</strong> of {s.weekTarget} done this week ({s.weekPct}%)
+                        <strong>{s.weekDone}</strong> of {s.weekTarget} done this week ({s.weekPct}
+                        %)
                       </span>
                       <span className="num">
                         <strong>{s.yearDone}</strong> of {s.yearTarget} YTD ({s.yearPct}%)
@@ -1063,5 +1075,3 @@ function HabitsPage() {
     </AppShell>
   );
 }
-
-

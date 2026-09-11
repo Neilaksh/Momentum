@@ -40,33 +40,45 @@ function streakAsOf(activeDays: string[], cutoff: Date): number {
   return run;
 }
 
-export async function getWeeklyReview(supabase: DB, userId: string, weekStart: string): Promise<WeeklyReview> {
+export async function getWeeklyReview(
+  supabase: DB,
+  userId: string,
+  weekStart: string,
+): Promise<WeeklyReview> {
   const dates = weekDates(weekStart);
 
-  const [taskRes, habitRes, logRes, goalRes, reviewRes, profileRes, subjectEntries] = await Promise.all([
-    supabase.from("day_tasks").select("task_date, completed_at").eq("user_id", userId),
-    supabase
-      .from("habits")
-      .select("id, title, color, target_per_week")
-      .eq("user_id", userId)
-      .eq("is_archived", false)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("habit_logs")
-      .select("habit_id, log_date")
-      .eq("user_id", userId)
-      .gte("log_date", dates[0]!)
-      .lte("log_date", dates[6]!),
-    supabase.from("goals").select("id, title, status, color, created_at, updated_at").eq("user_id", userId),
-    supabase
-      .from("weekly_reviews")
-      .select("reflection_text")
-      .eq("user_id", userId)
-      .eq("week_start_date", weekStart)
-      .maybeSingle(),
-    supabase.from("profiles").select("current_streak, best_streak").eq("id", userId).maybeSingle(),
-    getSubjectBreakdown(supabase, userId, dates[0]!, dates[6]!),
-  ]);
+  const [taskRes, habitRes, logRes, goalRes, reviewRes, profileRes, subjectEntries] =
+    await Promise.all([
+      supabase.from("day_tasks").select("task_date, completed_at").eq("user_id", userId),
+      supabase
+        .from("habits")
+        .select("id, title, color, target_per_week")
+        .eq("user_id", userId)
+        .eq("is_archived", false)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("habit_logs")
+        .select("habit_id, log_date")
+        .eq("user_id", userId)
+        .gte("log_date", dates[0]!)
+        .lte("log_date", dates[6]!),
+      supabase
+        .from("goals")
+        .select("id, title, status, color, created_at, updated_at")
+        .eq("user_id", userId),
+      supabase
+        .from("weekly_reviews")
+        .select("reflection_text")
+        .eq("user_id", userId)
+        .eq("week_start_date", weekStart)
+        .maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("current_streak, best_streak")
+        .eq("id", userId)
+        .maybeSingle(),
+      getSubjectBreakdown(supabase, userId, dates[0]!, dates[6]!),
+    ]);
 
   const taskRows = taskRes.data ?? [];
   const habits = habitRes.data ?? [];
@@ -114,8 +126,6 @@ export async function getWeeklyReview(supabase: DB, userId: string, weekStart: s
     else streakStatus = "broken";
   }
 
-
-
   // --- Habits ---
   const doneByHabit = new Map<string, string[]>();
   for (const l of logs) {
@@ -141,9 +151,24 @@ export async function getWeeklyReview(supabase: DB, userId: string, weekStart: s
 
   // --- Goals with status changes / newly completed that week ---
   const weekStartDate = parseISODate(weekStart);
-  const weekStartMin = new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate(), 0, 0, 0);
+  const weekStartMin = new Date(
+    weekStartDate.getFullYear(),
+    weekStartDate.getMonth(),
+    weekStartDate.getDate(),
+    0,
+    0,
+    0,
+  );
   const weekEndDate = parseISODate(dates[6]!);
-  const weekEndMax = new Date(weekEndDate.getFullYear(), weekEndDate.getMonth(), weekEndDate.getDate(), 23, 59, 59, 999);
+  const weekEndMax = new Date(
+    weekEndDate.getFullYear(),
+    weekEndDate.getMonth(),
+    weekEndDate.getDate(),
+    23,
+    59,
+    59,
+    999,
+  );
   const weekGoals: WeekReviewGoal[] = [];
   for (const g of goals) {
     const created = new Date(g.created_at);
@@ -183,7 +208,6 @@ export async function getWeeklyReview(supabase: DB, userId: string, weekStart: s
   };
 }
 
-
 /** Distinct Monday week-starts that have any tracked data or a saved review, newest first. */
 export async function listWeeklyReviews(supabase: DB, userId: string): Promise<string[]> {
   const [tasks, logs, reviews] = await Promise.all([
@@ -207,9 +231,7 @@ export async function listWeeklyReviews(supabase: DB, userId: string): Promise<s
   // Exclude weeks that haven't started yet — future-dated data only. The
   // current in-progress week is kept, since it has already begun.
   const todayISO = toISODate(new Date());
-  return [...weeks]
-    .filter((w) => w <= todayISO)
-    .sort((a, b) => (a < b ? 1 : -1));
+  return [...weeks].filter((w) => w <= todayISO).sort((a, b) => (a < b ? 1 : -1));
 }
 
 /** Should we prompt the user to view last week's review (only true on a Monday). */
@@ -243,7 +265,11 @@ export async function getReviewPromptStatus(
 }
 
 /** Mark the given week's review as seen so the Monday prompt doesn't repeat. */
-export async function markReviewSeen(supabase: DB, userId: string, weekStart: string): Promise<void> {
+export async function markReviewSeen(
+  supabase: DB,
+  userId: string,
+  weekStart: string,
+): Promise<void> {
   await supabase.from("profiles").update({ last_seen_review_week: weekStart }).eq("id", userId);
 }
 
@@ -261,4 +287,3 @@ export async function saveWeeklyReflection(
       { onConflict: "user_id,week_start_date" },
     );
 }
-

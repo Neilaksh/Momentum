@@ -58,9 +58,7 @@ export function ExamScheduleDialog({
 }: ExamScheduleDialogProps) {
   const { exams, createExam, updateExam, deleteExam } = useExamSchedules();
 
-  const [view, setView] = useState<"list" | "form">(
-    initialMode === "create" ? "form" : "list",
-  );
+  const [view, setView] = useState<"list" | "form">(initialMode === "create" ? "form" : "list");
   const [editingExamId, setEditingExamId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<"all" | "upcoming" | "past">("upcoming");
@@ -193,7 +191,8 @@ export function ExamScheduleDialog({
                   Exam Schedule
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Manage exam timetables linked to subjects. Displays in your Tasks dashboard without cluttering your daily task list.
+                  Manage exam timetables linked to subjects. Displays in your Tasks dashboard
+                  without cluttering your daily task list.
                 </DialogDescription>
               </div>
             </div>

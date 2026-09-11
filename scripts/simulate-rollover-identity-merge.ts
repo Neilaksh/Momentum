@@ -60,16 +60,22 @@ function makeMockDb(tables: Record<string, Row[]>) {
       upsert: () => b,
       insert: (rowsIn: unknown) => {
         const arr = Array.isArray(rowsIn) ? rowsIn : [rowsIn];
-        for (const r of arr) rows.push({ ...(r as Row), id: `new-${Math.random().toString(36).slice(2)}` });
+        for (const r of arr)
+          rows.push({ ...(r as Row), id: `new-${Math.random().toString(36).slice(2)}` });
         return Promise.resolve({ data: null, error: null });
       },
-      then: (res: (v: { data: unknown; error: unknown }) => unknown, rej?: (e: unknown) => unknown) =>
-        Promise.resolve({ data: run(), error: null }).then(res, rej),
+      then: (
+        res: (v: { data: unknown; error: unknown }) => unknown,
+        rej?: (e: unknown) => unknown,
+      ) => Promise.resolve({ data: run(), error: null }).then(res, rej),
     };
     return new Proxy(b, {
       get(target, prop, recv) {
         if (prop === "then") {
-          return (res: (v: { data: unknown; error: unknown }) => unknown, rej?: (e: unknown) => unknown) => {
+          return (
+            res: (v: { data: unknown; error: unknown }) => unknown,
+            rej?: (e: unknown) => unknown,
+          ) => {
             const patch = target.__patch as Row | undefined;
             if (patch) for (const r of run()) Object.assign(r, patch);
             else return Promise.resolve({ data: run(), error: null }).then(res, rej);
@@ -154,7 +160,10 @@ async function main() {
     };
     const db = makeMockDb(tables);
     const inserted = await carryForwardIncompleteTasks(db, "u1");
-    check("S2 goal chain suppressed by later-plain completion", inserted === 0 && todayRowsFor(tables, title).length === 0);
+    check(
+      "S2 goal chain suppressed by later-plain completion",
+      inserted === 0 && todayRowsFor(tables, title).length === 0,
+    );
   }
 
   // === S3: goal completed on a later day stops the plain chain ===
@@ -162,13 +171,21 @@ async function main() {
     const tables: Record<string, Row[]> = {
       day_tasks: [
         task("p0", d(-2), title, { id: "p0" }),
-        task("g1r", d(-1), title, { id: "g1r", goal_id: goalId, completed_at: NOW, progress_pct: 100 }),
+        task("g1r", d(-1), title, {
+          id: "g1r",
+          goal_id: goalId,
+          completed_at: NOW,
+          progress_pct: 100,
+        }),
       ],
       goals: [{ id: goalId, user_id: "u1", status: "active" }],
     };
     const db = makeMockDb(tables);
     const inserted = await carryForwardIncompleteTasks(db, "u1");
-    check("S3 plain chain suppressed by later-goal completion", inserted === 0 && todayRowsFor(tables, title).length === 0);
+    check(
+      "S3 plain chain suppressed by later-goal completion",
+      inserted === 0 && todayRowsFor(tables, title).length === 0,
+    );
   }
 
   // === S4: different goals sharing a title stay independent ===
@@ -187,8 +204,14 @@ async function main() {
     const db = makeMockDb(tables);
     const inserted = await carryForwardIncompleteTasks(db, "u1");
     const todayRows = todayRowsFor(tables, title);
-    check("S4 different-goal same-title rows both roll (independent)", inserted === 2 && todayRows.length === 2);
-    check("S4 both goal identities present on today", todayRows.some((r) => r.goal_id === goalId) && todayRows.some((r) => r.goal_id === idB));
+    check(
+      "S4 different-goal same-title rows both roll (independent)",
+      inserted === 2 && todayRows.length === 2,
+    );
+    check(
+      "S4 both goal identities present on today",
+      todayRows.some((r) => r.goal_id === goalId) && todayRows.some((r) => r.goal_id === idB),
+    );
   }
 
   // === S5: second pass is idempotent (no duplicate re-insert) ===
@@ -219,8 +242,14 @@ async function main() {
     const db = makeMockDb(tables);
     const inserted = await carryForwardIncompleteTasks(db, "u1");
     const todayRows = todayRowsFor(tables, title);
-    check("S6 one copy for today from a multi-row plain chain", inserted === 1 && todayRows.length === 1);
-    check("S6 today copy inherits the chain's next count (oldest rc 1 -> 2)", todayRows[0]?.rollover_count === 2);
+    check(
+      "S6 one copy for today from a multi-row plain chain",
+      inserted === 1 && todayRows.length === 1,
+    );
+    check(
+      "S6 today copy inherits the chain's next count (oldest rc 1 -> 2)",
+      todayRows[0]?.rollover_count === 2,
+    );
   }
 
   console.log(failed === 0 ? "\nALL CHECKS PASSED" : `\n${failed} CHECK(S) FAILED`);

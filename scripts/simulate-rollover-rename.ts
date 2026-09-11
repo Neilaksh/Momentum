@@ -56,17 +56,23 @@ function makeMockDb(tables: Record<string, Row[]>) {
       upsert: () => b,
       insert: (rowsIn: unknown) => {
         const arr = Array.isArray(rowsIn) ? rowsIn : [rowsIn];
-        for (const r of arr) rows.push({ ...(r as Row), id: `new-${Math.random().toString(36).slice(2)}` });
+        for (const r of arr)
+          rows.push({ ...(r as Row), id: `new-${Math.random().toString(36).slice(2)}` });
         return Promise.resolve({ data: null, error: null });
       },
-      then: (res: (v: { data: unknown; error: unknown }) => unknown, rej?: (e: unknown) => unknown) =>
-        Promise.resolve({ data: run(), error: null }).then(res, rej),
+      then: (
+        res: (v: { data: unknown; error: unknown }) => unknown,
+        rej?: (e: unknown) => unknown,
+      ) => Promise.resolve({ data: run(), error: null }).then(res, rej),
     };
     // .update() stores patch; on await, apply it to filtered rows
     return new Proxy(b, {
       get(target, prop, recv) {
         if (prop === "then") {
-          return (res: (v: { data: unknown; error: unknown }) => unknown, rej?: (e: unknown) => unknown) => {
+          return (
+            res: (v: { data: unknown; error: unknown }) => unknown,
+            rej?: (e: unknown) => unknown,
+          ) => {
             const patch = target.__patch as Row | undefined;
             if (patch) for (const r of run()) Object.assign(r, patch);
             else return Promise.resolve({ data: run(), error: null }).then(res, rej);
@@ -97,9 +103,39 @@ async function main() {
   // One task rolled over 3 times (Mon-2, Mon-1, today), uncompleted:
   // rollover_count 0 -> 1 -> 2. Current copy = today's row.
   const chainRows: Row[] = [
-    { id: "t0", user_id: "u1", task_date: d(-2), title: "Write chapter", goal_id: goalId, routine_task_id: null, rollover_count: 0, completed_at: null, is_stale: false },
-    { id: "t1", user_id: "u1", task_date: d(-1), title: "Write chapter", goal_id: goalId, routine_task_id: null, rollover_count: 1, completed_at: null, is_stale: false },
-    { id: "t2", user_id: "u1", task_date: d(0), title: "Write chapter", goal_id: goalId, routine_task_id: null, rollover_count: 2, completed_at: null, is_stale: false },
+    {
+      id: "t0",
+      user_id: "u1",
+      task_date: d(-2),
+      title: "Write chapter",
+      goal_id: goalId,
+      routine_task_id: null,
+      rollover_count: 0,
+      completed_at: null,
+      is_stale: false,
+    },
+    {
+      id: "t1",
+      user_id: "u1",
+      task_date: d(-1),
+      title: "Write chapter",
+      goal_id: goalId,
+      routine_task_id: null,
+      rollover_count: 1,
+      completed_at: null,
+      is_stale: false,
+    },
+    {
+      id: "t2",
+      user_id: "u1",
+      task_date: d(0),
+      title: "Write chapter",
+      goal_id: goalId,
+      routine_task_id: null,
+      rollover_count: 2,
+      completed_at: null,
+      is_stale: false,
+    },
   ];
   const goals: Row[] = [{ id: goalId, user_id: "u1", status: "active" }];
   const tables: Record<string, Row[]> = { day_tasks: chainRows, goals };
@@ -132,27 +168,69 @@ async function main() {
     "chain continued: today's copy inherited rollover_count 2 -> next would be 3",
     (todays[0]?.rollover_count as number) === 2,
   );
-  check("no copy created under the old title", tables.day_tasks.every((r) => String(r.title).trim().toLowerCase() !== "write chapter"));
+  check(
+    "no copy created under the old title",
+    tables.day_tasks.every((r) => String(r.title).trim().toLowerCase() !== "write chapter"),
+  );
 
   // === Step 4: second pass is idempotent (no re-insert) ===
   await carryForwardIncompleteTasks(db, "u1");
-  const afterSecond = tables.day_tasks.filter((r) => r.title === normalized && r.task_date === d(0)).length;
-  check("second pass inserts nothing (idempotent)", afterSecond === 1 && tables.day_tasks.length === 3);
+  const afterSecond = tables.day_tasks.filter(
+    (r) => r.title === normalized && r.task_date === d(0),
+  ).length;
+  check(
+    "second pass inserts nothing (idempotent)",
+    afterSecond === 1 && tables.day_tasks.length === 3,
+  );
 
   // === Contrast: single-row rename WOULD have forked (documenting the bug avoided) ===
   const forkDbRows: Row[] = [
-    { id: "f0", user_id: "u2", task_date: d(-1), title: "Old task", goal_id: goalId, routine_task_id: null, rollover_count: 0, completed_at: null, is_stale: false },
-    { id: "f1", user_id: "u2", task_date: d(0), title: "New task", goal_id: goalId, routine_task_id: null, rollover_count: 1, completed_at: null, is_stale: false },
+    {
+      id: "f0",
+      user_id: "u2",
+      task_date: d(-1),
+      title: "Old task",
+      goal_id: goalId,
+      routine_task_id: null,
+      rollover_count: 0,
+      completed_at: null,
+      is_stale: false,
+    },
+    {
+      id: "f1",
+      user_id: "u2",
+      task_date: d(0),
+      title: "New task",
+      goal_id: goalId,
+      routine_task_id: null,
+      rollover_count: 1,
+      completed_at: null,
+      is_stale: false,
+    },
   ];
-  const forkTables: Record<string, Row[]> = { day_tasks: forkDbRows, goals: [{ id: goalId, user_id: "u2", status: "active" }] };
-  const insertedFork = await carryForwardIncompleteTasks(makeMockDb(forkTables), "u2").catch((e) => {
-    console.log("[contrast] PASS THREW:", e?.message ?? e);
-    return -1;
-  });
-  console.log(`(contrast pass inserted ${insertedFork} rows; total rows now ${forkTables.day_tasks.length})`);
-  console.log(forkTables.day_tasks.map((r) => `${r.task_date}|${r.title}|rc=${r.rollover_count}`).join("\n"));
-  const forkedOld = forkTables.day_tasks.filter((r) => r.title === "Old task" && r.task_date === d(0)).length;
-  check("CONTRAST: single-row rename forks (old-title copy appears today) — the bug we prevented", forkedOld === 1);
+  const forkTables: Record<string, Row[]> = {
+    day_tasks: forkDbRows,
+    goals: [{ id: goalId, user_id: "u2", status: "active" }],
+  };
+  const insertedFork = await carryForwardIncompleteTasks(makeMockDb(forkTables), "u2").catch(
+    (e) => {
+      console.log("[contrast] PASS THREW:", e?.message ?? e);
+      return -1;
+    },
+  );
+  console.log(
+    `(contrast pass inserted ${insertedFork} rows; total rows now ${forkTables.day_tasks.length})`,
+  );
+  console.log(
+    forkTables.day_tasks.map((r) => `${r.task_date}|${r.title}|rc=${r.rollover_count}`).join("\n"),
+  );
+  const forkedOld = forkTables.day_tasks.filter(
+    (r) => r.title === "Old task" && r.task_date === d(0),
+  ).length;
+  check(
+    "CONTRAST: single-row rename forks (old-title copy appears today) — the bug we prevented",
+    forkedOld === 1,
+  );
 
   console.log(failed === 0 ? "\nALL CHECKS PASSED" : `\n${failed} CHECK(S) FAILED`);
   process.exit(failed === 0 ? 0 : 1);

@@ -73,13 +73,7 @@ export function PieStat({
               {data.map((entry, i) => (
                 <Cell
                   key={entry.name}
-                  fill={
-                    safeTotal === 0
-                      ? "var(--secondary)"
-                      : i === 0
-                        ? color
-                        : "var(--secondary)"
-                  }
+                  fill={safeTotal === 0 ? "var(--secondary)" : i === 0 ? color : "var(--secondary)"}
                 />
               ))}
             </Pie>
@@ -101,8 +95,11 @@ export function PieStat({
       <p className="mt-2 text-xs font-semibold tracking-wider uppercase text-muted-foreground text-center">
         {label}
       </p>
-      {caption && <p className="num mt-0.5 text-xs text-muted-foreground text-center max-w-[200px]">{caption}</p>}
+      {caption && (
+        <p className="num mt-0.5 text-xs text-muted-foreground text-center max-w-[200px]">
+          {caption}
+        </p>
+      )}
     </div>
   );
 }
-

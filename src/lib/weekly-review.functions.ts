@@ -11,7 +11,7 @@ import {
 
 export const getWeeklyReview = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { weekStart: string }) => z.object({ weekStart: z.string() }).parse(input))
+  .validator((input: { weekStart: string }) => z.object({ weekStart: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     const review = await loadWeeklyReview(context.supabase, context.userId, data.weekStart);
     return { review };
@@ -26,7 +26,7 @@ export const listWeeklyReviews = createServerFn({ method: "POST" })
 
 export const getReviewPromptStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { force?: boolean } | undefined) =>
+  .validator((input: { force?: boolean } | undefined) =>
     z.object({ force: z.boolean().optional() }).optional().parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -40,7 +40,7 @@ export const getReviewPromptStatus = createServerFn({ method: "POST" })
 
 export const markReviewSeen = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { weekStart: string }) => z.object({ weekStart: z.string() }).parse(input))
+  .validator((input: { weekStart: string }) => z.object({ weekStart: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     await markReviewSeenRow(context.supabase, context.userId, data.weekStart);
     return { ok: true };
@@ -48,10 +48,15 @@ export const markReviewSeen = createServerFn({ method: "POST" })
 
 export const saveWeeklyReflection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { weekStart: string; reflectionText: string }) =>
+  .validator((input: { weekStart: string; reflectionText: string }) =>
     z.object({ weekStart: z.string(), reflectionText: z.string().max(300) }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    await saveWeeklyReflectionRow(context.supabase, context.userId, data.weekStart, data.reflectionText);
+    await saveWeeklyReflectionRow(
+      context.supabase,
+      context.userId,
+      data.weekStart,
+      data.reflectionText,
+    );
     return { ok: true };
   });

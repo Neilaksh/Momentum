@@ -98,8 +98,7 @@
 }
 
 @theme inline {
-  --font-sans:
-    "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
@@ -131,4 +130,3 @@
     font-variant-numeric: tabular-nums;
   }
 }
-

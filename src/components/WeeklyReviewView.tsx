@@ -37,13 +37,7 @@ const STREAK_LABEL: Record<string, string> = {
   none: "No activity",
 };
 
-
-
-export function WeeklyReviewView({
-  weekStart,
-}: {
-  weekStart: string;
-}) {
+export function WeeklyReviewView({ weekStart }: { weekStart: string }) {
   const fetchReview = useServerFn(getWeeklyReview);
   const saveReflectionFn = useServerFn(saveWeeklyReflection);
   const qc = useQueryClient();
@@ -82,12 +76,35 @@ export function WeeklyReviewView({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="Completion rate" value={`${review.completionRate}%`} sub={`${review.completedTasks} / ${review.totalTasks} tasks`} />
-            <StatCard icon={<Zap className="h-4 w-4" />} label="XP earned" value={`${review.xpEarned}`} sub="this week" />
-            <StatCard icon={<Flame className="h-4 w-4" />} label="Streak" value={STREAK_LABEL[review.streakStatus] ?? "None"} sub={review.activeDaysInWeek ? `${review.activeDaysInWeek} active day${review.activeDaysInWeek !== 1 ? "s" : ""} this week` : "no tasks completed"} />
-            <StatCard icon={<TrendingUp className="h-4 w-4" />} label="Habits" value={`${review.habitRate}%`} sub={`${review.habitDone} / ${review.habitTarget} target`} />
+            <StatCard
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              label="Completion rate"
+              value={`${review.completionRate}%`}
+              sub={`${review.completedTasks} / ${review.totalTasks} tasks`}
+            />
+            <StatCard
+              icon={<Zap className="h-4 w-4" />}
+              label="XP earned"
+              value={`${review.xpEarned}`}
+              sub="this week"
+            />
+            <StatCard
+              icon={<Flame className="h-4 w-4" />}
+              label="Streak"
+              value={STREAK_LABEL[review.streakStatus] ?? "None"}
+              sub={
+                review.activeDaysInWeek
+                  ? `${review.activeDaysInWeek} active day${review.activeDaysInWeek !== 1 ? "s" : ""} this week`
+                  : "no tasks completed"
+              }
+            />
+            <StatCard
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="Habits"
+              value={`${review.habitRate}%`}
+              sub={`${review.habitDone} / ${review.habitTarget} target`}
+            />
           </div>
-
 
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Daily completions */}
@@ -99,11 +116,28 @@ export function WeeklyReviewView({
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
                     <CartesianGrid vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={false}
+                      fontSize={11}
+                      stroke="var(--muted-foreground)"
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                      fontSize={11}
+                      stroke="var(--muted-foreground)"
+                    />
                     <Tooltip
                       cursor={{ fill: "var(--secondary)" }}
-                      contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }}
+                      contentStyle={{
+                        background: "var(--popover)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 12,
+                        fontSize: 12,
+                      }}
                       formatter={(val: any) => [`${val} completed`, "Tasks"]}
                     />
                     <Bar dataKey="done" radius={[6, 6, 0, 0]}>
@@ -118,18 +152,28 @@ export function WeeklyReviewView({
 
             {/* Habits */}
             <section className="rounded-2xl border border-border bg-card p-5">
-              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Habits</p>
+              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
+                Habits
+              </p>
               {review.habits.length === 0 ? (
                 <p className="mt-3 text-xs text-muted-foreground">No habits tracked this week.</p>
               ) : (
                 <ul className="mt-3 space-y-2">
                   {review.habits.map((h) => (
                     <li key={h.id} className="flex items-center gap-2.5">
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: subjectColorHex(h.color) }} />
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: subjectColorHex(h.color) }}
+                      />
                       <span className="min-w-0 flex-1 truncate text-xs font-medium">{h.title}</span>
-                      <span className="num text-xs font-semibold text-primary">{h.done}/{h.target}</span>
+                      <span className="num text-xs font-semibold text-primary">
+                        {h.done}/{h.target}
+                      </span>
                       <div className="h-1.5 w-24 overflow-hidden rounded-full bg-secondary">
-                        <div className="h-full rounded-full bg-primary" style={{ width: `${h.pct}%` }} />
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${h.pct}%` }}
+                        />
                       </div>
                     </li>
                   ))}
@@ -138,12 +182,13 @@ export function WeeklyReviewView({
             </section>
           </div>
 
-
           {/* Goals */}
           <section className="rounded-2xl border border-border bg-card p-5">
             <div className="flex items-center gap-2 text-primary">
               <Target className="h-4 w-4" />
-              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Goals</p>
+              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
+                Goals
+              </p>
             </div>
             {review.goals.length === 0 ? (
               <p className="mt-3 text-xs text-muted-foreground">
@@ -152,16 +197,30 @@ export function WeeklyReviewView({
             ) : (
               <ul className="mt-3 space-y-2">
                 {review.goals.map((g) => (
-                  <li key={g.id} className="flex items-center gap-2.5 rounded-lg bg-secondary/40 px-3 py-2">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: subjectColorHex(g.color) }} />
+                  <li
+                    key={g.id}
+                    className="flex items-center gap-2.5 rounded-lg bg-secondary/40 px-3 py-2"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ background: subjectColorHex(g.color) }}
+                    />
                     <span className="min-w-0 flex-1 truncate text-xs font-medium">{g.title}</span>
                     {g.isNewlyCompleted ? (
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Completed</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                        Completed
+                      </span>
                     ) : g.isNewlyCreated ? (
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Created</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Created
+                      </span>
                     ) : (
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        {g.status === "overdue" ? "Overdue" : g.status === "active" ? "Updated" : g.status}
+                        {g.status === "overdue"
+                          ? "Overdue"
+                          : g.status === "active"
+                            ? "Updated"
+                            : g.status}
                       </span>
                     )}
                   </li>
@@ -174,7 +233,9 @@ export function WeeklyReviewView({
           <section className="rounded-2xl border border-border bg-card p-5">
             <div className="flex items-center gap-2 text-primary">
               <BookOpen className="h-4 w-4" />
-              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">By Subject</p>
+              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
+                By Subject
+              </p>
             </div>
             {review.subjects.length === 0 ? (
               <p className="mt-3 text-xs text-muted-foreground">
@@ -184,11 +245,43 @@ export function WeeklyReviewView({
               <div className="mt-3 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={review.subjects.map((e) => ({ name: e.name, count: e.count, color: subjectColorHex(e.color) }))} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
+                    <BarChart
+                      data={review.subjects.map((e) => ({
+                        name: e.name,
+                        count: e.count,
+                        color: subjectColorHex(e.color),
+                      }))}
+                      layout="vertical"
+                      margin={{ top: 4, right: 16, bottom: 0, left: 8 }}
+                    >
                       <CartesianGrid horizontal={false} stroke="var(--border)" />
-                      <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
-                      <YAxis type="category" dataKey="name" width={110} tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
-                      <Tooltip cursor={{ fill: "var(--secondary)" }} contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }} formatter={(val: any) => [`${val} completed`, "Tasks"]} />
+                      <XAxis
+                        type="number"
+                        allowDecimals={false}
+                        tickLine={false}
+                        axisLine={false}
+                        fontSize={11}
+                        stroke="var(--muted-foreground)"
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={110}
+                        tickLine={false}
+                        axisLine={false}
+                        fontSize={11}
+                        stroke="var(--muted-foreground)"
+                      />
+                      <Tooltip
+                        cursor={{ fill: "var(--secondary)" }}
+                        contentStyle={{
+                          background: "var(--popover)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 12,
+                          fontSize: 12,
+                        }}
+                        formatter={(val: any) => [`${val} completed`, "Tasks"]}
+                      />
                       <Bar dataKey="count" radius={[0, 6, 6, 0]}>
                         {review.subjects.map((e, i) => (
                           <Cell key={`${e.name}-${i}`} fill={subjectColorHex(e.color)} />
@@ -199,9 +292,17 @@ export function WeeklyReviewView({
                 </div>
                 <ol className="space-y-2 self-start">
                   {review.subjects.map((e, i) => (
-                    <li key={e.subjectId} className="flex items-center gap-2.5 rounded-lg bg-secondary/40 px-3 py-2">
-                      <span className="num w-4 shrink-0 text-[10px] font-bold text-muted-foreground">{i + 1}</span>
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: subjectColorHex(e.color) }} />
+                    <li
+                      key={e.subjectId}
+                      className="flex items-center gap-2.5 rounded-lg bg-secondary/40 px-3 py-2"
+                    >
+                      <span className="num w-4 shrink-0 text-[10px] font-bold text-muted-foreground">
+                        {i + 1}
+                      </span>
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: subjectColorHex(e.color) }}
+                      />
                       <span className="min-w-0 flex-1 truncate text-xs font-medium">{e.name}</span>
                       <span className="num text-xs font-semibold text-primary">{e.count}</span>
                     </li>
@@ -226,7 +327,9 @@ export function WeeklyReviewView({
               />
               <Button
                 onClick={() => saveReflection.mutate(draft ?? review.reflection ?? "")}
-                disabled={saveReflection.isPending || (draft ?? review.reflection ?? "").trim() === ""}
+                disabled={
+                  saveReflection.isPending || (draft ?? review.reflection ?? "").trim() === ""
+                }
                 className="gap-2"
               >
                 <Save className="h-4 w-4" />
@@ -239,4 +342,3 @@ export function WeeklyReviewView({
     </div>
   );
 }
-

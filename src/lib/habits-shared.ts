@@ -74,4 +74,3 @@ export function formatHabitTitle(cleanTitle: string, timeTag?: string | null): s
   }
   return trimmed;
 }
-

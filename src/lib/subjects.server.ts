@@ -50,7 +50,11 @@ export async function updateSubjectRow(
   return data ?? null;
 }
 
-export async function countSubjectUsage(supabase: DB, userId: string, id: string): Promise<SubjectUsage> {
+export async function countSubjectUsage(
+  supabase: DB,
+  userId: string,
+  id: string,
+): Promise<SubjectUsage> {
   const [dayTasks, routineTasks] = await Promise.all([
     supabase
       .from("day_tasks")

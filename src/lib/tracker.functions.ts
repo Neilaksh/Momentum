@@ -28,16 +28,14 @@ import { parseHabitTitle } from "./habits-shared";
 
 export const getWeek = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { weekStart: string }) =>
-    z.object({ weekStart: z.string() }).parse(input),
-  )
+  .validator((input: { weekStart: string }) => z.object({ weekStart: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     return loadWeek(context.supabase, context.userId, data.weekStart);
   });
 
 export const toggleDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; completed: boolean }) =>
+  .validator((input: { id: string; completed: boolean }) =>
     z.object({ id: z.string(), completed: z.boolean() }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -82,7 +80,7 @@ export const toggleDayTask = createServerFn({ method: "POST" })
 
 export const renameDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; title: string }) =>
+  .validator((input: { id: string; title: string }) =>
     z.object({ id: z.string().uuid(), title: z.string().min(1).max(300) }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -155,7 +153,7 @@ export const renameDayTask = createServerFn({ method: "POST" })
 
 export const updateDayTaskDescription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; description: string | null; estMinutes?: number | null }) =>
+  .validator((input: { id: string; description: string | null; estMinutes?: number | null }) =>
     z
       .object({
         id: z.string().uuid(),
@@ -205,10 +203,9 @@ export const updateDayTaskDescription = createServerFn({ method: "POST" })
     return { success: true };
   });
 
-
 export const addDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       date: string;
       title: string;
@@ -274,7 +271,7 @@ export const addDayTask = createServerFn({ method: "POST" })
  */
 export const setDayTaskPriority = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; priority: GoalPriority | null }) =>
+  .validator((input: { id: string; priority: GoalPriority | null }) =>
     z
       .object({ id: z.string().uuid(), priority: z.enum(["High", "Med", "Low"]).nullable() })
       .parse(input),
@@ -321,7 +318,7 @@ export const setDayTaskPriority = createServerFn({ method: "POST" })
 
 export const deleteDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
+  .validator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     // Past-day tasks are locked: history is read-only. The UI disables the delete
     // control; this is the server-side backstop so no client can bypass it.
@@ -341,9 +338,7 @@ export const deleteDayTask = createServerFn({ method: "POST" })
 
 export const completeDayTasksBulk = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { date: string }) =>
-    z.object({ date: z.string() }).parse(input),
-  )
+  .validator((input: { date: string }) => z.object({ date: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
     if (data.date < toISODate(new Date())) {
@@ -362,7 +357,9 @@ export const completeDayTasksBulk = createServerFn({ method: "POST" })
       return { completedCount: 0, profile: null };
     }
 
-    const goalIds = Array.from(new Set(uncompleted.map((t) => t.goal_id).filter(Boolean))) as string[];
+    const goalIds = Array.from(
+      new Set(uncompleted.map((t) => t.goal_id).filter(Boolean)),
+    ) as string[];
     const lockedGoalIds = new Set<string>();
     if (goalIds.length > 0) {
       const { data: goalRows } = await supabase
@@ -395,14 +392,13 @@ export const completeDayTasksBulk = createServerFn({ method: "POST" })
 
 export const reorderDayTasks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { date: string; orderedIds: string[] }) =>
-      z
-        .object({
-          date: z.string(),
-          orderedIds: z.array(z.string().uuid()),
-        })
-        .parse(input),
+  .validator((input: { date: string; orderedIds: string[] }) =>
+    z
+      .object({
+        date: z.string(),
+        orderedIds: z.array(z.string().uuid()),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
@@ -426,14 +422,13 @@ export const reorderDayTasks = createServerFn({ method: "POST" })
 
 export const rescheduleDayTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { id: string; targetDate: string }) =>
-      z
-        .object({
-          id: z.string().uuid(),
-          targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        })
-        .parse(input),
+  .validator((input: { id: string; targetDate: string }) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
@@ -510,9 +505,7 @@ export const rescheduleDayTask = createServerFn({ method: "POST" })
  */
 export const getGoalWeeklyProgress = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { goalId: string }) =>
-    z.object({ goalId: z.string().uuid() }).parse(input),
-  )
+  .validator((input: { goalId: string }) => z.object({ goalId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: rows } = await context.supabase
       .from("day_tasks")
@@ -521,7 +514,8 @@ export const getGoalWeeklyProgress = createServerFn({ method: "GET" })
       .eq("goal_id", data.goalId)
       .order("task_date", { ascending: true });
 
-    if (!rows || rows.length === 0) return { weeks: [] as { weekStart: string; done: number; total: number }[] };
+    if (!rows || rows.length === 0)
+      return { weeks: [] as { weekStart: string; done: number; total: number }[] };
 
     // Group by Monday-week (same startOfWeek logic: Monday = day 0)
     const weekMap = new Map<string, { done: number; total: number }>();
@@ -545,7 +539,7 @@ export const getGoalWeeklyProgress = createServerFn({ method: "GET" })
 
 export const copyWeekdayRoutines = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       sourceWeekday: number;
       targetWeekday: number;
@@ -607,17 +601,15 @@ export const copyWeekdayRoutines = createServerFn({ method: "POST" })
     return { copiedCount: clones.length };
   });
 
-
 export const reorderRoutineTasks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { orderedIds: string[]; variant?: string }) =>
-      z
-        .object({
-          orderedIds: z.array(z.string().uuid()).min(1),
-          variant: z.string().optional(),
-        })
-        .parse(input),
+  .validator((input: { orderedIds: string[]; variant?: string }) =>
+    z
+      .object({
+        orderedIds: z.array(z.string().uuid()).min(1),
+        variant: z.string().optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
@@ -651,9 +643,7 @@ export const reorderRoutineTasks = createServerFn({ method: "POST" })
     // Positional values (10, 20, 30, ...) for the ordered set. Any task NOT in
     // the reordered cell keeps its existing sort_order (typically 0), which
     // still sorts before these — creation-order fallback remains deterministic.
-    const orderByTitle = new Map(
-      orderedTitles.map((t, i) => [t, (i + 1) * 10]),
-    );
+    const orderByTitle = new Map(orderedTitles.map((t, i) => [t, (i + 1) * 10]));
 
     // Update every row (all weekdays) whose parsed clean title matches one of
     // the reordered tasks. Titles carry structured prefixes
@@ -708,7 +698,7 @@ export const getRoutine = createServerFn({ method: "POST" })
 
 export const setActiveRoutineVariant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { variant: string }) =>
+  .validator((input: { variant: string }) =>
     z.object({ variant: z.enum(["primary", "alternate"]) }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -735,7 +725,7 @@ export const setActiveRoutineVariant = createServerFn({ method: "POST" })
 
 export const deleteRoutineTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
+  .validator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     await context.supabase.from("routine_tasks").delete().eq("id", data.id);
     return { ok: true };
@@ -743,7 +733,7 @@ export const deleteRoutineTask = createServerFn({ method: "POST" })
 
 export const updateRoutineTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       id: string;
       title?: string;
@@ -787,7 +777,7 @@ export const updateRoutineTask = createServerFn({ method: "POST" })
 
 export const toggleRoutineTaskActive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; isActive: boolean }) =>
+  .validator((input: { id: string; isActive: boolean }) =>
     z.object({ id: z.string(), isActive: z.boolean() }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -801,7 +791,7 @@ export const toggleRoutineTaskActive = createServerFn({ method: "POST" })
 
 export const batchAddRoutineTasks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       items: Array<{
         weekday: number;
@@ -856,16 +846,14 @@ export const batchAddRoutineTasks = createServerFn({ method: "POST" })
       is_active: item.isActive ?? true,
       week_variant: variant,
     }));
-    const { error: insertError } = await context.supabase
-      .from("routine_tasks")
-      .insert(rows);
+    const { error: insertError } = await context.supabase.from("routine_tasks").insert(rows);
     if (insertError) throw new Error(insertError.message);
     return { ok: true };
   });
 
 export const clearAllRoutineTasks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { variant?: string }) =>
+  .validator((input: { variant?: string }) =>
     z.object({ variant: z.enum(["primary", "alternate"]).optional() }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -1412,7 +1400,7 @@ export const getGoals = createServerFn({ method: "POST" })
 
 export const saveGoal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       id?: string | null;
       title: string;
@@ -1459,7 +1447,7 @@ export const saveGoal = createServerFn({ method: "POST" })
  */
 export const renameGoal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; title: string }) =>
+  .validator((input: { id: string; title: string }) =>
     z.object({ id: z.string().uuid(), title: z.string().min(1).max(200) }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -1485,7 +1473,7 @@ export const renameGoal = createServerFn({ method: "POST" })
 
 export const deleteGoal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
+  .validator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
     // Deactivate all linked routine tasks so they stop repeating
@@ -1501,7 +1489,7 @@ export const deleteGoal = createServerFn({ method: "POST" })
 /** Remove a batch of routine tasks linked to a goal (atomic, avoids partial-failure from N parallel calls). */
 export const removeGoalRoutineTasksBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { ids: string[] }) =>
+  .validator((input: { ids: string[] }) =>
     z.object({ ids: z.array(z.string()).min(1) }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -1519,7 +1507,7 @@ export const removeGoalRoutineTasksBatch = createServerFn({ method: "POST" })
 /** Update goal status: complete | active | overdue. Optionally extend target date. */
 export const updateGoalStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; status: string; newTargetDate?: string | null }) =>
+  .validator((input: { id: string; status: string; newTargetDate?: string | null }) =>
     z
       .object({
         id: z.string(),

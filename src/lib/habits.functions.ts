@@ -6,16 +6,14 @@ import { loadHabits } from "./habits.server";
 
 export const getHabits = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { weekStart: string }) =>
-    z.object({ weekStart: z.string() }).parse(input),
-  )
+  .validator((input: { weekStart: string }) => z.object({ weekStart: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     return loadHabits(context.supabase, context.userId, data.weekStart);
   });
 
 export const addHabit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { title: string; targetPerWeek: number }) =>
+  .validator((input: { title: string; targetPerWeek: number }) =>
     z
       .object({ title: z.string().min(1).max(120), targetPerWeek: z.number().int().min(1).max(7) })
       .parse(input),
@@ -31,7 +29,7 @@ export const addHabit = createServerFn({ method: "POST" })
 
 export const deleteHabit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
+  .validator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     await context.supabase.from("habits").delete().eq("id", data.id);
     return { ok: true };
@@ -39,15 +37,14 @@ export const deleteHabit = createServerFn({ method: "POST" })
 
 export const updateHabit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { id: string; title?: string; targetPerWeek?: number }) =>
-      z
-        .object({
-          id: z.string(),
-          title: z.string().min(1).max(120).optional(),
-          targetPerWeek: z.number().int().min(1).max(7).optional(),
-        })
-        .parse(input),
+  .validator((input: { id: string; title?: string; targetPerWeek?: number }) =>
+    z
+      .object({
+        id: z.string(),
+        title: z.string().min(1).max(120).optional(),
+        targetPerWeek: z.number().int().min(1).max(7).optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
@@ -66,7 +63,7 @@ export const updateHabit = createServerFn({ method: "POST" })
 
 export const toggleHabitDay = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { habitId: string; date: string; done: boolean }) =>
+  .validator((input: { habitId: string; date: string; done: boolean }) =>
     z.object({ habitId: z.string(), date: z.string(), done: z.boolean() }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -90,9 +87,8 @@ export const toggleHabitDay = createServerFn({ method: "POST" })
 
 export const linkHabitToGoal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { habitId: string; goalId: string }) =>
-      z.object({ habitId: z.string(), goalId: z.string() }).parse(input),
+  .validator((input: { habitId: string; goalId: string }) =>
+    z.object({ habitId: z.string(), goalId: z.string() }).parse(input),
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
@@ -128,9 +124,8 @@ export const linkHabitToGoal = createServerFn({ method: "POST" })
 
 export const unlinkHabitFromGoal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { habitId: string; goalId: string }) =>
-      z.object({ habitId: z.string(), goalId: z.string() }).parse(input),
+  .validator((input: { habitId: string; goalId: string }) =>
+    z.object({ habitId: z.string(), goalId: z.string() }).parse(input),
   )
   .handler(async ({ data, context }) => {
     // Remove just this (goal, habit) pair — other goals sharing the habit are
@@ -150,15 +145,14 @@ export const unlinkHabitFromGoal = createServerFn({ method: "POST" })
 
 export const updateHabitTrackingDuration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { goalId: string; habitId: string; durationDays: number | null }) =>
-      z
-        .object({
-          goalId: z.string(),
-          habitId: z.string(),
-          durationDays: z.number().int().min(1).max(3650).nullable(),
-        })
-        .parse(input),
+  .validator((input: { goalId: string; habitId: string; durationDays: number | null }) =>
+    z
+      .object({
+        goalId: z.string(),
+        habitId: z.string(),
+        durationDays: z.number().int().min(1).max(3650).nullable(),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     // Scoped update: touches duration_days on the exact (goal_id, habit_id)
@@ -172,4 +166,3 @@ export const updateHabitTrackingDuration = createServerFn({ method: "POST" })
       .eq("habit_id", data.habitId);
     return { ok: true };
   });
-

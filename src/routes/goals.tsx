@@ -63,7 +63,12 @@ import {
   toggleDayTask,
   updateGoalStatus,
 } from "@/lib/tracker.functions";
-import { getHabits, linkHabitToGoal, updateHabitTrackingDuration, unlinkHabitFromGoal } from "@/lib/habits.functions";
+import {
+  getHabits,
+  linkHabitToGoal,
+  updateHabitTrackingDuration,
+  unlinkHabitFromGoal,
+} from "@/lib/habits.functions";
 import { parseHabitTitle, type HabitsData } from "@/lib/habits-shared";
 import { getWeek } from "@/lib/tracker.functions";
 import {
@@ -278,7 +283,9 @@ function GoalsPage() {
 
   const addDirectGoalTask = useMutation({
     mutationFn: (v: { goalId: string; title: string; date: string; subjectId?: string | null }) =>
-      addTaskFn({ data: { title: v.title, goalId: v.goalId, date: v.date, subjectId: v.subjectId ?? null } }),
+      addTaskFn({
+        data: { title: v.title, goalId: v.goalId, date: v.date, subjectId: v.subjectId ?? null },
+      }),
     onSuccess: () => {
       invalidate();
       toast.success("Task added to goal for today");
@@ -288,7 +295,9 @@ function GoalsPage() {
 
   const scheduleGoalTask = useMutation({
     mutationFn: (v: { goalId: string; title: string; date: string; subjectId?: string | null }) =>
-      addTaskFn({ data: { title: v.title, goalId: v.goalId, date: v.date, subjectId: v.subjectId ?? null } }),
+      addTaskFn({
+        data: { title: v.title, goalId: v.goalId, date: v.date, subjectId: v.subjectId ?? null },
+      }),
     onSuccess: (_data, vars) => {
       invalidate();
       toast.success(`Task scheduled for ${formatDayDate(vars.date)}`);
@@ -298,13 +307,19 @@ function GoalsPage() {
 
   const linkHabit = useMutation({
     mutationFn: (v: { habitId: string; goalId: string }) => linkHabitFn({ data: v }),
-    onSuccess: () => { invalidate(); toast.success("Habit linked to goal!"); },
+    onSuccess: () => {
+      invalidate();
+      toast.success("Habit linked to goal!");
+    },
     onError: () => toast.error("Couldn't link habit."),
   });
 
   const unlinkHabit = useMutation({
     mutationFn: (v: { goalId: string; habitId: string }) => unlinkHabitFn({ data: v }),
-    onSuccess: () => { invalidate(); toast.success("Habit unlinked."); },
+    onSuccess: () => {
+      invalidate();
+      toast.success("Habit unlinked.");
+    },
     onError: () => toast.error("Couldn't unlink habit."),
   });
 
@@ -349,11 +364,19 @@ function GoalsPage() {
       active.sort((a, b) => priorityRank(b) - priorityRank(a));
       overdue.sort((a, b) => priorityRank(b) - priorityRank(a));
     } else if (sortBy === "progress") {
-      active.sort((a, b) => (progressByGoal[b.id]?.overall ?? 0) - (progressByGoal[a.id]?.overall ?? 0));
-      overdue.sort((a, b) => (progressByGoal[b.id]?.overall ?? 0) - (progressByGoal[a.id]?.overall ?? 0));
+      active.sort(
+        (a, b) => (progressByGoal[b.id]?.overall ?? 0) - (progressByGoal[a.id]?.overall ?? 0),
+      );
+      overdue.sort(
+        (a, b) => (progressByGoal[b.id]?.overall ?? 0) - (progressByGoal[a.id]?.overall ?? 0),
+      );
     } else if (sortBy === "due") {
-      active.sort((a, b) => (a.target_date ?? "9999-99-99").localeCompare(b.target_date ?? "9999-99-99"));
-      overdue.sort((a, b) => (a.target_date ?? "9999-99-99").localeCompare(b.target_date ?? "9999-99-99"));
+      active.sort((a, b) =>
+        (a.target_date ?? "9999-99-99").localeCompare(b.target_date ?? "9999-99-99"),
+      );
+      overdue.sort((a, b) =>
+        (a.target_date ?? "9999-99-99").localeCompare(b.target_date ?? "9999-99-99"),
+      );
     }
 
     return { activeGoals: active, overdueGoals: overdue, completedGoals: completed };
@@ -414,7 +437,8 @@ function GoalsPage() {
                 {progressByGoal[recommendedGoal.id]?.overall ?? 0}% complete
               </span>
               <p className="text-[10px] text-muted-foreground">
-                {progressByGoal[recommendedGoal.id]?.taskDone ?? 0}/{progressByGoal[recommendedGoal.id]?.taskTotal ?? 0} tasks done
+                {progressByGoal[recommendedGoal.id]?.taskDone ?? 0}/
+                {progressByGoal[recommendedGoal.id]?.taskTotal ?? 0} tasks done
               </p>
             </div>
           </div>
@@ -547,9 +571,7 @@ function GoalsPage() {
               </div>
             </div>
           )}
-          {isLoading && (
-            <p className="text-sm text-muted-foreground">Loading goals…</p>
-          )}
+          {isLoading && <p className="text-sm text-muted-foreground">Loading goals…</p>}
 
           {!isLoading && goals.length === 0 && (
             <div className="rounded-2xl border border-dashed border-border p-10 text-center">
@@ -589,14 +611,32 @@ function GoalsPage() {
                     onDelete={() => remove.mutate({ id: g.id })}
                     onRename={(title) => rename.mutate({ id: g.id, title })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
-                    onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
+                    onExtendDate={(d) =>
+                      markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })
+                    }
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
-                    onAddDirectTask={(t, subjectId) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()), subjectId })}
-                    onScheduleTask={(v) => scheduleGoalTask.mutate({ goalId: g.id, title: v.title, date: v.date, subjectId: v.subjectId })}
+                    onAddDirectTask={(t, subjectId) =>
+                      addDirectGoalTask.mutate({
+                        goalId: g.id,
+                        title: t,
+                        date: toISODate(new Date()),
+                        subjectId,
+                      })
+                    }
+                    onScheduleTask={(v) =>
+                      scheduleGoalTask.mutate({
+                        goalId: g.id,
+                        title: v.title,
+                        date: v.date,
+                        subjectId: v.subjectId,
+                      })
+                    }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId, goalId: g.id })}
-                    onSetDuration={(habitId, durationDays) => setHabitDuration.mutate({ goalId: g.id, habitId, durationDays })}
+                    onSetDuration={(habitId, durationDays) =>
+                      setHabitDuration.mutate({ goalId: g.id, habitId, durationDays })
+                    }
                   />
                 ))}
               </div>
@@ -633,14 +673,32 @@ function GoalsPage() {
                     onDelete={() => remove.mutate({ id: g.id })}
                     onRename={(title) => rename.mutate({ id: g.id, title })}
                     onMarkComplete={() => markStatus.mutate({ id: g.id, status: "completed" })}
-                    onExtendDate={(d) => markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })}
+                    onExtendDate={(d) =>
+                      markStatus.mutate({ id: g.id, status: "active", newTargetDate: d || null })
+                    }
                     onRemoveRoutineGroup={(ids) => removeRoutineBatch.mutate({ ids })}
                     onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
-                    onAddDirectTask={(t, subjectId) => addDirectGoalTask.mutate({ goalId: g.id, title: t, date: toISODate(new Date()), subjectId })}
-                    onScheduleTask={(v) => scheduleGoalTask.mutate({ goalId: g.id, title: v.title, date: v.date, subjectId: v.subjectId })}
+                    onAddDirectTask={(t, subjectId) =>
+                      addDirectGoalTask.mutate({
+                        goalId: g.id,
+                        title: t,
+                        date: toISODate(new Date()),
+                        subjectId,
+                      })
+                    }
+                    onScheduleTask={(v) =>
+                      scheduleGoalTask.mutate({
+                        goalId: g.id,
+                        title: v.title,
+                        date: v.date,
+                        subjectId: v.subjectId,
+                      })
+                    }
                     onLinkHabit={(habitId) => linkHabit.mutate({ habitId, goalId: g.id })}
                     onUnlinkHabit={(habitId) => unlinkHabit.mutate({ habitId, goalId: g.id })}
-                    onSetDuration={(habitId, durationDays) => setHabitDuration.mutate({ goalId: g.id, habitId, durationDays })}
+                    onSetDuration={(habitId, durationDays) =>
+                      setHabitDuration.mutate({ goalId: g.id, habitId, durationDays })
+                    }
                   />
                 ))}
               </div>
@@ -923,9 +981,7 @@ function GoalCard({
 
   const today = new Date().toISOString().slice(0, 10);
   const daysUntilDue = goal.target_date
-    ? Math.ceil(
-        (new Date(goal.target_date).getTime() - new Date(today).getTime()) / 86400000,
-      )
+    ? Math.ceil((new Date(goal.target_date).getTime() - new Date(today).getTime()) / 86400000)
     : null;
 
   const routineGroups = Array.from(
@@ -950,15 +1006,11 @@ function GoalCard({
   // Rollover chain resilience metrics across all tasks linked to this goal
   const rolloverMetrics = useMemo(() => {
     const chains = buildRolloverChains(tasks);
-    const rolloverChains = chains.filter(
-      (c) => c.length > 1 || (c[0]?.rollover_count ?? 0) > 0,
-    );
+    const rolloverChains = chains.filter((c) => c.length > 1 || (c[0]?.rollover_count ?? 0) > 0);
     const completedAfterRollover = rolloverChains.filter((c) =>
       c.some((t) => !!t.completed_at),
     ).length;
-    const activeRollovers = rolloverChains.filter(
-      (c) => !c.some((t) => !!t.completed_at),
-    ).length;
+    const activeRollovers = rolloverChains.filter((c) => !c.some((t) => !!t.completed_at)).length;
     return {
       totalRolloverChains: rolloverChains.length,
       completedAfterRollover,
@@ -1244,7 +1296,9 @@ function GoalCard({
                 </p>
               </div>
               <div className="rounded-lg bg-secondary/40 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Overall</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Overall
+                </p>
                 <p className="num mt-0.5 text-sm font-bold">
                   {overall === null ? "—" : `${overall}%`}
                 </p>
@@ -1262,7 +1316,8 @@ function GoalCard({
                     Rollover Resilience
                   </p>
                   <p className="num mt-0.5 text-sm font-bold text-indigo-300">
-                    {rolloverMetrics.completedAfterRollover}/{rolloverMetrics.totalRolloverChains} completed
+                    {rolloverMetrics.completedAfterRollover}/{rolloverMetrics.totalRolloverChains}{" "}
+                    completed
                   </p>
                   <p className="text-[10px] text-muted-foreground">
                     {rolloverMetrics.activeRollovers > 0
@@ -1294,7 +1349,9 @@ function GoalCard({
                       : lh.weeksMet === lh.weeksTotal;
                     return (
                       <li key={lh.habitId} className="flex items-center gap-2 text-xs">
-                        <span className={`h-2 w-2 shrink-0 rounded-full ${onTrack ? "bg-primary" : "bg-amber-400"}`} />
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${onTrack ? "bg-primary" : "bg-amber-400"}`}
+                        />
                         <span className="min-w-0 flex-1 truncate font-medium text-foreground">
                           {lh.title}
                         </span>
@@ -1305,7 +1362,10 @@ function GoalCard({
                           />
                         </div>
                         <span className="num shrink-0 text-[11px] text-muted-foreground">
-                          {isDurationMode ? `${lh.daysLogged}/${lh.durationDays} days` : `${lh.weeksMet}/${lh.weeksTotal} wks`} · {lh.hitRate}%
+                          {isDurationMode
+                            ? `${lh.daysLogged}/${lh.durationDays} days`
+                            : `${lh.weeksMet}/${lh.weeksTotal} wks`}{" "}
+                          · {lh.hitRate}%
                         </span>
                       </li>
                     );
@@ -1330,7 +1390,8 @@ function GoalCard({
                 <p className="text-xs text-muted-foreground py-1">Loading weekly trail...</p>
               ) : trailWeeks.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-1">
-                  No weekly task history yet for this goal. As you complete linked daily tasks, weekly completion snapshots will appear here.
+                  No weekly task history yet for this goal. As you complete linked daily tasks,
+                  weekly completion snapshots will appear here.
                 </p>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-2">
@@ -1353,7 +1414,11 @@ function GoalCard({
                           <span>Wk {formatDayDate(tw.weekStart).slice(0, 6)}</span>
                           <span
                             className={`font-semibold ${
-                              isOnTrack ? "text-emerald-400" : isPartial ? "text-amber-400" : "text-muted-foreground"
+                              isOnTrack
+                                ? "text-emerald-400"
+                                : isPartial
+                                  ? "text-amber-400"
+                                  : "text-muted-foreground"
                             }`}
                           >
                             {pct}%
@@ -1362,7 +1427,11 @@ function GoalCard({
                         <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                           <div
                             className={`h-full transition-all ${
-                              isOnTrack ? "bg-emerald-400" : isPartial ? "bg-amber-400" : "bg-primary"
+                              isOnTrack
+                                ? "bg-emerald-400"
+                                : isPartial
+                                  ? "bg-amber-400"
+                                  : "bg-primary"
                             }`}
                             style={{ width: `${pct}%` }}
                           />
@@ -1378,7 +1447,6 @@ function GoalCard({
             </div>
           </div>
         )}
-
       </div>
 
       {/* Active Goal Tasks (Today / Pending / Shifted) */}
@@ -1443,13 +1511,19 @@ function GoalCard({
                           fill="none"
                           strokeWidth={2.5}
                         >
-                          <path d="M2.5 6.3l2.4 2.4 4.6-5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path
+                            d="M2.5 6.3l2.4 2.4 4.6-5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
                         </svg>
                       )}
                     </button>
                     <span
                       className={`truncate ${
-                        isDone ? "line-through text-muted-foreground" : "text-foreground font-medium"
+                        isDone
+                          ? "line-through text-muted-foreground"
+                          : "text-foreground font-medium"
                       }`}
                     >
                       {t.title}
@@ -1476,7 +1550,6 @@ function GoalCard({
                         Completed late
                       </span>
                     )}
-
                   </div>
                 </li>
               );
@@ -1550,7 +1623,9 @@ function GoalCard({
             {showLinkHabitDropdown && (
               <div className="mb-3 rounded-lg border border-amber-500/20 bg-card p-2 space-y-1 max-h-40 overflow-y-auto">
                 {unlinkedHabits.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground px-1">All habits already linked.</p>
+                  <p className="text-[11px] text-muted-foreground px-1">
+                    All habits already linked.
+                  </p>
                 ) : (
                   unlinkedHabits.map((s) => (
                     <button
@@ -1561,9 +1636,16 @@ function GoalCard({
                       }}
                       className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-left hover:bg-secondary transition-colors"
                     >
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: `hsl(var(--primary))` }} />
-                      <span className="font-medium truncate">{parseHabitTitle(s.habit.title).displayTitle}</span>
-                      <span className="ml-auto text-muted-foreground text-[10px]">{s.habit.target_per_week}×/wk</span>
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ background: `hsl(var(--primary))` }}
+                      />
+                      <span className="font-medium truncate">
+                        {parseHabitTitle(s.habit.title).displayTitle}
+                      </span>
+                      <span className="ml-auto text-muted-foreground text-[10px]">
+                        {s.habit.target_per_week}×/wk
+                      </span>
                     </button>
                   ))
                 )}
@@ -1574,7 +1656,9 @@ function GoalCard({
             {linkedHabits.length === 0 ? (
               <p className="text-[11px] text-muted-foreground">
                 No habits linked yet.{" "}
-                {!isCompleted && unlinkedHabits.length > 0 && "Click 'Link Habit' to attach an existing habit to this goal."}
+                {!isCompleted &&
+                  unlinkedHabits.length > 0 &&
+                  "Click 'Link Habit' to attach an existing habit to this goal."}
               </p>
             ) : (
               <div className="space-y-2">
@@ -1583,9 +1667,10 @@ function GoalCard({
                   const snap = snapFor(s.habit.id);
                   const lh = progress?.linkedHabits.find((x) => x.habitId === s.habit.id) ?? null;
                   const durationLimited = lh?.durationDays != null;
-                  const habitOnTrack = durationLimited && lh
-                    ? lh.daysLogged === lh.durationDays
-                    : (lh?.weeksMet ?? 0) === (lh?.weeksTotal ?? -1);
+                  const habitOnTrack =
+                    durationLimited && lh
+                      ? lh.daysLogged === lh.durationDays
+                      : (lh?.weeksMet ?? 0) === (lh?.weeksTotal ?? -1);
                   const weekTarget = s.habit.target_per_week;
                   // "X/Y this wk" must start counting from the day this habit was
                   // linked to THIS goal (goal_habit_links.created_at), matching the
@@ -1598,20 +1683,23 @@ function GoalCard({
                   // never fall back to the raw s.weekDone, which is what caused the
                   // "1/7 bar but 0% / 2/7 bar but 14%" contradiction.
                   const linkStart = (habitDurations[s.habit.id]?.createdAt ?? "").slice(0, 10);
-                  const weekDone = linkStart
-                    ? s.doneDates.filter((d) => d >= linkStart).length
-                    : 0;
-                  const pctWeek = weekTarget > 0
-                    ? Math.min(100, Math.round((weekDone / weekTarget) * 100))
-                    : 0;
+                  const weekDone = linkStart ? s.doneDates.filter((d) => d >= linkStart).length : 0;
+                  const pctWeek =
+                    weekTarget > 0 ? Math.min(100, Math.round((weekDone / weekTarget) * 100)) : 0;
                   return (
-                    <div key={s.habit.id} className="flex items-center gap-2 rounded-lg bg-amber-500/5 border border-amber-500/10 px-2.5 py-2">
+                    <div
+                      key={s.habit.id}
+                      className="flex items-center gap-2 rounded-lg bg-amber-500/5 border border-amber-500/10 px-2.5 py-2"
+                    >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-xs font-semibold text-foreground truncate">{displayTitle}</span>
+                          <span className="text-xs font-semibold text-foreground truncate">
+                            {displayTitle}
+                          </span>
                           {!snap && s.streak > 0 && (
                             <span className="flex items-center gap-0.5 text-[10px] font-semibold text-orange-400">
-                              <Flame className="h-3 w-3" />{s.streak}d
+                              <Flame className="h-3 w-3" />
+                              {s.streak}d
                             </span>
                           )}
                         </div>
@@ -1762,7 +1850,11 @@ function GoalCard({
           >
             <Calendar className="h-3.5 w-3.5" />
             Change Deadline
-            {showExtendPanel ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {showExtendPanel ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )}
           </button>
 
           {/* Schedule a future task for this goal */}
@@ -1782,7 +1874,11 @@ function GoalCard({
             >
               <CalendarClock className="h-3.5 w-3.5" />
               Schedule Task
-              {showSchedulePanel ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              {showSchedulePanel ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
             </button>
           )}
         </div>
@@ -1814,7 +1910,9 @@ function GoalCard({
           </p>
 
           <div className="flex flex-wrap items-center gap-1.5 mb-3">
-            <span className="text-[10px] uppercase font-semibold text-muted-foreground">Quick Extend:</span>
+            <span className="text-[10px] uppercase font-semibold text-muted-foreground">
+              Quick Extend:
+            </span>
             {[7, 14, 30].map((days) => {
               const baseDate =
                 goal.target_date && goal.target_date > today
@@ -1952,8 +2050,8 @@ function GoalCard({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this goal?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{parsedGoal.cleanTitle}", its linked tasks, and any routine links.
-              This action cannot be undone.
+              This will permanently delete "{parsedGoal.cleanTitle}", its linked tasks, and any
+              routine links. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2028,7 +2126,8 @@ function GoalCard({
               onClick={submitRename}
               disabled={
                 !renameDraft.trim() ||
-                (renameDraft.trim() === parsedGoal.cleanTitle && renamePriority === parsedGoal.priority)
+                (renameDraft.trim() === parsedGoal.cleanTitle &&
+                  renamePriority === parsedGoal.priority)
               }
             >
               Save

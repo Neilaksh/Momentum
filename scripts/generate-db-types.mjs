@@ -137,27 +137,87 @@ const schema = {
 // `supabase gen types`, mirroring the committed file).
 const relationships = {
   day_tasks: [
-    { foreignKeyName: "day_tasks_goal_id_fkey", columns: ["goal_id"], isOneToOne: false, referencedRelation: "goals", referencedColumns: ["id"] },
-    { foreignKeyName: "day_tasks_routine_task_id_fkey", columns: ["routine_task_id"], isOneToOne: false, referencedRelation: "routine_tasks", referencedColumns: ["id"] },
-    { foreignKeyName: "day_tasks_subject_id_fkey", columns: ["subject_id"], isOneToOne: false, referencedRelation: "subjects", referencedColumns: ["id"] },
+    {
+      foreignKeyName: "day_tasks_goal_id_fkey",
+      columns: ["goal_id"],
+      isOneToOne: false,
+      referencedRelation: "goals",
+      referencedColumns: ["id"],
+    },
+    {
+      foreignKeyName: "day_tasks_routine_task_id_fkey",
+      columns: ["routine_task_id"],
+      isOneToOne: false,
+      referencedRelation: "routine_tasks",
+      referencedColumns: ["id"],
+    },
+    {
+      foreignKeyName: "day_tasks_subject_id_fkey",
+      columns: ["subject_id"],
+      isOneToOne: false,
+      referencedRelation: "subjects",
+      referencedColumns: ["id"],
+    },
   ],
   goal_habit_links: [
-    { foreignKeyName: "goal_habit_links_goal_id_fkey", columns: ["goal_id"], isOneToOne: false, referencedRelation: "goals", referencedColumns: ["id"] },
-    { foreignKeyName: "goal_habit_links_habit_id_fkey", columns: ["habit_id"], isOneToOne: false, referencedRelation: "habits", referencedColumns: ["id"] },
+    {
+      foreignKeyName: "goal_habit_links_goal_id_fkey",
+      columns: ["goal_id"],
+      isOneToOne: false,
+      referencedRelation: "goals",
+      referencedColumns: ["id"],
+    },
+    {
+      foreignKeyName: "goal_habit_links_habit_id_fkey",
+      columns: ["habit_id"],
+      isOneToOne: false,
+      referencedRelation: "habits",
+      referencedColumns: ["id"],
+    },
   ],
   goal_habit_snapshots: [
-    { foreignKeyName: "goal_habit_snapshots_goal_id_fkey", columns: ["goal_id"], isOneToOne: false, referencedRelation: "goals", referencedColumns: ["id"] },
-    { foreignKeyName: "goal_habit_snapshots_habit_id_fkey", columns: ["habit_id"], isOneToOne: false, referencedRelation: "habits", referencedColumns: ["id"] },
+    {
+      foreignKeyName: "goal_habit_snapshots_goal_id_fkey",
+      columns: ["goal_id"],
+      isOneToOne: false,
+      referencedRelation: "goals",
+      referencedColumns: ["id"],
+    },
+    {
+      foreignKeyName: "goal_habit_snapshots_habit_id_fkey",
+      columns: ["habit_id"],
+      isOneToOne: false,
+      referencedRelation: "habits",
+      referencedColumns: ["id"],
+    },
   ],
   goals: [],
   habit_logs: [
-    { foreignKeyName: "habit_logs_habit_id_fkey", columns: ["habit_id"], isOneToOne: false, referencedRelation: "habits", referencedColumns: ["id"] },
+    {
+      foreignKeyName: "habit_logs_habit_id_fkey",
+      columns: ["habit_id"],
+      isOneToOne: false,
+      referencedRelation: "habits",
+      referencedColumns: ["id"],
+    },
   ],
   habits: [],
   profiles: [],
   routine_tasks: [
-    { foreignKeyName: "routine_tasks_goal_id_fkey", columns: ["goal_id"], isOneToOne: false, referencedRelation: "goals", referencedColumns: ["id"] },
-    { foreignKeyName: "routine_tasks_subject_id_fkey", columns: ["subject_id"], isOneToOne: false, referencedRelation: "subjects", referencedColumns: ["id"] },
+    {
+      foreignKeyName: "routine_tasks_goal_id_fkey",
+      columns: ["goal_id"],
+      isOneToOne: false,
+      referencedRelation: "goals",
+      referencedColumns: ["id"],
+    },
+    {
+      foreignKeyName: "routine_tasks_subject_id_fkey",
+      columns: ["subject_id"],
+      isOneToOne: false,
+      referencedRelation: "subjects",
+      referencedColumns: ["id"],
+    },
   ],
   subjects: [],
   weekly_reviews: [],
@@ -196,7 +256,9 @@ function tableBlock(name, cols, rels) {
           (r) =>
             `          {\n            foreignKeyName: "${r.foreignKeyName}"\n            columns: [${r.columns
               .map((c) => `"${c}"`)
-              .join(", ")}]\n            isOneToOne: ${r.isOneToOne}\n            referencedRelation: "${r.referencedRelation}"\n            referencedColumns: [${r.referencedColumns
+              .join(
+                ", ",
+              )}]\n            isOneToOne: ${r.isOneToOne}\n            referencedRelation: "${r.referencedRelation}"\n            referencedColumns: [${r.referencedColumns
               .map((c) => `"${c}"`)
               .join(", ")}]\n          },`,
         )
@@ -252,7 +314,8 @@ const headMarker = `    Tables: {${NL}`;
 const tailMarker = `    }${NL}    Views: {`;
 const headEnd = current.indexOf(headMarker);
 const tailStart = current.indexOf(tailMarker);
-if (headEnd < 0 || tailStart < 0) throw new Error("Could not locate Tables/Views markers in types.ts");
+if (headEnd < 0 || tailStart < 0)
+  throw new Error("Could not locate Tables/Views markers in types.ts");
 const head = current.slice(0, headEnd + headMarker.length);
 const tail = current.slice(tailStart);
 
@@ -265,5 +328,3 @@ const tablesSrc = Object.keys(schema)
 
 fs.writeFileSync(OUT, `${head}${tablesSrc}${NL}${tail}`);
 console.log(`\nWrote ${OUT}`);
-
-

@@ -145,13 +145,25 @@ export function useExamSchedules() {
             const item: ExamSchedule = {
               id: e.id,
               user_id: e.user_id,
-              subject_id: input.subject_id !== undefined ? (input.subject_id ?? null) : (e.subject_id ?? null),
+              subject_id:
+                input.subject_id !== undefined
+                  ? (input.subject_id ?? null)
+                  : (e.subject_id ?? null),
               title: input.title !== undefined ? input.title.trim() : e.title,
               exam_date: input.exam_date !== undefined ? input.exam_date : e.exam_date,
-              start_time: input.start_time !== undefined ? (input.start_time?.trim() || null) : (e.start_time ?? null),
-              end_time: input.end_time !== undefined ? (input.end_time?.trim() || null) : (e.end_time ?? null),
-              location: input.location !== undefined ? (input.location?.trim() || null) : (e.location ?? null),
-              notes: input.notes !== undefined ? (input.notes?.trim() || null) : (e.notes ?? null),
+              start_time:
+                input.start_time !== undefined
+                  ? input.start_time?.trim() || null
+                  : (e.start_time ?? null),
+              end_time:
+                input.end_time !== undefined
+                  ? input.end_time?.trim() || null
+                  : (e.end_time ?? null),
+              location:
+                input.location !== undefined
+                  ? input.location?.trim() || null
+                  : (e.location ?? null),
+              notes: input.notes !== undefined ? input.notes?.trim() || null : (e.notes ?? null),
               created_at: e.created_at,
               updated_at: now,
             };
