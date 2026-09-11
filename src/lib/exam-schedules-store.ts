@@ -31,6 +31,123 @@ function saveToLocalStorage(exams: ExamSchedule[]) {
   }
 }
 
+function warn(context: string, err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  console.warn(`[exam-schedules] ${context}: ${message}`, err);
+}
+
+// ---------------------------------------------------------------------------
+// Shared two-way sync with Supabase.
+//
+// Four components mount useExamSchedules() on the dashboard alone (glance bar,
+// manage dialog, dashboard route, subjects route), so the sync runs once per
+// page load at module level and broadcasts its result through localStorage +
+// the custom event. Without sharing, concurrent instances race: each pushes
+// the same local-only rows (duplicated inserts) and overwrites the others.
+//
+// The previous design was local-first and pull-only: exams created on one
+// device never reached another because nothing pushed local-only rows upward
+// and every remote error was swallowed silently. The sync now both pulls
+// (merging remote over local by id) and pushes (uploading local-only rows),
+// so schedules converge across devices, including the Android PWA.
+// ---------------------------------------------------------------------------
+
+let sharedSync: Promise<void> | null = null;
+// Ids known to exist remotely (pushed in this session or raced by another
+// device/tab), so one row is never inserted twice within a page session.
+const pushedIds = new Set<string>();
+
+async function fetchRemote(): Promise<{ userId: string; remote: ExamSchedule[] } | null> {
+  try {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError) {
+      warn("auth.getUser failed", userError);
+      return null;
+    }
+    const userId = userData?.user?.id;
+    if (!userId) return null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("exam_schedules")
+      .select("*")
+      .eq("user_id", userId)
+      .order("exam_date", { ascending: true });
+
+    if (error) {
+      warn("remote pull failed", error);
+      return null;
+    }
+    return { userId, remote: Array.isArray(data) ? (data as ExamSchedule[]) : [] };
+  } catch (err) {
+    warn("remote pull threw", err);
+    return null;
+  }
+}
+
+function mergeExams(local: ExamSchedule[], remote: ExamSchedule[]): ExamSchedule[] {
+  const mergedMap = new Map<string, ExamSchedule>();
+  for (const item of local) mergedMap.set(item.id, item);
+  // Remote wins for shared ids: it reflects the latest saves from every device.
+  for (const item of remote) mergedMap.set(item.id, item);
+  return Array.from(mergedMap.values()).sort((a, b) => a.exam_date.localeCompare(b.exam_date));
+}
+
+function signatureOf(list: ExamSchedule[]): string {
+  return list
+    .map((e) => `${e.id}:${e.updated_at}`)
+    .sort()
+    .join("|");
+}
+
+async function runSync(): Promise<void> {
+  const local = loadFromLocalStorage();
+  const fetched = await fetchRemote();
+  if (!fetched) return;
+  const { userId, remote } = fetched;
+
+  // Push local-only rows upward (one attempt per id per page session).
+  const remoteIds = new Set(remote.map((r) => r.id));
+  const pushedRows: ExamSchedule[] = [];
+  for (const item of local) {
+    if (remoteIds.has(item.id) || pushedIds.has(item.id)) continue;
+    const row: ExamSchedule = { ...item, user_id: userId };
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from("exam_schedules").insert(row);
+      if (error) {
+        // 23505 = duplicate key: another device already pushed this row.
+        if (error.code === "23505") {
+          pushedIds.add(item.id);
+        } else {
+          warn("remote push failed", error);
+        }
+        continue;
+      }
+      pushedIds.add(item.id);
+      pushedRows.push(row);
+    } catch (err) {
+      warn("remote push threw", err);
+    }
+  }
+
+  const merged = mergeExams(local, [...remote, ...pushedRows]);
+  // Persist (and broadcast) only when something actually changed, so an idle
+  // re-sync does not re-render every listener.
+  if (signatureOf(merged) !== signatureOf(local)) saveToLocalStorage(merged);
+}
+
+// Deduped entry point: concurrent requests (multiple hook mounts, window
+// focus, network recovery) share one in-flight run instead of racing.
+function requestExamSync(): Promise<void> {
+  if (!sharedSync) {
+    sharedSync = runSync().finally(() => {
+      sharedSync = null;
+    });
+  }
+  return sharedSync;
+}
+
 export function useExamSchedules() {
   const [exams, setExams] = useState<ExamSchedule[]>(loadFromLocalStorage);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,47 +172,35 @@ export function useExamSchedules() {
     window.addEventListener(EVENT_NAME, handleUpdate);
     window.addEventListener("storage", handleStorage);
 
-    // Initial load from storage to ensure consistency
-    setExams(loadFromLocalStorage());
+    // Initial pull + push, then re-sync when the app regains focus or the
+    // network returns, so a resumed PWA picks up other-device saves without
+    // a full reload.
+    setIsLoading(true);
+    let cancelled = false;
+    requestExamSync()
+      .catch((err) => warn("sync failed", err))
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
 
-    // Optional background sync with Supabase if table is created
-    let isMounted = true;
-    async function syncSupabase() {
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        const userId = userData?.user?.id;
-        if (!userId) return;
+    const onRegain = () => {
+      void requestExamSync();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") onRegain();
+    };
 
-        // Try querying exam_schedules if table exists
-        const { data, error } = await (supabase as any)
-          .from("exam_schedules")
-          .select("*")
-          .eq("user_id", userId)
-          .order("exam_date", { ascending: true });
-
-        if (!error && Array.isArray(data) && data.length > 0 && isMounted) {
-          // Merge local and remote
-          const local = loadFromLocalStorage();
-          const mergedMap = new Map<string, ExamSchedule>();
-          for (const item of local) mergedMap.set(item.id, item);
-          for (const item of data) mergedMap.set(item.id, item);
-          const merged = Array.from(mergedMap.values()).sort((a, b) =>
-            a.exam_date.localeCompare(b.exam_date),
-          );
-          setExams(merged);
-          saveToLocalStorage(merged);
-        }
-      } catch {
-        // Table not present or network offline - fallback to local storage seamlessly
-      }
-    }
-
-    void syncSupabase();
+    window.addEventListener("focus", onRegain);
+    window.addEventListener("online", onRegain);
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
-      isMounted = false;
+      cancelled = true;
       window.removeEventListener(EVENT_NAME, handleUpdate);
       window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", onRegain);
+      window.removeEventListener("online", onRegain);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 
@@ -122,13 +227,21 @@ export function useExamSchedules() {
 
     // Best-effort remote push
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user?.id) {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        warn("auth.getUser failed", userError);
+      } else if (userData?.user?.id) {
         newExam.user_id = userData.user.id;
-        await (supabase as any).from("exam_schedules").insert(newExam);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any).from("exam_schedules").insert(newExam);
+        if (error) {
+          warn("remote push failed", error);
+        } else {
+          pushedIds.add(newExam.id);
+        }
       }
-    } catch {
-      // Ignored if remote table not yet migrated
+    } catch (err) {
+      warn("remote push threw", err);
     }
 
     return newExam;
@@ -181,7 +294,8 @@ export function useExamSchedules() {
     // Best-effort remote update
     try {
       if (updated) {
-        await (supabase as any)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any)
           .from("exam_schedules")
           .update({
             subject_id: (updated as ExamSchedule).subject_id,
@@ -194,9 +308,10 @@ export function useExamSchedules() {
             updated_at: now,
           })
           .eq("id", input.id);
+        if (error) warn("remote update failed", error);
       }
-    } catch {
-      // Ignored
+    } catch (err) {
+      warn("remote update threw", err);
     }
 
     return updated!;
@@ -211,9 +326,11 @@ export function useExamSchedules() {
 
     // Best-effort remote delete
     try {
-      await (supabase as any).from("exam_schedules").delete().eq("id", id);
-    } catch {
-      // Ignored
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from("exam_schedules").delete().eq("id", id);
+      if (error) warn("remote delete failed", error);
+    } catch (err) {
+      warn("remote delete threw", err);
     }
   }, []);
 
