@@ -93,6 +93,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "theme-color", content: "#16181d" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Momentum" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -106,6 +111,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/pwa-192.png", sizes: "192x192" },
     ],
   }),
   shellComponent: RootShell,
@@ -131,6 +138,25 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Register the PWA service worker (offline shell + Firefox/Chrome install).
+  // Skipped inside the Capacitor Android WebView (https://localhost, no port)
+  // and on http dev servers, so bundled/dev output is never intercepted.
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const isCapacitorWebView = location.hostname === "localhost" && location.port === "";
+    if (location.protocol !== "https:" || isCapacitorWebView) return;
+    const register = () => {
+      navigator.serviceWorker.register("/sw.js").catch((err) => {
+        console.warn("[pwa] service worker registration failed", err);
+      });
+    };
+    if (document.readyState === "complete") {
+      register();
+    } else {
+      window.addEventListener("load", register, { once: true });
+    }
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
