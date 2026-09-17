@@ -1,9 +1,24 @@
+# DORMANT WORKFLOW — kept as a manual reference, never triggered automatically.
+#
+# This recipe stopped being runnable in 3a7587d ("chore: remove capacitor
+# dependencies from package configuration"), which deleted the entire android/
+# Gradle project and dropped the @capacitor/* dependencies. The push trigger was
+# left in place, so every push to main started this job and failed at "Make
+# Gradle Wrapper Executable" (chmod +x android/gradlew — no such file), skipping
+# the Capacitor sync, SDK setup, Gradle and APK steps. See runs #19 and #23.
+#
+# The rest of the Android path is still in the repo (capacitor.config.ts,
+# vite.config.android.ts and the `build:static` script), so this file is retained
+# rather than deleted. To revive it:
+#   1. git checkout 3a7587d^ -- android      # restore the Gradle project
+#   2. git show 3a7587d -- package.json      # re-add the removed Capacitor deps,
+#                                            # then run `npm install`
+#   3. restore the `push: branches: [main]` trigger below
+#
+# Until then, start it by hand from the Actions tab ("Run workflow") only.
 name: Build Android APK
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
