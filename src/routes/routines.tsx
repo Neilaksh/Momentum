@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState, useEffect } from "react";
+import { lazy, Suspense, useMemo, useState, useEffect } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -89,6 +89,10 @@ import {
   type RoutineTask,
   type WeekData,
 } from "@/lib/tracker-shared";
+// Type-only import: erased at compile time, so it does not pull the picker
+// module (and its ~96 kB emoji dataset) into the Routines route bundle — the
+// runtime module is loaded lazily inside `RoutineEmojiPicker`.
+import type { EmojiClickData, EmojiStyle, Theme } from "emoji-picker-react";
 
 export const Route = createFileRoute("/routines")({
   head: () => ({
@@ -108,43 +112,90 @@ export const Route = createFileRoute("/routines")({
   ),
 });
 
-const EMOJI_PRESETS = [
-  "🌅",
-  "🏋️",
-  "🏊",
-  "🚿",
-  "🍳",
-  "☕",
-  "📚",
-  "💻",
-  "🌺",
-  "🍱",
-  "🎮",
-  "🏄",
-  "🧘",
-  "🥋",
-  "🍲",
-  "📖",
-  "🎨",
-  "🌙",
-  "😴",
-  "💼",
-  "🎓",
-  "🏃",
-  "🚰",
-  "📝",
-  "🎯",
-  "🚴",
-  "🥑",
-  "💊",
-  "🚶",
-  "🥗",
-  "📖",
-  "🧹",
-  "🎮",
-  "🥋",
-  "😴",
-];
+/**
+ * Full standard emoji picker for a routine slot's icon.
+ *
+ * `emoji-picker-react` ships the complete Unicode emoji dataset (every
+ * category: smileys & people, animals & nature, food & drink, travel,
+ * activities, objects, symbols, flags) inside its own build, so browsing,
+ * search, skin tones and "frequently used" all work with no runtime CDN fetch
+ * (the PWA/Android builds stay functional offline). That whole build is
+ * ~96 kB gzipped, so the module is lazy-loaded: Vite code-splits it and it is
+ * only downloaded the first time someone actually opens the icon picker.
+ *
+ * `emojiStyle="native"` renders the OS emoji font instead of CDN images, and
+ * `onEmojiClick` hands back the same single emoji character (`emojiData.emoji`)
+ * that the previous preset grid stored, so `formatRoutineTitle` /
+ * `parseRoutineTitle` need no storage changes.
+ *
+ * Theming: the picker applies its `style` prop inline on its root element, so
+ * overriding its documented `--epr-*` variables inline always beats its own
+ * light/dark defaults. Every value below maps onto the app's dark theme tokens
+ * from `src/styles.css`.
+ */
+const LazyEmojiPicker = lazy(() => import("emoji-picker-react"));
+
+const EMOJI_PICKER_THEME_STYLE = {
+  "--epr-bg-color": "var(--popover)",
+  "--epr-text-color": "var(--muted-foreground)",
+  "--epr-picker-border-color": "transparent",
+  "--epr-picker-border-radius": "0px",
+  "--epr-highlight-color": "var(--primary)",
+  "--epr-hover-bg-color": "var(--secondary)",
+  "--epr-focus-bg-color": "var(--accent)",
+  "--epr-search-input-bg-color": "var(--secondary)",
+  "--epr-search-input-bg-color-active": "var(--secondary)",
+  "--epr-search-input-text-color": "var(--foreground)",
+  "--epr-search-input-placeholder-color": "var(--muted-foreground)",
+  "--epr-search-border-color": "var(--border)",
+  "--epr-search-border-color-active": "var(--primary)",
+  "--epr-search-icon-color": "var(--muted-foreground)",
+  "--epr-category-icon-active-color": "var(--primary)",
+  "--epr-category-icon-inactive-color": "var(--muted-foreground)",
+  "--epr-category-label-bg-color": "color-mix(in oklab, var(--popover) 90%, transparent)",
+  "--epr-category-label-text-color": "var(--muted-foreground)",
+  "--epr-skin-tone-picker-menu-color": "var(--popover)",
+  "--epr-emoji-size": "24px",
+} as React.CSSProperties;
+
+function RoutineEmojiPicker({
+  selectedEmoji,
+  onSelectEmoji,
+}: {
+  selectedEmoji: string;
+  onSelectEmoji: (emoji: string) => void;
+}) {
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between border-b border-border/60 px-3 py-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Pick an icon
+        </span>
+        <span className="text-lg leading-none">{selectedEmoji}</span>
+      </div>
+      <Suspense
+        fallback={
+          <div className="px-4 py-8 text-center text-xs text-muted-foreground">Loading emoji…</div>
+        }
+      >
+        <LazyEmojiPicker
+          theme={"dark" as Theme}
+          emojiStyle={"native" as EmojiStyle}
+          width="100%"
+          height={330}
+          // The picker lives inside a Radix popover; auto-focusing its search
+          // field would pop the soft keyboard open on mobile before the user
+          // has even started browsing the categories.
+          autoFocusSearch={false}
+          searchPlaceHolder="Search emoji…"
+          previewConfig={{ showPreview: false }}
+          style={EMOJI_PICKER_THEME_STYLE}
+          onEmojiClick={(emojiData: EmojiClickData) => onSelectEmoji(emojiData.emoji)}
+        />
+      </Suspense>
+    </div>
+  );
+}
 
 const STORAGE_CUSTOM_SLOTS_KEY = "momentum_custom_time_slots";
 const STORAGE_CUSTOM_CATS_KEY = "momentum_custom_categories";
@@ -2079,26 +2130,17 @@ function RoutinesPage() {
                       <span className="font-medium">Choose icon</span>
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-64">
-                    <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-1">
-                      {EMOJI_PRESETS.map((emo) => (
-                        <button
-                          key={emo}
-                          type="button"
-                          onClick={() => {
-                            setFormEmoji(emo);
-                            setEmojiPickerOpen(false);
-                          }}
-                          className={`h-8 w-8 rounded text-lg flex items-center justify-center transition-all ${
-                            formEmoji === emo
-                              ? "bg-primary text-primary-foreground scale-110 shadow"
-                              : "hover:bg-secondary"
-                          }`}
-                        >
-                          {emo}
-                        </button>
-                      ))}
-                    </div>
+                  <PopoverContent
+                    align="start"
+                    className="w-[20rem] max-w-[90vw] overflow-hidden border-border bg-popover p-0"
+                  >
+                    <RoutineEmojiPicker
+                      selectedEmoji={formEmoji}
+                      onSelectEmoji={(emoji) => {
+                        setFormEmoji(emoji);
+                        setEmojiPickerOpen(false);
+                      }}
+                    />
                   </PopoverContent>
                 </Popover>
               </div>
