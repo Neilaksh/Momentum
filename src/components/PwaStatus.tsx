@@ -1,10 +1,23 @@
 import { useEffect, useState } from "react";
-import { WifiOff } from "lucide-react";
+import { Download, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 
 /**
+ * `beforeinstallprompt` is not part of the DOM lib yet, so the deferred event is
+ * described structurally here.
+ */
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
+/** Remembers that the install offer was actioned so it never nags twice. */
+const INSTALL_KEY = "momentum:install-prompt";
+
+/**
  * Owns the PWA lifecycle: service-worker registration, the "new version ready"
- * prompt and the offline indicator. Mounted once from the root route.
+ * prompt, the install prompt and the offline indicator. Mounted once from the
+ * root route.
  *
  * Nothing here may touch `navigator`/`location` during render — the root route
  * is server-rendered, so all browser access lives inside effects (which also
@@ -42,6 +55,7 @@ export function PwaStatus() {
       if (!navigator.serviceWorker.controller) return;
       prompted = true;
       toast("Update available", {
+        id: "pwa-update",
         description: "A new version of Momentum is ready.",
         duration: Number.POSITIVE_INFINITY,
         action: { label: "Reload", onClick: () => window.location.reload() },
@@ -74,6 +88,67 @@ export function PwaStatus() {
     } else {
       window.addEventListener("load", register, { once: true });
     }
+  }, []);
+
+  // Install offer. Chrome fires `beforeinstallprompt` only once the app is
+  // actually installable (manifest + service worker + engagement), so the toast
+  // is never shown to browsers that cannot install. The choice is remembered in
+  // localStorage so the prompt appears at most once.
+  useEffect(() => {
+    const remember = () => {
+      try {
+        localStorage.setItem(INSTALL_KEY, "1");
+      } catch {
+        // Storage can be unavailable (private mode); nagging at most once per
+        // session is an acceptable fallback.
+      }
+    };
+
+    const onBeforeInstall = (event: Event) => {
+      // Without preventDefault Chrome shows its own mini-infobar instead of
+      // letting us surface the install action in-app.
+      event.preventDefault();
+      try {
+        if (localStorage.getItem(INSTALL_KEY) === "1") return;
+      } catch {
+        /* ignore */
+      }
+      const installEvent = event as BeforeInstallPromptEvent;
+      toast("Install Momentum", {
+        id: "pwa-install",
+        icon: <Download className="h-4 w-4" />,
+        description: "Add it to your home screen for offline access.",
+        duration: Number.POSITIVE_INFINITY,
+        action: {
+          label: "Install",
+          onClick: () => {
+            // `prompt()` may only be called once per event, so the toast is
+            // dismissed either way. A dismissal is remembered too, otherwise the
+            // offer would reappear on the next visit even though the user
+            // declined the native install sheet.
+            void installEvent.prompt().then(async () => {
+              const { outcome } = await installEvent.userChoice;
+              if (outcome === "dismissed") remember();
+              toast.dismiss("pwa-install");
+            });
+          },
+        },
+        cancel: { label: "Not now", onClick: remember },
+        onDismiss: remember,
+      });
+    };
+
+    const onInstalled = () => {
+      toast.dismiss("pwa-install");
+      remember();
+    };
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstall);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
   }, []);
 
   if (!offline) return null;
