@@ -462,7 +462,9 @@ function HistoryPage() {
                       fontSize: 12,
                     }}
                   />
-                  <Bar dataKey="xp" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  {/* Token instead of a hard-coded hex so the bar follows the
+                      theme (previous value was indigo #6366f1 → chart-5, hue 280). */}
+                  <Bar dataKey="xp" fill="var(--chart-5)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               ) : (
                 <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
@@ -493,7 +495,13 @@ function HistoryPage() {
                       fontSize: 12,
                     }}
                   />
-                  <Bar dataKey="done" fill="#10b981" radius={[4, 4, 0, 0]} name="Completed" />
+                  {/* Previous value was emerald #10b981 → chart-2, hue 160. */}
+                  <Bar
+                    dataKey="done"
+                    fill="var(--chart-2)"
+                    radius={[4, 4, 0, 0]}
+                    name="Completed"
+                  />
                 </BarChart>
               )}
             </ResponsiveContainer>

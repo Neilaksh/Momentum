@@ -440,7 +440,7 @@ function HabitsPage() {
       {/* Top Overview: Dual Aggregate Pie Charts + Stats Panel */}
       <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Weekly Pie Chart */}
-        <section className="flex flex-col items-center justify-between rounded-2xl border border-border bg-card p-6 shadow-sm relative overflow-hidden">
+        <section className="flex flex-col items-center justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6 relative overflow-hidden">
           {isWeeklyGoalAchieved && (
             <div className="absolute top-0 right-0 left-0 bg-primary/15 py-1 text-center text-[11px] font-semibold text-primary">
               🎉 Weekly Target Reached!
@@ -478,7 +478,7 @@ function HabitsPage() {
         </section>
 
         {/* Yearly Pie Chart */}
-        <section className="flex flex-col items-center justify-between rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <section className="flex flex-col items-center justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
           <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <TrendingUp className="h-4 w-4 text-primary" />
@@ -504,7 +504,7 @@ function HabitsPage() {
         </section>
 
         {/* Quick Metrics Summary */}
-        <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6 shadow-sm md:col-span-2 lg:col-span-1">
+        <section className="flex flex-col justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6 md:col-span-2 lg:col-span-1">
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <Sparkles className="h-4 w-4 text-primary" />

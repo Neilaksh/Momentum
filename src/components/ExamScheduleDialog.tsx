@@ -397,7 +397,7 @@ export function ExamScheduleDialog({
             </div>
 
             {filteredExams.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border/80 p-8 text-center">
+              <div className="rounded-2xl border border-dashed border-border p-10 text-center">
                 <GraduationCap className="mx-auto h-10 w-10 text-muted-foreground opacity-30" />
                 <p className="mt-2.5 text-sm font-semibold">No exams found</p>
                 <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">

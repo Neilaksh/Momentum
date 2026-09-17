@@ -1335,7 +1335,7 @@ function RoutinesPage() {
 
         {/* Calculated Stats Overview */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Weekly Scheduled</span>
               <Clock className="h-3.5 w-3.5 text-primary" />
@@ -1349,7 +1349,7 @@ function RoutinesPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Active Routine Slots</span>
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
@@ -1799,7 +1799,7 @@ function RoutinesPage() {
                 `shrink-0` on the actions keeps both buttons at full size.
                 Edit mode renders two nowrap buttons here ("Copy Day" + "Add to
                 {Day}"), which is what previously squeezed the heading. */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4">
               <div className="min-w-0">
                 <h3 className="font-semibold text-lg">
                   {WEEKDAY_NAMES[selectedDay]} Routine Schedule
@@ -1963,7 +1963,7 @@ function RoutinesPage() {
         {viewMode === "analytics" && (
           <div className="space-y-6">
             {/* Category Allocation Distribution Bar */}
-            <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+            <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-primary" /> Category Time Allocation
@@ -2037,7 +2037,7 @@ function RoutinesPage() {
             </div>
 
             {/* Day Load */}
-            <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+            <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-purple-400" /> Day-by-Day Load Density
               </h3>
