@@ -3,9 +3,16 @@ import { Toaster as Sonner } from "sonner";
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  // The toaster is fixed to the viewport top, so in the installed PWA (where we
+  // opt into `viewport-fit=cover` + `black-translucent`) its default 16px offset
+  // sits it under the status bar / notch. Safe-area-aware offsets lift it clear
+  // and collapse to the previous spacing whenever the inset is 0. Both are
+  // declared before `{...props}` so callers can still override them.
   return (
     <Sonner
       className="toaster group"
+      offset={{ top: "calc(1rem + env(safe-area-inset-top))" }}
+      mobileOffset={{ top: "calc(0.75rem + env(safe-area-inset-top))" }}
       toastOptions={{
         classNames: {
           toast:

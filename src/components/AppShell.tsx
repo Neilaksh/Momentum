@@ -20,7 +20,10 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
   return (
     <div className="min-h-screen">
       <style>{`#lovable-badge { display: none !important; }`}</style>
-      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur">
+      {/* `env(safe-area-inset-top)` reserves room for the notch/status bar in the
+          installed PWA (we opt into `viewport-fit=cover`). It resolves to 0 in a
+          normal browser tab, so desktop layout is untouched. */}
+      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2.5 sm:gap-4 sm:px-6 sm:py-3">
           <Link to="/" className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-primary" />
@@ -83,7 +86,12 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8">{children}</main>
+      {/* `pb-[max(...,env(safe-area-inset-bottom))]` keeps the last card clear of
+          the iOS home indicator; the explicit `sm:` twin is required because
+          `sm:py-8` would otherwise override the base bottom padding. */}
+      <main className="mx-auto max-w-7xl px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 sm:pb-[max(2rem,env(safe-area-inset-bottom))]">
+        {children}
+      </main>
     </div>
   );
 }

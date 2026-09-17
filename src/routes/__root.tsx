@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { AuthProvider } from "../hooks/useAuth";
+import { PwaStatus } from "../components/PwaStatus";
 import { Toaster } from "../components/ui/sonner";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -139,30 +140,14 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
-  // Register the PWA service worker (offline shell + Firefox/Chrome install).
-  // Skipped inside the Capacitor Android WebView (https://localhost, no port)
-  // and on http dev servers, so bundled/dev output is never intercepted.
-  useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
-    const isCapacitorWebView = location.hostname === "localhost" && location.port === "";
-    if (location.protocol !== "https:" || isCapacitorWebView) return;
-    const register = () => {
-      navigator.serviceWorker.register("/sw.js").catch((err) => {
-        console.warn("[pwa] service worker registration failed", err);
-      });
-    };
-    if (document.readyState === "complete") {
-      register();
-    } else {
-      window.addEventListener("load", register, { once: true });
-    }
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
+        {/* Service-worker registration, the update prompt and the offline banner
+            all live in PwaStatus so this route owns no PWA side effects. */}
+        <PwaStatus />
         <Toaster position="top-center" />
       </AuthProvider>
     </QueryClientProvider>
