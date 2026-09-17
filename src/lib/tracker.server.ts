@@ -478,13 +478,25 @@ export async function recomputeStats(supabase: DB, userId: string): Promise<Prof
   }
 
   let xp = 0;
-  const activeDays: string[] = [];
-  for (const [date, e] of byDate) {
+  for (const e of byDate.values()) {
     xp += e.done * XP_PER_TASK;
     if (e.total > 0 && e.done === e.total) xp += XP_PERFECT_DAY;
-    if (e.done > 0) activeDays.push(date);
   }
-  activeDays.sort();
+
+  // Streak activity = the real days on which the user completed something,
+  // keyed by the UTC calendar date of completed_at (PostgREST returns
+  // timestamptz in UTC) — NOT the scheduled task_date. Keying streak days by
+  // task_date let a task moved to a future day and ticked early inflate
+  // current/best streak with a day that never happened (or, for users ahead
+  // of UTC, wipe the current streak to 0 because "last active day" landed in
+  // the future). Completion-time dating is timezone-agnostic: pre-completing
+  // tomorrow's task credits today, and a future day can never become an
+  // active day, so the today/yesterday grace check below stays correct.
+  const activeDays: string[] = [
+    ...new Set(
+      rows.filter((r) => r.completed_at).map((r) => r.completed_at!.slice(0, 10)),
+    ),
+  ].sort();
 
   let best = 0;
   let run = 0;
