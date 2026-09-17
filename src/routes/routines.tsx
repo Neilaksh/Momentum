@@ -1334,7 +1334,7 @@ function RoutinesPage() {
         </div>
 
         {/* Calculated Stats Overview */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Weekly Scheduled</span>
@@ -1365,7 +1365,7 @@ function RoutinesPage() {
 
         {/* View Switches & Toolbar */}
         <div className="flex flex-nowrap items-center gap-4 overflow-x-auto border-b border-border/60 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:justify-between">
-          <div className="flex items-center gap-1 rounded-full bg-secondary/80 p-1 text-xs">
+          <div className="flex shrink-0 items-center gap-1 rounded-full bg-secondary/80 p-1 text-xs">
             <button
               onClick={() => setViewMode("matrix")}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-all ${
@@ -1793,8 +1793,14 @@ function RoutinesPage() {
         {/* View Mode 2: Single Day Breakdown */}
         {viewMode === "day" && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
-              <div>
+            {/* Guarded row: `flex-wrap` lets the action group drop to its own
+                line on narrow screens instead of competing for space with the
+                heading, `min-w-0` lets the text block actually shrink, and
+                `shrink-0` on the actions keeps both buttons at full size.
+                Edit mode renders two nowrap buttons here ("Copy Day" + "Add to
+                {Day}"), which is what previously squeezed the heading. */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+              <div className="min-w-0">
                 <h3 className="font-semibold text-lg">
                   {WEEKDAY_NAMES[selectedDay]} Routine Schedule
                 </h3>
@@ -1807,7 +1813,7 @@ function RoutinesPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1897,14 +1903,18 @@ function RoutinesPage() {
                         )}
                       </div>
 
-                      <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-2 text-xs">
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-t border-border/40 pt-2 text-xs">
+                        {/* `min-w-0 truncate` keeps a long custom category name
+                            from pushing the edit-mode controls out of the card;
+                            the controls stay full size via `shrink-0` and wrap
+                            to their own line when space runs out. */}
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-medium ${color.text} bg-background/50 border ${color.border}`}
+                          className={`min-w-0 truncate px-2 py-0.5 rounded text-[10px] font-medium ${color.text} bg-background/50 border ${color.border}`}
                         >
                           {parsed.category}
                         </span>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex shrink-0 items-center gap-1.5">
                           {/* Move Slot Popover — edit mode only */}
                           {editMode && (
                             <MoveRoutineSlotPopover
@@ -2527,7 +2537,10 @@ function RoutinesPage() {
               className="mt-4 space-y-4"
             >
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                {/* `min-w-0` so the grid tracks may shrink below the selects'
+                    min-content width (~longest weekday label) instead of
+                    overflowing this narrow modal on small phones. */}
+                <div className="min-w-0">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
                     Copy From (Source)
                   </label>
@@ -2544,7 +2557,7 @@ function RoutinesPage() {
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
                     Copy To (Target)
                   </label>
