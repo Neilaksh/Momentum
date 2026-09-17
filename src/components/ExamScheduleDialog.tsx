@@ -455,7 +455,7 @@ export function ExamScheduleDialog({
                                 {subject.name}
                               </span>
                             ) : (
-                              <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                                 General Exam
                               </span>
                             )}

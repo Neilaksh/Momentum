@@ -701,7 +701,7 @@ function HistoryPage() {
                 {group.items.map((w) => (
                   <article
                     key={w.weekStart}
-                    className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-xs hover:border-border/90 transition-colors"
+                    className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm hover:border-border/90 transition-colors"
                   >
                     <ProgressRing
                       value={w.total ? (w.done / w.total) * 100 : 0}

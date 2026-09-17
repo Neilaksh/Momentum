@@ -1464,7 +1464,7 @@ function RoutinesPage() {
         {/* View Mode 1: 7-Day Timetable Matrix */}
         {viewMode === "matrix" && (
           <div className="space-y-4">
-            <div className="relative overflow-x-auto rounded-xl border border-border/80 bg-card shadow-2xl">
+            <div className="relative overflow-x-auto rounded-xl border border-border/80 bg-card shadow-sm">
               <table className="w-full border-collapse text-left text-xs min-w-[950px]">
                 {/* Header Row */}
                 <thead>
@@ -2073,7 +2073,7 @@ function RoutinesPage() {
       {/* Routine Add / Edit Dialog Overlay */}
       {isDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 my-8">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95 my-8">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
@@ -2327,7 +2327,7 @@ function RoutinesPage() {
       {/* Add Custom Time Slot Modal */}
       {isAddSlotOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h3 className="font-bold text-base flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary" /> Create Custom Time Slot
@@ -2391,7 +2391,7 @@ function RoutinesPage() {
       {/* Add Custom Category Modal */}
       {isAddCategoryOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h3 className="font-bold text-base flex items-center gap-2">
                 <Tag className="h-4 w-4 text-cyan-400" /> Create Custom Category
@@ -2508,7 +2508,7 @@ function RoutinesPage() {
       {/* Copy Weekday Schedule Modal */}
       {isCopyScheduleOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h3 className="font-bold text-base flex items-center gap-2">
                 <Copy className="h-4 w-4 text-indigo-400" /> Copy Weekday Schedule
@@ -2616,7 +2616,7 @@ function RoutinesPage() {
       {/* Import Routines JSON Modal */}
       {isImportOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h3 className="font-bold text-base flex items-center gap-2">
                 <FileJson className="h-4 w-4 text-amber-400" /> Import Schedule JSON

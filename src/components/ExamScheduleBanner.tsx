@@ -102,10 +102,16 @@ export function UpcomingExamsGlanceBar({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold tracking-wider uppercase text-primary">
+                {/* Section-label weight matches the app-wide `font-semibold`
+                    uppercase-label convention (only badges use `font-bold`). */}
+                <span className="text-xs font-semibold tracking-wider uppercase text-primary">
                   Exam Schedule
                 </span>
-                <span className="rounded-full bg-primary/20 px-2 py-0.2 text-[10px] font-bold text-primary">
+                {/* `px-1.5 py-0.5` matches the `text-[10px]` badge convention used
+                    everywhere else (subjects.tsx has this same "N upcoming" pill at
+                    px-1.5). `py-0.5` also replaces a `py-0.2` typo that was not a
+                    real Tailwind step. */}
+                <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold text-primary">
                   {upcoming.length} upcoming
                 </span>
               </div>
@@ -184,7 +190,7 @@ export function UpcomingExamsGlanceBar({
                     )}
 
                     <span
-                      className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold uppercase tracking-wider ${
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
                         countdown.isToday
                           ? "bg-primary text-primary-foreground animate-pulse"
                           : countdown.isTomorrow

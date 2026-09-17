@@ -301,7 +301,7 @@ function SubjectsPage() {
           <GraduationCap className="h-4 w-4" />
           Exam Schedule
           {upcomingExams.length > 0 && (
-            <span className="rounded-full bg-primary/20 px-1.5 py-0.2 text-[10px] font-bold">
+            <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold">
               {upcomingExams.length} upcoming
             </span>
           )}
@@ -613,7 +613,7 @@ function SubjectsPage() {
                         </span>
                       </div>
                       <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
                           countdown.isToday
                             ? "bg-primary text-primary-foreground animate-pulse"
                             : countdown.isTomorrow

@@ -37,7 +37,12 @@ export function PieStat({
     <div className="flex flex-col items-center">
       <div
         className={`relative transition-all duration-300 ${
-          isComplete ? "drop-shadow-[0_0_12px_rgba(200,255,100,0.25)]" : ""
+          isComplete
+            ? // Derived from `--primary` via color-mix so the completion glow can
+              // never drift out of sync with the theme (it used to hard-code the
+              // lime primary as rgba).
+              "drop-shadow-[0_0_12px_color-mix(in_oklab,var(--primary)_25%,transparent)]"
+            : ""
         }`}
         style={{ width: size, height: size }}
       >
