@@ -492,7 +492,7 @@ function SubjectsPage() {
                       : "border-border bg-card"
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                   <span
                     className="h-4 w-4 shrink-0 rounded-full border border-white/10"
                     style={{ background: subjectColorHex(s.color) }}
@@ -510,7 +510,7 @@ function SubjectsPage() {
                   {!isArchived && (
                     <a
                       href={`/?subjectId=${encodeURIComponent(s.id)}`}
-                      className="flex items-center gap-1 rounded-lg bg-primary/10 border border-primary/20 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+                      className="flex shrink-0 items-center gap-1 rounded-lg bg-primary/10 border border-primary/20 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
                       title={`Log a new task under ${s.name}`}
                     >
                       <Plus className="h-3 w-3" /> Log Task
@@ -526,7 +526,7 @@ function SubjectsPage() {
                         setExamDialogMode("create");
                         setExamDialogOpen(true);
                       }}
-                      className="flex items-center gap-1 rounded-lg bg-secondary/50 hover:bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                      className="flex shrink-0 items-center gap-1 rounded-lg bg-secondary/50 hover:bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                       title={`Schedule an exam for ${s.name}`}
                     >
                       <GraduationCap className="h-3.5 w-3.5 text-primary" /> Schedule Exam
@@ -541,7 +541,7 @@ function SubjectsPage() {
                       setEditColor(s.color);
                       setBlockedDelete(null);
                     }}
-                    className="rounded-lg bg-secondary/50 px-3.5 py-2.5 -mx-1 -my-1 md:px-3 md:py-1.5 md:mx-0 md:my-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    className="shrink-0 rounded-lg bg-secondary/50 px-3.5 py-2.5 -mx-1 -my-1 md:px-3 md:py-1.5 md:mx-0 md:my-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                   >
                     Edit
                   </button>
@@ -551,7 +551,7 @@ function SubjectsPage() {
                     onClick={() => toggleArchive(s.id)}
                     title={isArchived ? "Restore subject to active" : "Archive subject"}
                     aria-label={isArchived ? "Restore subject" : "Archive subject"}
-                    className="p-3 -m-2 md:p-1 md:m-0 text-muted-foreground transition-colors hover:text-foreground"
+                    className="shrink-0 p-3 -m-2 md:p-1 md:m-0 text-muted-foreground transition-colors hover:text-foreground"
                   >
                     {isArchived ? (
                       <ArchiveRestore className="h-4 w-4 text-primary" />
@@ -583,7 +583,7 @@ function SubjectsPage() {
                       type="button"
                       onClick={() => void requestDelete(s)}
                       aria-label={`Delete ${s.name}`}
-                      className="p-3 -m-2 md:p-1 md:m-0 text-muted-foreground transition-colors hover:text-destructive"
+                      className="shrink-0 p-3 -m-2 md:p-1 md:m-0 text-muted-foreground transition-colors hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
