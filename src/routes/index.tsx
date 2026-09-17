@@ -455,9 +455,10 @@ function UnifiedTasksPage() {
   const parsedActiveDate = parseISODate(activeDay.date);
   const activeWeekdayName = WEEKDAY_NAMES[(parsedActiveDate.getDay() + 6) % 7]!;
   const isActiveDayToday = activeDay.date === todayISO;
-  // Past days are read-only in the focused panel: toggling, deleting and adding
-  // are locked for any date strictly before today. Today and future stay editable.
-  const isActiveDayPast = activeDay.date < todayISO;
+  // Only today's tasks are editable in the focused panel: toggling, adding,
+  // deleting, reordering, notes and rescheduling are locked for every other
+  // day — past days (history) and future days (planning) both stay read-only.
+  const isActiveDayLocked = !isActiveDayToday;
 
   const filteredActiveTasks = useMemo(() => {
     let list = [...activeTasks];
@@ -806,7 +807,7 @@ function UnifiedTasksPage() {
 
           {/* Action buttons & Filter tabs */}
           <div className="flex flex-wrap items-center gap-2">
-            {!isActiveDayPast && remainingActive > 0 && (
+            {!isActiveDayLocked && remainingActive > 0 && (
               <Button
                 size="sm"
                 variant="outline"
@@ -928,13 +929,13 @@ function UnifiedTasksPage() {
                     <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <button
-                          disabled={goalLocked || isActiveDayPast}
+                          disabled={goalLocked || isActiveDayLocked}
                           onClick={() => toggle.mutate({ id: t.id, completed: !t.completed_at })}
                           aria-label={
                             goalLocked
                               ? `${t.title} is locked because its goal is completed`
-                              : isActiveDayPast
-                                ? `${t.title} is locked because it belongs to a past day`
+                              : isActiveDayLocked
+                                ? `${t.title} is locked — only today's tasks can be changed`
                                 : t.completed_at
                                   ? `Mark ${t.title} incomplete`
                                   : `Mark ${t.title} complete`
@@ -942,17 +943,17 @@ function UnifiedTasksPage() {
                           title={
                             goalLocked
                               ? "Goal completed — task locked"
-                              : isActiveDayPast
-                                ? "Past day — tasks are read-only"
+                              : isActiveDayLocked
+                                ? "Only today's tasks are editable"
                                 : undefined
                           }
                           className={`flex shrink-0 items-center justify-center rounded-md p-2 -m-2 md:p-0 md:m-0 transition-all ${
-                            goalLocked || isActiveDayPast ? "cursor-not-allowed" : ""
+                            goalLocked || isActiveDayLocked ? "cursor-not-allowed" : ""
                           }`}
                         >
                           <span
                             className={`flex h-6 w-6 items-center justify-center rounded-md border transition-all ${
-                              goalLocked || isActiveDayPast
+                              goalLocked || isActiveDayLocked
                                 ? "border-border/60 bg-secondary/40 text-muted-foreground opacity-60"
                                 : t.completed_at
                                   ? "border-emerald-500/40 bg-emerald-500/20"
@@ -1067,7 +1068,7 @@ function UnifiedTasksPage() {
                           )}
                         </div>
                         <div className="ml-auto flex items-center gap-0.5 md:contents">
-                          {!isActiveDayPast && filteredActiveTasks.length > 1 && (
+                          {!isActiveDayLocked && filteredActiveTasks.length > 1 && (
                             <div className="flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                               <button
                                 disabled={filteredActiveTasks.findIndex((x) => x.id === t.id) === 0}
@@ -1093,7 +1094,7 @@ function UnifiedTasksPage() {
                             </div>
                           )}
 
-                          {!isActiveDayPast && !goalLocked && !t.completed_at && (
+                          {!isActiveDayLocked && !goalLocked && !t.completed_at && (
                             <Popover>
                               <PopoverTrigger asChild>
                                 <button
@@ -1175,7 +1176,7 @@ function UnifiedTasksPage() {
                           )}
 
                           <button
-                            disabled={goalLocked || isActiveDayPast}
+                            disabled={goalLocked || isActiveDayLocked}
                             onClick={() => toggleNote(t)}
                             aria-label={t.description ? "Edit note" : "Add note"}
                             title={t.description ? "View / edit note" : "Add note"}
@@ -1189,24 +1190,24 @@ function UnifiedTasksPage() {
                           </button>
 
                           <button
-                            disabled={goalLocked || isActiveDayPast}
+                            disabled={goalLocked || isActiveDayLocked}
                             onClick={() => startRenaming(t)}
                             aria-label={
                               goalLocked
                                 ? `${t.title} cannot be renamed because its goal is completed`
-                                : isActiveDayPast
-                                  ? `Past day — ${t.title} cannot be renamed`
+                                : isActiveDayLocked
+                                  ? `${t.title} cannot be renamed — only today's tasks can be changed`
                                   : `Rename ${t.title}`
                             }
                             title={
                               goalLocked
                                 ? "Goal completed — task locked"
-                                : isActiveDayPast
-                                  ? "Past day — tasks are read-only"
+                                : isActiveDayLocked
+                                  ? "Only today's tasks are editable"
                                   : "Rename task"
                             }
                             className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
-                              goalLocked || isActiveDayPast
+                              goalLocked || isActiveDayLocked
                                 ? "cursor-not-allowed"
                                 : "hover:text-primary"
                             }`}
@@ -1215,16 +1216,18 @@ function UnifiedTasksPage() {
                           </button>
 
                           <button
-                            disabled={isActiveDayPast}
+                            disabled={isActiveDayLocked}
                             onClick={() => removeTask.mutate({ id: t.id })}
                             aria-label={
-                              isActiveDayPast
-                                ? `Past day — ${t.title} cannot be deleted`
+                              isActiveDayLocked
+                                ? `${t.title} cannot be deleted — only today's tasks can be changed`
                                 : `Delete ${t.title}`
                             }
-                            title={isActiveDayPast ? "Past day — tasks are read-only" : undefined}
+                            title={
+                              isActiveDayLocked ? "Only today's tasks are editable" : undefined
+                            }
                             className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
-                              isActiveDayPast ? "cursor-not-allowed" : "hover:text-destructive"
+                              isActiveDayLocked ? "cursor-not-allowed" : "hover:text-destructive"
                             }`}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -1238,7 +1241,7 @@ function UnifiedTasksPage() {
                       parseTaskDescription(t.description).note &&
                       !expandedNotes.has(t.id) && (
                         <div
-                          onClick={() => !isActiveDayPast && toggleNote(t)}
+                          onClick={() => !isActiveDayLocked && toggleNote(t)}
                           className="ml-9 cursor-pointer text-xs text-muted-foreground line-clamp-1 hover:text-foreground transition-colors"
                           title="Click to expand note"
                         >
@@ -1275,7 +1278,7 @@ function UnifiedTasksPage() {
                           onChange={(e) => setNoteDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
                           placeholder="Add details, links, or notes for this task..."
                           className="min-h-[60px] text-xs resize-none bg-secondary/30"
-                          disabled={goalLocked || isActiveDayPast}
+                          disabled={goalLocked || isActiveDayLocked}
                         />
                         {/* Effort estimate row */}
                         <div className="mt-2 flex items-center gap-2">
@@ -1291,7 +1294,7 @@ function UnifiedTasksPage() {
                               setEstDrafts((d) => ({ ...d, [t.id]: e.target.value }))
                             }
                             placeholder="e.g. 30"
-                            disabled={goalLocked || isActiveDayPast}
+                            disabled={goalLocked || isActiveDayLocked}
                             className="h-7 w-24 rounded-md border border-border bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                           />
                           <span className="text-[11px] text-muted-foreground">
@@ -1312,7 +1315,7 @@ function UnifiedTasksPage() {
                             type="button"
                             size="sm"
                             className="h-7 px-2.5 text-xs"
-                            disabled={goalLocked || isActiveDayPast || updateDescription.isPending}
+                            disabled={goalLocked || isActiveDayLocked || updateDescription.isPending}
                             onClick={() => {
                               const rawEst = estDrafts[t.id]?.trim();
                               const parsedEst = rawEst ? parseInt(rawEst, 10) : null;
@@ -1346,7 +1349,7 @@ function UnifiedTasksPage() {
           className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
-            if (isActiveDayPast) return;
+            if (isActiveDayLocked) return;
             const title = draft.trim();
             if (!title) return;
             // Double-submit guard: if this exact (day, title) add is already in
@@ -1370,7 +1373,7 @@ function UnifiedTasksPage() {
             onChange={(e) => setDraft(e.target.value)}
             placeholder={`Add a task for ${activeWeekdayName}...`}
             className="h-10 min-w-0 flex-1 text-base md:text-sm"
-            disabled={isActiveDayPast}
+            disabled={isActiveDayLocked}
           />
           <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <select
@@ -1378,7 +1381,7 @@ function UnifiedTasksPage() {
               onChange={(e) => setDraftSubjectId(e.target.value || null)}
               aria-label="Subject (optional)"
               className="h-10 w-full rounded-lg border border-border bg-secondary/50 px-2.5 text-base md:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-44"
-              disabled={isActiveDayPast}
+              disabled={isActiveDayLocked}
             >
               <option value="">No subject</option>
               {subjects.map((s) => (
@@ -1392,7 +1395,7 @@ function UnifiedTasksPage() {
               onChange={(e) => setDraftPriority((e.target.value || null) as GoalPriority | null)}
               aria-label="Priority (optional)"
               className="h-10 w-full rounded-lg border border-border bg-secondary/50 px-2.5 text-base md:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-32"
-              disabled={isActiveDayPast}
+              disabled={isActiveDayLocked}
             >
               <option value="">Priority</option>
               <option value="High">🔴 High</option>
@@ -1404,15 +1407,15 @@ function UnifiedTasksPage() {
             type="submit"
             className="h-10 shrink-0 gap-1.5 px-4"
             aria-label="Add task"
-            disabled={isActiveDayPast || !draft.trim()}
+            disabled={isActiveDayLocked || !draft.trim()}
           >
             <Plus className="h-4 w-4" />
             <span>Add Task</span>
           </Button>
         </form>
-        {isActiveDayPast && (
+        {isActiveDayLocked && (
           <p className="mt-2 text-xs text-muted-foreground">
-            Past days are read-only — select today or a future day to add or change tasks.
+            Only today's tasks can be changed — select today to add or edit tasks.
           </p>
         )}
       </section>
@@ -1428,7 +1431,8 @@ function UnifiedTasksPage() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Read-only 7-day overview. Click any day to focus and manage its tasks.
+              Read-only 7-day overview. Click any day to view it — only today's tasks can be
+              edited.
             </p>
           </div>
 
@@ -1669,7 +1673,13 @@ function DayCard({
 
       {/* Focus day action footer */}
       <div className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground group-hover:text-primary transition-colors">
-        <span>{isSelected ? "Currently active in editor" : "Click card to focus & edit"}</span>
+        <span>
+          {isToday
+            ? isSelected
+              ? "Currently active in editor"
+              : "Click card to focus & edit"
+            : "Click card to view (read-only)"}
+        </span>
         <ChevronRight className="h-3.5 w-3.5 transform group-hover:translate-x-1 transition-transform" />
       </div>
     </article>
