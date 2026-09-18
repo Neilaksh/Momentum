@@ -77,10 +77,12 @@ import {
 import {
   COLOR_PALETTE,
   DEFAULT_CATEGORIES,
+  ROUTINE_SLEEP_NIGHT_CUTOFF_MIN,
   SAMPLE_TIME_SLOTS,
   SAMPLE_WEEKLY_ROUTINE,
   WEEKDAY_NAMES,
   calculateSlotDurationMinutes,
+  computeRoutineSleepMinutes,
   formatRoutineTitle,
   parseRoutineTitle,
   startOfWeek,
@@ -112,6 +114,15 @@ export const Route = createFileRoute("/routines")({
     </RequireAuth>
   ),
 });
+
+/**
+ * Human label for the sleep estimate's night/morning boundary, derived from
+ * ROUTINE_SLEEP_NIGHT_CUTOFF_MIN so the on-screen explanation can never drift
+ * from the cutoff the math actually uses.
+ */
+const SLEEP_NIGHT_CUTOFF_LABEL = `${Math.floor(ROUTINE_SLEEP_NIGHT_CUTOFF_MIN / 60)}:${String(
+  ROUTINE_SLEEP_NIGHT_CUTOFF_MIN % 60,
+).padStart(2, "0")} AM`;
 
 /**
  * Full standard emoji picker for a routine slot's icon.
@@ -706,36 +717,29 @@ function RoutinesPage() {
       .sort((a, b) => Number(b.hours) - Number(a.hours));
 
     // ===================== SLEEP ESTIMATE =====================
-    // Sleep for day D = (first bar start of day D+1, offset +24h) − (last bar
-    // start of day D). The last routine bar of the day is the go-to-sleep
-    // anchor and the next day's first bar is the wake-up anchor; the +24h wrap
-    // makes e.g. 10:30 PM → 5:45 AM next day = 7h 15m. Per-day math so
-    // different weekend schedules are handled naturally.
-    const slotStartsByDay: number[][] = Array.from({ length: 7 }, () => []);
-    for (const t of tasks) {
-      if (!t.is_active) continue;
-      const start = timeSlotStartMinutes(parseRoutineTitle(t.title).timeSlot);
-      if (start === null) continue;
-      (slotStartsByDay[t.weekday] ?? []).push(start);
-    }
-    const sleepMinutes: (number | null)[] = [];
-    for (let d = 0; d < 7; d++) {
-      const todayStarts = slotStartsByDay[d] ?? [];
-      const nextStarts = slotStartsByDay[(d + 1) % 7] ?? [];
-      if (todayStarts.length === 0 || nextStarts.length === 0) {
-        sleepMinutes.push(null);
-        continue;
-      }
-      const bed = Math.max(...todayStarts);
-      const wake = Math.min(...nextStarts) + 24 * 60;
-      sleepMinutes.push(wake - bed);
-    }
+    // Sleep for day D = the bed anchor of day D → the first morning bar of day
+    // D+1. The bed anchor is the LAST bar of D's evening chain: bars starting
+    // before the night/morning cutoff (4:00 AM by default) count as the tail of
+    // the previous night, so an after-midnight "😴 Sleep 12:00–6:30 AM" or a
+    // "12:30 AM" bar is the go-to-sleep anchor instead of D+1's wake anchor.
+    // Schedules whose bars never cross midnight keep the plain
+    // last-bar → first-next-bar behaviour (10:30 PM → 6:30 AM = 8h). The wake
+    // anchor is D+1's first bar at/after the cutoff and before noon, so a night
+    // whose next day has no morning bars stays unmeasured instead of becoming a
+    // 16–24h phantom in the average. Per-day math so different weekend
+    // schedules are handled naturally.
+    const sleepMinutes = computeRoutineSleepMinutes(
+      tasks
+        .filter((t) => t.is_active)
+        .map((t) => ({
+          weekday: t.weekday,
+          startMinutes: timeSlotStartMinutes(parseRoutineTitle(t.title).timeSlot),
+        })),
+    );
     const trackedSleep = sleepMinutes.filter((m): m is number => m !== null);
     const sleepDaysTracked = trackedSleep.length;
     const avgSleepMins =
-      sleepDaysTracked > 0
-        ? trackedSleep.reduce((a, b) => a + b, 0) / sleepDaysTracked
-        : null;
+      sleepDaysTracked > 0 ? trackedSleep.reduce((a, b) => a + b, 0) / sleepDaysTracked : null;
     const minSleepMins = sleepDaysTracked > 0 ? Math.min(...trackedSleep) : null;
     const maxSleepMins = sleepDaysTracked > 0 ? Math.max(...trackedSleep) : null;
     const fmtSleep = (mins: number | null): string =>
@@ -2137,14 +2141,14 @@ function RoutinesPage() {
                       </span>
                       {analytics.sleepByDay[dl.weekday] &&
                         analytics.sleepByDay[dl.weekday] !== "—" && (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 border border-purple-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-purple-400"
-                          title="Planned sleep: last routine bar of the day → first bar of the next day"
-                        >
-                          <Moon className="h-3 w-3" />
-                          {analytics.sleepByDay[dl.weekday]}
-                        </span>
-                      )}
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 border border-purple-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-purple-400"
+                            title={`Planned sleep: last evening bar → first bar of the next day (bars before ${SLEEP_NIGHT_CUTOFF_LABEL} count as the previous night)`}
+                          >
+                            <Moon className="h-3 w-3" />
+                            {analytics.sleepByDay[dl.weekday]}
+                          </span>
+                        )}
                     </div>
                   </div>
                 ))}

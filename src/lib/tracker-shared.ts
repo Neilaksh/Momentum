@@ -739,6 +739,80 @@ export function timeSlotStartMinutes(timeSlot: string): number | null {
   return parseOne(parts[0] ?? "", endAmPm);
 }
 
+/**
+ * Boundary (minutes since midnight) between "late night of the previous day"
+ * and "this morning". Routine bars that start before 4:00 AM are treated as the
+ * tail of the previous night: a "😴 Sleep 12:00–6:30 AM" or a bare "12:30 AM"
+ * bedtime bar closes out the evening before the day it is filed under, instead
+ * of being mistaken for that morning's first bar.
+ */
+export const ROUTINE_SLEEP_NIGHT_CUTOFF_MIN = 4 * 60;
+
+/**
+ * End of the morning band (minutes since midnight). A wake anchor is a bar of
+ * the next day that starts at/after the night cutoff but BEFORE noon: on a day
+ * whose only bar is an evening one (no morning bars at all) there is no wake
+ * time, and the night is reported as unmeasured instead of as a 16–24h phantom
+ * that would wreck the average.
+ */
+export const ROUTINE_SLEEP_MORNING_END_MIN = 12 * 60;
+
+export type RoutineSleepBar = { weekday: number; startMinutes: number | null };
+
+/**
+ * Planned sleep per weekday (0=Mon … 6=Sun) in minutes, or null for a night
+ * that can't be measured. For day D:
+ *
+ *   bed  = latest of (D's bars starting at/after the cutoff) and (D+1's bars
+ *          starting before the cutoff, shifted +24h — the after-midnight bars
+ *          that close out D's night);
+ *   wake = first bar of D+1 starting at/after the cutoff and before noon (the
+ *          real morning bar);
+ *   sleep = wake + 24h − bed.
+ *
+ * So "last bar of the evening chain → first bar of the next morning" holds even
+ * when the bedtime bar itself sits after midnight: 10:30 PM wind-down, a
+ * 12:00–6:30 AM Sleep bar and a 6:30 AM wake-up bar measure 6h 30m. Schedules
+ * whose bars never cross midnight produce exactly the same numbers as the plain
+ * last-bar → first-next-bar rule (10:30 PM → 6:30 AM = 8h). Null when the night
+ * has no bedtime anchor or no next-morning bar.
+ */
+export function computeRoutineSleepMinutes(
+  bars: RoutineSleepBar[],
+  cutoffMin: number = ROUTINE_SLEEP_NIGHT_CUTOFF_MIN,
+  morningEndMin: number = ROUTINE_SLEEP_MORNING_END_MIN,
+): (number | null)[] {
+  const startsByDay: number[][] = Array.from({ length: 7 }, () => []);
+  for (const bar of bars) {
+    if (bar.startMinutes === null || bar.weekday < 0 || bar.weekday > 6) continue;
+    startsByDay[bar.weekday]!.push(bar.startMinutes);
+  }
+
+  const sleepMinutes: (number | null)[] = [];
+  for (let d = 0; d < 7; d++) {
+    const today = startsByDay[d]!;
+    const next = startsByDay[(d + 1) % 7]!;
+
+    const bedCandidates = [
+      ...today.filter((m) => m >= cutoffMin),
+      ...next.filter((m) => m < cutoffMin).map((m) => m + 24 * 60),
+    ];
+    const wakeCandidates = next.filter((m) => m >= cutoffMin && m < morningEndMin);
+
+    if (bedCandidates.length === 0 || wakeCandidates.length === 0) {
+      sleepMinutes.push(null);
+      continue;
+    }
+
+    // Every bed value is < cutoff+24h and every wake value is ≥ cutoff+24h, so
+    // the difference is always strictly positive.
+    const bed = Math.max(...bedCandidates);
+    const wake = Math.min(...wakeCandidates) + 24 * 60;
+    sleepMinutes.push(wake - bed);
+  }
+  return sleepMinutes;
+}
+
 /** Sample Routine Schedule matching reference spreadsheet */
 export const SAMPLE_WEEKLY_ROUTINE: Array<{
   weekdays: number[]; // 0=Mon, 1=Tue, ..., 6=Sun
