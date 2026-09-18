@@ -292,6 +292,7 @@ export type Database = {
           last_active_day: string | null;
           last_seen_review_week: string | null;
           level: number;
+          routine_days_off: Json;
           total_xp: number;
           updated_at: string;
         };
@@ -305,6 +306,7 @@ export type Database = {
           last_active_day?: string | null;
           last_seen_review_week?: string | null;
           level?: number;
+          routine_days_off?: Json;
           total_xp?: number;
           updated_at?: string;
         };
@@ -318,6 +320,7 @@ export type Database = {
           last_active_day?: string | null;
           last_seen_review_week?: string | null;
           level?: number;
+          routine_days_off?: Json;
           total_xp?: number;
           updated_at?: string;
         };

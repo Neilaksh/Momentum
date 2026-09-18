@@ -100,6 +100,7 @@ const schema = {
     last_active_day: ["date", true, false],
     last_seen_review_week: ["date", true, false],
     level: ["integer", false, true],
+    routine_days_off: ["jsonb", false, true],
     total_xp: ["integer", false, true],
     updated_at: ["timestamptz", false, true],
   },
@@ -231,6 +232,8 @@ const PG_TO_TS = {
   integer: "number",
   smallint: "number",
   boolean: "boolean",
+  // Matches `supabase gen types`: jsonb maps to the file-local `Json` alias.
+  jsonb: "Json",
 };
 
 function tsType(pg, nullable) {

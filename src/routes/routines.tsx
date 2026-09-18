@@ -30,6 +30,8 @@ import {
   Pause,
   Play,
   Plus,
+  Power,
+  PowerOff,
   RotateCcw,
   Shuffle,
   Sparkles,
@@ -71,6 +73,7 @@ import {
   getWeek,
   reorderRoutineTasks,
   setActiveRoutineVariant,
+  setRoutineDaysOff,
   toggleRoutineTaskActive,
   updateRoutineTask,
 } from "@/lib/tracker.functions";
@@ -85,6 +88,9 @@ import {
   computeRoutineSleepMinutes,
   formatRoutineTitle,
   parseRoutineTitle,
+  routineDaysOffFor,
+  routineDaysOffLabel,
+  routineWeekdays,
   routineSlotEndMinutes,
   startOfWeek,
   timeSlotStartMinutes,
@@ -545,6 +551,27 @@ function RoutinesPage() {
   // Sourced from the server so the active week stays in sync across devices.
   const activeVariant = (routineData?.activeVariant ?? "primary") as "primary" | "alternate";
 
+  // Weekdays switched off for the active week (0=Mon … 6=Sun), stored per week on
+  // the profile. A disabled day keeps every routine slot it has — the rows are
+  // still fetched and still drawn in the grid so the plan is never lost — but all
+  // derived numbers (weekly hours, per-day load, category breakdown, and the
+  // planned-sleep estimate) skip it, and its blocks are read-only in edit mode.
+  const daysOff = useMemo(
+    () => routineWeekdays(routineData?.daysOff) as number[],
+    [routineData?.daysOff],
+  );
+  const daysOffSet = useMemo(() => new Set(daysOff), [daysOff]);
+  const enabledDayCount = 7 - daysOff.length;
+  const daysOffLabel = routineDaysOffLabel(daysOff);
+  // Day View's currently-selected weekday, and how many slots it still holds
+  // (switching a day off hides nothing — the rows are only excluded from the
+  // maths — so this count stays truthful for a day off).
+  const isSelectedDayOff = daysOffSet.has(selectedDay);
+  const selectedDaySlotCount = useMemo(
+    () => tasks.filter((t) => t.weekday === selectedDay).length,
+    [tasks, selectedDay],
+  );
+
   const existingTasks = useMemo(() => {
     const list: Array<{ id: string; title: string }> = [];
     for (const day of weekData?.days ?? []) {
@@ -684,6 +711,11 @@ function RoutinesPage() {
 
     for (const t of tasks) {
       if (!t.is_active) continue;
+      // Days switched off are excluded from every derived number below — weekly
+      // total, day load, category breakdown and the sleep estimate (the same
+      // filter feeds computeRoutineSleepMinutes further down). Their rows are
+      // still in `tasks` and still render in the grid; they simply do not count.
+      if (daysOffSet.has(t.weekday)) continue;
       const parsed = parseRoutineTitle(t.title);
       const duration = calculateSlotDurationMinutes(parsed.timeSlot);
 
@@ -705,7 +737,10 @@ function RoutinesPage() {
     }
 
     const totalWeeklyHours = (totalWeeklyMins / 60).toFixed(1);
-    const avgDailyHours = (totalWeeklyMins / 60 / 7).toFixed(1);
+    // Average over the days that are actually planned — with days switched off a
+    // hard /7 would silently understate the daily load. Guarded against 0 so the
+    // card can never print NaN if every day ends up off.
+    const avgDailyHours = (totalWeeklyMins / 60 / Math.max(1, enabledDayCount)).toFixed(1);
 
     const categoriesList = Object.entries(catMins)
       .map(([name, data]) => ({
@@ -765,8 +800,13 @@ function RoutinesPage() {
         hours: (d.mins / 60).toFixed(1),
         count: d.count,
         level: d.mins < 240 ? "Light" : d.mins <= 480 ? "Balanced" : "Intense",
+        isOff: daysOffSet.has(idx),
       })),
-      activeRoutineCount: tasks.filter((t) => t.is_active).length,
+      // Slots that actually count (enabled days only) vs every active slot that
+      // exists, so the card can show both without implying the disabled ones
+      // vanished.
+      activeRoutineCount: tasks.filter((t) => t.is_active && !daysOffSet.has(t.weekday)).length,
+      activeRoutineTotal: tasks.filter((t) => t.is_active).length,
       sleepByDay: sleepMinutes.map((m) => fmtSleep(m)),
       avgSleepLabel: fmtSleep(avgSleepMins),
       avgSleepMinsValue: avgSleepMins,
@@ -777,7 +817,7 @@ function RoutinesPage() {
       sleepDaysTracked,
       sleepHealthy: avgSleepMins !== null && avgSleepMins >= 420 && avgSleepMins <= 540,
     };
-  }, [tasks]);
+  }, [tasks, daysOffSet, enabledDayCount]);
 
   // Mutations
   const updateMutation = useMutation({
@@ -934,6 +974,51 @@ function RoutinesPage() {
     },
     onError: () => toast.error("Couldn't switch routine."),
   });
+
+  // -------- Day on/off switches (Edit mode → day header toggle) --------
+  const setDaysOffFn = useServerFn(setRoutineDaysOff);
+  const daysOffMutation = useMutation({
+    mutationFn: (weekdays: number[]) =>
+      setDaysOffFn({ data: { weekdays, variant: activeVariant } }),
+    onSuccess: (res) => {
+      // Re-assert the authoritative list (the optimistic write below already
+      // flipped the UI) and refetch so tasks/stats stay in sync.
+      qc.setQueryData(["routine"], (old: unknown) =>
+        old && typeof old === "object" ? { ...(old as object), daysOff: res.daysOff } : old,
+      );
+      invalidate();
+    },
+    onError: () => {
+      // Roll back to whatever the server actually has.
+      invalidate();
+      toast.error("Couldn't change the day off.");
+    },
+  });
+
+  /**
+   * Flip one weekday between planned and day-off for the ACTIVE week. The day's
+   * routine slots are never touched — only the flag — so switching it back on
+   * restores the exact same schedule. Applied optimistically (grid + all cards
+   * update on the same frame) and rolled back on failure.
+   */
+  const toggleDayOff = (weekday: number) => {
+    const next = daysOffSet.has(weekday)
+      ? daysOff.filter((d) => d !== weekday)
+      : [...daysOff, weekday].sort((a, b) => a - b);
+
+    // Keep at least one planned day: an all-off week would blank the matrix,
+    // the averages and the sleep estimate at once, which is never the intent of
+    // a per-day switch. Turning the last enabled day off is refused with a hint.
+    if (next.length >= 7) {
+      toast.error("Keep at least one day planned — turn another day on first.");
+      return;
+    }
+
+    qc.setQueryData(["routine"], (old: unknown) =>
+      old && typeof old === "object" ? { ...(old as object), daysOff: next } : old,
+    );
+    daysOffMutation.mutate(next);
+  };
 
   // Export Routine JSON
   const handleExportRoutinesJSON = () => {
@@ -1321,6 +1406,15 @@ function RoutinesPage() {
                 <Shuffle className="h-3 w-3" />
                 {activeVariant === "primary" ? "Primary Week" : "Alternate Week"}
               </span>
+              {daysOffLabel && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-rose-300"
+                  title="These days are switched off: their slots are kept but excluded from the weekly hours, categories, day load and sleep estimate"
+                >
+                  <PowerOff className="h-3 w-3" />
+                  {daysOffLabel}
+                </span>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">
               Fully editable time-blocked timetable with custom time slots, custom categories, habit
@@ -1405,6 +1499,7 @@ function RoutinesPage() {
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
               ~{analytics.avgDailyHours} hrs/day average
+              {daysOffLabel ? ` · ${enabledDayCount} planned days` : ""}
             </div>
           </div>
 
@@ -1417,7 +1512,8 @@ function RoutinesPage() {
               {analytics.activeRoutineCount}
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
-              {tasks.length} total registered
+              {analytics.activeRoutineTotal} active in total
+              {daysOffLabel ? ` · ${daysOffLabel}` : ""}
             </div>
           </div>
 
@@ -1442,8 +1538,12 @@ function RoutinesPage() {
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
               {analytics.sleepRangeLabel !== null
-                ? `${analytics.sleepRangeLabel} across days · ${analytics.sleepDaysTracked}/7 days tracked`
-                : "Add late-night & morning bars to track sleep"}
+                ? `${analytics.sleepRangeLabel} across days · ${analytics.sleepDaysTracked}/7 days tracked${
+                    daysOffLabel ? ` · ${daysOffLabel}` : ""
+                  }`
+                : daysOffLabel
+                  ? `No nights measured — ${daysOffLabel}`
+                  : "Add late-night & morning bars to track sleep"}
             </div>
           </div>
         </div>
@@ -1485,19 +1585,25 @@ function RoutinesPage() {
 
           {viewMode === "day" && (
             <div className="flex items-center gap-1 overflow-x-auto">
-              {WEEKDAY_NAMES.map((name, idx) => (
-                <button
-                  key={name}
-                  onClick={() => setSelectedDay(idx)}
-                  className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
-                    selectedDay === idx
-                      ? "bg-primary text-primary-foreground font-semibold"
-                      : "bg-card text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {name.slice(0, 3)}
-                </button>
-              ))}
+              {WEEKDAY_NAMES.map((name, idx) => {
+                const isOff = daysOffSet.has(idx);
+                return (
+                  <button
+                    key={name}
+                    onClick={() => setSelectedDay(idx)}
+                    title={isOff ? `${name} is switched off (day off)` : name}
+                    className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+                      selectedDay === idx
+                        ? "bg-primary text-primary-foreground font-semibold"
+                        : isOff
+                          ? "bg-card text-rose-300/70 line-through hover:text-rose-200"
+                          : "bg-card text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {name.slice(0, 3)}
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -1523,6 +1629,18 @@ function RoutinesPage() {
             {editMode ? "Done Editing" : "Edit"}
           </button>
         </div>
+
+        {/* Edit-mode hint for the per-day on/off switches, so the new control is
+            discoverable exactly when it is available. */}
+        {editMode && (
+          <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-card/40 px-4 py-2.5 text-[11px] text-muted-foreground">
+            <Power className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+            <span>
+              Tap the power icon on any day to switch that day off. Its slots are kept — they just
+              stop counting toward your weekly hours, categories and sleep estimate.
+            </span>
+          </div>
+        )}
 
         {/* Clear-schedule confirmation (destructive, gated behind explicit confirm) */}
         <AlertDialog open={isClearConfirmOpen} onOpenChange={setIsClearConfirmOpen}>
@@ -1560,21 +1678,65 @@ function RoutinesPage() {
                     {WEEKDAY_NAMES.map((dayName, idx) => {
                       const isWeekend = idx === 5 || idx === 6;
                       const dayLoad = analytics.dayLoads[idx];
+                      const isDayOff = daysOffSet.has(idx);
                       return (
                         <th
                           key={dayName}
                           className={`p-3 font-semibold text-center uppercase tracking-wider border-r border-border/50 ${
-                            isWeekend ? "bg-rose-500/10 text-rose-300" : "text-foreground"
+                            isDayOff
+                              ? "bg-secondary/60 text-muted-foreground"
+                              : isWeekend
+                                ? "bg-rose-500/10 text-rose-300"
+                                : "text-foreground"
                           }`}
                         >
-                          <div>{dayName}</div>
-                          {dayLoad && (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span
+                              className={
+                                isDayOff ? "line-through decoration-muted-foreground/60" : ""
+                              }
+                            >
+                              {dayName}
+                            </span>
+                            {/* Per-day on/off switch — Edit mode only. */}
+                            {editMode && (
+                              <button
+                                type="button"
+                                onClick={() => toggleDayOff(idx)}
+                                aria-pressed={isDayOff}
+                                aria-label={
+                                  isDayOff
+                                    ? `Switch ${dayName} back on`
+                                    : `Switch ${dayName} off (day off)`
+                                }
+                                title={
+                                  isDayOff ? `Switch ${dayName} back on` : `Day off for ${dayName}`
+                                }
+                                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                                  isDayOff
+                                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                                    : "border-border bg-background/60 text-muted-foreground hover:border-rose-500/40 hover:text-rose-300"
+                                }`}
+                              >
+                                {isDayOff ? (
+                                  <Power className="h-3 w-3" />
+                                ) : (
+                                  <PowerOff className="h-3 w-3" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                          {isDayOff ? (
+                            <div className="mt-0.5 text-[10px] font-semibold lowercase tracking-wider text-rose-300/80">
+                              day off
+                            </div>
+                          ) : dayLoad ? (
                             <div className="flex flex-col items-center gap-0.5 mt-0.5">
                               <span className="text-[10px] font-mono font-normal text-muted-foreground lowercase">
                                 {dayLoad.hours}h ({dayLoad.count} slots)
                               </span>
                             </div>
-                          )}
+                          ) : null}
                         </th>
                       );
                     })}
@@ -1654,36 +1816,53 @@ function RoutinesPage() {
                             const key = `${timeSlot}|${dayIdx}`;
                             const cellTasks = taskMatrix.get(key) ?? [];
                             const isWeekend = dayIdx === 5 || dayIdx === 6;
+                            const isDayOff = daysOffSet.has(dayIdx);
                             const isCellDragOver = dragOverCellKey === key;
 
                             return (
                               <td
                                 key={dayIdx}
-                                onDragOver={(e) => {
-                                  if (draggingTaskId) {
-                                    e.preventDefault();
-                                    e.dataTransfer.dropEffect = "move";
-                                    setDragOverCellKey(key);
-                                  }
-                                }}
-                                onDragLeave={() => {
-                                  if (dragOverCellKey === key) {
-                                    setDragOverCellKey(null);
-                                  }
-                                }}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  setDragOverCellKey(null);
-                                  const tId =
-                                    e.dataTransfer.getData("text/plain") || draggingTaskId;
-                                  if (tId) {
-                                    handleMoveRoutineSlot(tId, dayIdx, timeSlot);
-                                    setDraggingTaskId(null);
-                                  }
-                                }}
+                                onDragOver={
+                                  isDayOff
+                                    ? undefined
+                                    : (e) => {
+                                        if (draggingTaskId) {
+                                          e.preventDefault();
+                                          e.dataTransfer.dropEffect = "move";
+                                          setDragOverCellKey(key);
+                                        }
+                                      }
+                                }
+                                onDragLeave={
+                                  isDayOff
+                                    ? undefined
+                                    : () => {
+                                        if (dragOverCellKey === key) {
+                                          setDragOverCellKey(null);
+                                        }
+                                      }
+                                }
+                                onDrop={
+                                  isDayOff
+                                    ? undefined
+                                    : (e) => {
+                                        e.preventDefault();
+                                        setDragOverCellKey(null);
+                                        const tId =
+                                          e.dataTransfer.getData("text/plain") || draggingTaskId;
+                                        if (tId) {
+                                          handleMoveRoutineSlot(tId, dayIdx, timeSlot);
+                                          setDraggingTaskId(null);
+                                        }
+                                      }
+                                }
                                 className={`p-2 border-r border-border/30 vertical-top align-top min-h-[52px] transition-all relative ${
-                                  isWeekend ? "bg-rose-500/[0.02]" : ""
-                                } ${editMode ? "group" : ""} ${
+                                  isDayOff
+                                    ? "bg-secondary/40 opacity-50"
+                                    : isWeekend
+                                      ? "bg-rose-500/[0.02]"
+                                      : ""
+                                } ${editMode && !isDayOff ? "group" : ""} ${
                                   isCellDragOver
                                     ? "bg-primary/20 border-primary ring-2 ring-primary/50 shadow-inner"
                                     : ""
@@ -1699,7 +1878,7 @@ function RoutinesPage() {
                                     return (
                                       <div
                                         key={task.id}
-                                        draggable={editMode}
+                                        draggable={editMode && !isDayOff}
                                         onDragStart={
                                           editMode
                                             ? (e) => {
@@ -1718,12 +1897,18 @@ function RoutinesPage() {
                                               }
                                             : undefined
                                         }
-                                        onClick={editMode ? () => openEditModal(task) : undefined}
+                                        onClick={
+                                          editMode && !isDayOff
+                                            ? () => openEditModal(task)
+                                            : undefined
+                                        }
                                         className={`relative flex flex-col gap-1 rounded-lg border border-border/70 bg-secondary/40 py-2 pl-3 pr-2 text-[11px] transition-all ${
-                                          editMode
+                                          editMode && !isDayOff
                                             ? "group/item hover:scale-[1.02] hover:shadow-md cursor-grab active:cursor-grabbing"
                                             : "hover:shadow-xs"
-                                        } ${!task.is_active ? "opacity-40 grayscale" : ""} ${
+                                        } ${isDayOff ? "pointer-events-none select-none" : ""} ${
+                                          !task.is_active ? "opacity-40 grayscale" : ""
+                                        } ${
                                           isThisDragging
                                             ? "opacity-30 scale-95 border-dashed border-primary"
                                             : ""
@@ -1827,6 +2012,12 @@ function RoutinesPage() {
 
                                         {/* Status Badge */}
                                         <div className="flex flex-wrap items-center gap-1 text-[11px] mt-0.5">
+                                          {isDayOff && (
+                                            <span className="inline-flex items-center gap-0.5 text-rose-300/90 bg-rose-500/10 px-1 py-0.5 rounded border border-rose-500/30 text-[10px] font-semibold">
+                                              <PowerOff className="h-2 w-2" />
+                                              <span>Day off</span>
+                                            </span>
+                                          )}
                                           {!task.is_active && (
                                             <span className="inline-flex items-center gap-0.5 text-muted-foreground bg-muted/60 px-1 py-0.5 rounded border border-border/50 text-[10px] font-semibold">
                                               <Pause className="h-2 w-2" />
@@ -1844,8 +2035,10 @@ function RoutinesPage() {
                                     </div>
                                   )}
 
-                                  {/* Add button on hover (edit mode only) */}
-                                  {editMode && (
+                                  {/* Add button on hover (edit mode only; a day
+                                      that is switched off accepts no new slots
+                                      until it is switched back on). */}
+                                  {editMode && !isDayOff && (
                                     <button
                                       onClick={() => openAddModal(dayIdx, timeSlot)}
                                       className="w-full flex md:hidden md:group-hover:flex items-center justify-center rounded border border-dashed border-border/60 py-2 text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-all"
@@ -1889,38 +2082,115 @@ function RoutinesPage() {
                 <h3 className="font-semibold text-lg">
                   {WEEKDAY_NAMES[selectedDay]} Routine Schedule
                 </h3>
-                <p className="text-xs text-muted-foreground">
-                  Scheduled time:{" "}
-                  <span className="num font-semibold text-foreground">
-                    {analytics.dayLoads[selectedDay]?.hours ?? 0} hours
-                  </span>{" "}
-                  across {analytics.dayLoads[selectedDay]?.count ?? 0} routine blocks.
-                </p>
+                {isSelectedDayOff ? (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-semibold text-rose-300">Day off</span> —{" "}
+                    {selectedDaySlotCount} routine block{selectedDaySlotCount === 1 ? "" : "s"} kept
+                    but excluded from your weekly hours and sleep estimate.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Scheduled time:{" "}
+                    <span className="num font-semibold text-foreground">
+                      {analytics.dayLoads[selectedDay]?.hours ?? 0} hours
+                    </span>{" "}
+                    across {analytics.dayLoads[selectedDay]?.count ?? 0} routine blocks.
+                  </p>
+                )}
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
+                  disabled={isSelectedDayOff}
                   onClick={() => {
                     setCopySourceDay(selectedDay);
                     setCopyTargetDay((selectedDay + 1) % 7);
                     setIsCopyScheduleOpen(true);
                   }}
                   className="gap-1.5 text-xs border-border hover:bg-secondary"
+                  title={
+                    isSelectedDayOff
+                      ? `Switch ${WEEKDAY_NAMES[selectedDay]} back on to copy it`
+                      : undefined
+                  }
                 >
                   <Copy className="h-3.5 w-3.5 text-indigo-400" /> Copy Day
                 </Button>
                 {editMode && (
-                  <Button size="sm" onClick={() => openAddModal(selectedDay)}>
+                  <Button
+                    size="sm"
+                    disabled={isSelectedDayOff}
+                    onClick={() => openAddModal(selectedDay)}
+                    title={
+                      isSelectedDayOff
+                        ? `Switch ${WEEKDAY_NAMES[selectedDay]} back on to add slots`
+                        : undefined
+                    }
+                  >
                     <Plus className="h-4 w-4 mr-1" /> Add to{" "}
                     {WEEKDAY_NAMES[selectedDay]?.slice(0, 3) ?? "Day"}
+                  </Button>
+                )}
+                {/* Same switch as the matrix header toggle, so the day can be
+                    turned on/off without leaving Day View. */}
+                {editMode && (
+                  <Button
+                    variant={isSelectedDayOff ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleDayOff(selectedDay)}
+                    className="gap-1.5 text-xs"
+                    title={
+                      isSelectedDayOff
+                        ? `Switch ${WEEKDAY_NAMES[selectedDay]} back on`
+                        : `Switch ${WEEKDAY_NAMES[selectedDay]} off`
+                    }
+                  >
+                    {isSelectedDayOff ? (
+                      <>
+                        <Power className="h-3.5 w-3.5" /> Turn on
+                      </>
+                    ) : (
+                      <>
+                        <PowerOff className="h-3.5 w-3.5" /> Day off
+                      </>
+                    )}
                   </Button>
                 )}
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Day-off notice: the day's slots are intact and still listed below
+                (dimmed, read-only) so a switched-off day never looks like lost
+                data. */}
+            {isSelectedDayOff && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/[0.07] p-4 text-xs">
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <PowerOff className="h-4 w-4 shrink-0 text-rose-300" />
+                  <span>
+                    <span className="font-semibold text-rose-200">
+                      {WEEKDAY_NAMES[selectedDay]} is switched off.
+                    </span>{" "}
+                    Nothing was deleted — these blocks stay in your plan but no longer count toward
+                    weekly hours, categories, day load or the sleep estimate.
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => toggleDayOff(selectedDay)}
+                  className="shrink-0 gap-1.5 text-xs"
+                >
+                  <Power className="h-3.5 w-3.5" /> Turn {WEEKDAY_NAMES[selectedDay]} on
+                </Button>
+              </div>
+            )}
+
+            <div
+              className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
+                isSelectedDayOff ? "opacity-55 pointer-events-none select-none" : ""
+              }`}
+            >
               {tasks
                 .filter((t) => t.weekday === selectedDay)
                 // Chronological within the day: sort by the block's start time
@@ -2130,32 +2400,53 @@ function RoutinesPage() {
                 {analytics.dayLoads.map((dl) => (
                   <div
                     key={dl.weekday}
-                    className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-xs"
+                    className={`flex items-center justify-between rounded-lg border p-2.5 text-xs ${
+                      dl.isOff
+                        ? "border-rose-500/25 bg-rose-500/[0.06]"
+                        : "border-border/60 bg-secondary/30"
+                    }`}
                   >
-                    <span className="font-semibold text-foreground w-24">{dl.name}</span>
+                    <span
+                      className={`font-semibold w-24 ${
+                        dl.isOff ? "text-muted-foreground line-through" : "text-foreground"
+                      }`}
+                    >
+                      {dl.name}
+                    </span>
                     <div className="flex-1 mx-3">
                       <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-                        <div
-                          className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${Math.min(100, (Number(dl.hours) / 10) * 100)}%` }}
-                        />
+                        {!dl.isOff && (
+                          <div
+                            className="h-full bg-primary rounded-full transition-all"
+                            style={{ width: `${Math.min(100, (Number(dl.hours) / 10) * 100)}%` }}
+                          />
+                        )}
                       </div>
                     </div>
                     <div className="text-right flex items-center gap-2">
-                      <span className="num font-bold">{dl.hours} hrs</span>
-                      <span className="text-[10px] text-muted-foreground ml-1.5">
-                        ({dl.count} slots)
-                      </span>
-                      {analytics.sleepByDay[dl.weekday] &&
-                        analytics.sleepByDay[dl.weekday] !== "—" && (
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 border border-purple-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-purple-400"
-                            title={`Planned sleep: end of the last evening bar → first bar of the next day (bars before ${SLEEP_NIGHT_CUTOFF_LABEL} count as the previous night)`}
-                          >
-                            <Moon className="h-3 w-3" />
-                            {analytics.sleepByDay[dl.weekday]}
+                      {dl.isOff ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300/90">
+                          <PowerOff className="h-3 w-3" />
+                          Day off
+                        </span>
+                      ) : (
+                        <>
+                          <span className="num font-bold">{dl.hours} hrs</span>
+                          <span className="text-[10px] text-muted-foreground ml-1.5">
+                            ({dl.count} slots)
                           </span>
-                        )}
+                          {analytics.sleepByDay[dl.weekday] &&
+                            analytics.sleepByDay[dl.weekday] !== "—" && (
+                              <span
+                                className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 border border-purple-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-purple-400"
+                                title={`Planned sleep: end of the last evening bar → first bar of the next day (bars before ${SLEEP_NIGHT_CUTOFF_LABEL} count as the previous night)`}
+                              >
+                                <Moon className="h-3 w-3" />
+                                {analytics.sleepByDay[dl.weekday]}
+                              </span>
+                            )}
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -2374,10 +2665,16 @@ function RoutinesPage() {
                   <div className="grid grid-cols-7 gap-1">
                     {WEEKDAY_NAMES.map((dayName, idx) => {
                       const selected = formWeekdays.includes(idx);
+                      const isOff = daysOffSet.has(idx);
                       return (
                         <button
                           key={dayName}
                           type="button"
+                          title={
+                            isOff
+                              ? `${dayName} is switched off — slots here are kept but not counted`
+                              : dayName
+                          }
                           onClick={() => {
                             if (selected) {
                               if (formWeekdays.length > 1) {
@@ -2391,9 +2688,12 @@ function RoutinesPage() {
                             selected
                               ? "bg-primary text-primary-foreground shadow"
                               : "bg-secondary text-muted-foreground hover:text-foreground"
-                          }`}
+                          } ${isOff && !selected ? "text-rose-300/80" : ""}`}
                         >
                           {dayName.slice(0, 3)}
+                          {isOff && (
+                            <span className="ml-0.5 align-super text-[8px] font-bold">off</span>
+                          )}
                         </button>
                       );
                     })}
@@ -2647,6 +2947,7 @@ function RoutinesPage() {
                     {WEEKDAY_NAMES.map((name, idx) => (
                       <option key={name} value={idx}>
                         {name} ({tasks.filter((t) => t.weekday === idx).length} slots)
+                        {daysOffSet.has(idx) ? " — day off" : ""}
                       </option>
                     ))}
                   </select>
@@ -2664,9 +2965,13 @@ function RoutinesPage() {
                     {WEEKDAY_NAMES.map((name, idx) => (
                       <option key={name} value={idx}>
                         {name} ({tasks.filter((t) => t.weekday === idx).length} slots)
+                        {daysOffSet.has(idx) ? " — day off" : ""}
                       </option>
                     ))}
                   </select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Copying only moves routine slots — it never changes whether a day is on or off.
+                  </p>
                 </div>
               </div>
 

@@ -169,6 +169,61 @@ export type RoutineTask = {
   created_at: string;
 };
 
+/** The two whole-week routines a profile can edit (routine_tasks.week_variant). */
+export const ROUTINE_VARIANTS = ["primary", "alternate"] as const;
+export type RoutineVariant = (typeof ROUTINE_VARIANTS)[number];
+
+/**
+ * Weekdays (0=Mon … 6=Sun) switched off for one week-variant, read out of the
+ * profiles.routine_days_off jsonb blob. A day switched off is never deleted —
+ * its routine_tasks rows stay put and come straight back when it is switched on
+ * again — it is only excluded from the derived numbers (weekly hours, per-day
+ * load, category breakdown, planned-sleep estimate).
+ *
+ * Unrecognised values are dropped, so a malformed or pre-migration blob degrades
+ * to "no days off" instead of breaking the page.
+ */
+export function routineDaysOffFor(value: unknown, variant: RoutineVariant): number[] {
+  const raw = (value as Record<string, unknown> | null | undefined)?.[variant];
+  return routineWeekdays(raw);
+}
+
+/**
+ * Normalise any raw weekday list (0=Mon … 6=Sun): keeps only real weekday
+ * numbers, de-duplicates and sorts. Shared by the server (reading the jsonb
+ * blob) and the client (reading the server response), so both sides can never
+ * disagree about what a valid day list is.
+ */
+export function routineWeekdays(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  const days = value.filter(
+    (d): d is number => typeof d === "number" && Number.isInteger(d) && d >= 0 && d <= 6,
+  );
+  return [...new Set(days)].sort((a, b) => a - b);
+}
+
+/**
+ * Normalised {primary, alternate} days-off blob, ready to be written back to
+ * profiles.routine_days_off. Always carries BOTH variants so a read-modify-write
+ * of one week never drops the other week's days off.
+ */
+export function routineDaysOffBlob(value: unknown): Record<RoutineVariant, number[]> {
+  return {
+    primary: routineDaysOffFor(value, "primary"),
+    alternate: routineDaysOffFor(value, "alternate"),
+  };
+}
+
+/**
+ * Human label for a set of disabled weekdays, e.g. ["Sun off"] or ["Sun, Mon off"].
+ * Weekday names share the app's Monday-first convention (0=Mon).
+ */
+export function routineDaysOffLabel(daysOff: number[]): string | null {
+  if (daysOff.length === 0) return null;
+  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  return `${daysOff.map((d) => names[d] ?? d).join(", ")} off`;
+}
+
 export type Goal = {
   id: string;
   title: string;

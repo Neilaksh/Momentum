@@ -17,12 +17,15 @@ import {
   parseISODate,
   parseRoutineTitle,
   parseTaskDescription as parseTaskDescriptionServer,
+  routineDaysOffBlob,
+  routineDaysOffFor,
   startOfWeek,
   toISODate,
   type GoalHabitSnapshot,
   type GoalHabitStat,
   type GoalPriority,
   type GoalProgress,
+  type RoutineVariant,
 } from "./tracker-shared";
 import { parseHabitTitle } from "./habits-shared";
 
@@ -681,7 +684,11 @@ export const getRoutine = createServerFn({ method: "POST" })
       .select("active_routine_variant")
       .eq("id", context.userId)
       .maybeSingle();
-    const activeVariant = profile?.active_routine_variant ?? "primary";
+    const activeVariant = (profile?.active_routine_variant ?? "primary") as RoutineVariant;
+    // Days switched off for THIS week (0=Mon … 6=Sun). The rows are still sent —
+    // the client keeps them visible in the matrix so re-enabling a day restores
+    // its schedule instantly — but they are excluded from every derived number.
+    const daysOff = await loadRoutineDaysOff(context.supabase, context.userId, activeVariant);
 
     const { data, error } = await context.supabase
       .from("routine_tasks")
@@ -693,7 +700,7 @@ export const getRoutine = createServerFn({ method: "POST" })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
     if (error) throw new Error(error.message);
-    return { tasks: data ?? [], activeVariant };
+    return { tasks: data ?? [], activeVariant, daysOff };
   });
 
 export const setActiveRoutineVariant = createServerFn({ method: "POST" })
@@ -708,8 +715,11 @@ export const setActiveRoutineVariant = createServerFn({ method: "POST" })
       .eq("id", context.userId);
     if (error) throw new Error(error.message);
 
-    // Return the target week's tasks in the same round-trip so the client can
-    // swap the routine cache atomically — no second fetch, no stale read.
+    // Return the target week's tasks AND its days off in the same round-trip so
+    // the client can swap the routine cache atomically — no second fetch, no
+    // stale read, and no moment where week B is shown with week A's day offs.
+    const daysOff = await loadRoutineDaysOff(context.supabase, context.userId, data.variant);
+
     const { data: routineRows, error: routineError } = await context.supabase
       .from("routine_tasks")
       .select("*")
@@ -720,8 +730,81 @@ export const setActiveRoutineVariant = createServerFn({ method: "POST" })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
     if (routineError) throw new Error(routineError.message);
-    return { tasks: routineRows ?? [], activeVariant: data.variant };
+    return { tasks: routineRows ?? [], activeVariant: data.variant, daysOff };
   });
+
+/**
+ * Turn whole weekdays of the weekly routine on/off (Routines → Edit → day
+ * toggles). Only the day list is stored — nothing is deleted, so the schedule of
+ * a disabled day is still there (just excluded from the stats) and comes back the
+ * moment the day is switched on again. Stored per week-variant, so the primary
+ * and alternate weeks keep their own days off.
+ */
+export const setRoutineDaysOff = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { weekdays: number[]; variant?: string }) =>
+    z
+      .object({
+        weekdays: z.array(z.number().int().min(0).max(6)).max(7),
+        variant: z.enum(["primary", "alternate"]).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: profile, error: readError } = await context.supabase
+      .from("profiles")
+      .select("active_routine_variant, routine_days_off")
+      .eq("id", context.userId)
+      .maybeSingle();
+    // A missing column means the routine_days_off migration has not been applied
+    // to this database yet — surface that instead of a generic failure.
+    if (readError) throw new Error(routineDaysOffError(readError.message));
+
+    const variant = (data.variant ??
+      profile?.active_routine_variant ??
+      "primary") as RoutineVariant;
+    // Read-modify-write of the jsonb blob, normalised on the way in and out so a
+    // legacy/partial value can never be persisted as-is.
+    const blob = routineDaysOffBlob(profile?.routine_days_off);
+    blob[variant] = [...new Set(data.weekdays)].sort((a, b) => a - b);
+
+    const { error } = await context.supabase
+      .from("profiles")
+      .update({ routine_days_off: blob })
+      .eq("id", context.userId);
+    if (error) throw new Error(routineDaysOffError(error.message));
+
+    return { ok: true as const, activeVariant: variant, daysOff: blob[variant] };
+  });
+
+/**
+ * Days off for one week, read straight off the profile.
+ *
+ * Read separately (and tolerantly) from the rest of the routine data so that a
+ * database where the routine_days_off migration has not been applied yet simply
+ * behaves like "no days off" — the page keeps working instead of failing on an
+ * unknown column.
+ */
+async function loadRoutineDaysOff(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  variant: RoutineVariant,
+): Promise<number[]> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("routine_days_off")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) return [];
+  return routineDaysOffFor(data?.routine_days_off, variant);
+}
+
+/** Friendlier message when routine_days_off does not exist in the database yet. */
+function routineDaysOffError(message: string): string {
+  return /routine_days_off/i.test(message)
+    ? "Day on/off needs the latest database migration (routine_days_off) — apply it and try again."
+    : message;
+}
 
 export const deleteRoutineTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
