@@ -455,9 +455,11 @@ function UnifiedTasksPage() {
   const parsedActiveDate = parseISODate(activeDay.date);
   const activeWeekdayName = WEEKDAY_NAMES[(parsedActiveDate.getDay() + 6) % 7]!;
   const isActiveDayToday = activeDay.date === todayISO;
-  // Only today's tasks are editable in the focused panel: toggling, adding,
-  // deleting, reordering, notes and rescheduling are locked for every other
-  // day — past days (history) and future days (planning) both stay read-only.
+  // Past days (history) are fully read-only: nothing can be added, changed or
+  // deleted. Future days (planning) allow adding and deleting tasks, while
+  // everything else — completing, reordering, rescheduling, notes, renaming —
+  // stays restricted to today.
+  const isActiveDayPast = activeDay.date < todayISO;
   const isActiveDayLocked = !isActiveDayToday;
 
   const filteredActiveTasks = useMemo(() => {
@@ -1216,18 +1218,18 @@ function UnifiedTasksPage() {
                           </button>
 
                           <button
-                            disabled={isActiveDayLocked}
+                            disabled={isActiveDayPast}
                             onClick={() => removeTask.mutate({ id: t.id })}
                             aria-label={
-                              isActiveDayLocked
-                                ? `${t.title} cannot be deleted — only today's tasks can be changed`
+                              isActiveDayPast
+                                ? `${t.title} cannot be deleted — past days are read-only`
                                 : `Delete ${t.title}`
                             }
                             title={
-                              isActiveDayLocked ? "Only today's tasks are editable" : undefined
+                              isActiveDayPast ? "Past day — tasks are read-only" : undefined
                             }
                             className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
-                              isActiveDayLocked ? "cursor-not-allowed" : "hover:text-destructive"
+                              isActiveDayPast ? "cursor-not-allowed" : "hover:text-destructive"
                             }`}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -1349,7 +1351,7 @@ function UnifiedTasksPage() {
           className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
-            if (isActiveDayLocked) return;
+            if (isActiveDayPast) return;
             const title = draft.trim();
             if (!title) return;
             // Double-submit guard: if this exact (day, title) add is already in
@@ -1373,7 +1375,7 @@ function UnifiedTasksPage() {
             onChange={(e) => setDraft(e.target.value)}
             placeholder={`Add a task for ${activeWeekdayName}...`}
             className="h-10 min-w-0 flex-1 text-base md:text-sm"
-            disabled={isActiveDayLocked}
+            disabled={isActiveDayPast}
           />
           <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <select
@@ -1381,7 +1383,7 @@ function UnifiedTasksPage() {
               onChange={(e) => setDraftSubjectId(e.target.value || null)}
               aria-label="Subject (optional)"
               className="h-10 w-full rounded-lg border border-border bg-secondary/50 px-2.5 text-base md:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-44"
-              disabled={isActiveDayLocked}
+              disabled={isActiveDayPast}
             >
               <option value="">No subject</option>
               {subjects.map((s) => (
@@ -1395,7 +1397,7 @@ function UnifiedTasksPage() {
               onChange={(e) => setDraftPriority((e.target.value || null) as GoalPriority | null)}
               aria-label="Priority (optional)"
               className="h-10 w-full rounded-lg border border-border bg-secondary/50 px-2.5 text-base md:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-32"
-              disabled={isActiveDayLocked}
+              disabled={isActiveDayPast}
             >
               <option value="">Priority</option>
               <option value="High">🔴 High</option>
@@ -1407,15 +1409,16 @@ function UnifiedTasksPage() {
             type="submit"
             className="h-10 shrink-0 gap-1.5 px-4"
             aria-label="Add task"
-            disabled={isActiveDayLocked || !draft.trim()}
+            disabled={isActiveDayPast || !draft.trim()}
           >
             <Plus className="h-4 w-4" />
             <span>Add Task</span>
           </Button>
         </form>
-        {isActiveDayLocked && (
+        {isActiveDayPast && (
           <p className="mt-2 text-xs text-muted-foreground">
-            Only today's tasks can be changed — select today to add or edit tasks.
+            Past days are read-only — select today to change tasks or a future day to add or
+            delete them.
           </p>
         )}
       </section>
@@ -1427,12 +1430,12 @@ function UnifiedTasksPage() {
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold tracking-tight">Full Week Schedule</h2>
               <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                View Only
+                Overview
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Read-only 7-day overview. Click any day to view it — only today's tasks can be
-              edited.
+              Click any day to view it — check off today's tasks, plan future days (add or
+              delete tasks); past days are read-only.
             </p>
           </div>
 
@@ -1678,7 +1681,9 @@ function DayCard({
             ? isSelected
               ? "Currently active in editor"
               : "Click card to focus & edit"
-            : "Click card to view (read-only)"}
+            : isPast
+              ? "Click card to view (read-only)"
+              : "Click card to view & plan"}
         </span>
         <ChevronRight className="h-3.5 w-3.5 transform group-hover:translate-x-1 transition-transform" />
       </div>
