@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { loadHabits } from "./habits.server";
+import { computeHabitCycles } from "./habits-shared";
+import { toISODate } from "./tracker-shared";
 
 export const getHabits = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -68,6 +70,54 @@ export const toggleHabitDay = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase;
+    const today = toISODate(new Date());
+
+    // Future check-ins are blocked. The rolling-cycle model derives cycles
+    // from the log set, so a future-dated log would create a phantom open
+    // cycle that only "starts" days from now.
+    if (data.done && data.date > today) {
+      throw new Error("Future check-ins are not allowed.");
+    }
+
+    if (data.done) {
+      // Cycle lock guard: recompute the greedy 7-day cycle partition WITH the
+      // candidate date included and cap every cycle at target_per_week logs.
+      // This blocks a new check-in once its containing cycle (normally the
+      // current open one) has reached the target, while un-checks (the
+      // done=false path below) stay completely unguarded so a mistaken tap can
+      // always be undone — which also re-unlocks further checking.
+      const { data: habitRow } = await supabase
+        .from("habits")
+        .select("target_per_week")
+        .eq("id", data.habitId)
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if (!habitRow) throw new Error("Habit not found.");
+
+      const { data: logRows } = await supabase
+        .from("habit_logs")
+        .select("log_date")
+        .eq("habit_id", data.habitId)
+        .eq("user_id", context.userId);
+
+      const doneDates = (logRows ?? []).map((r) => r.log_date);
+      if (!doneDates.includes(data.date)) {
+        const target = Math.max(1, habitRow.target_per_week);
+        const candidate = [...doneDates, data.date];
+        const cycle = computeHabitCycles(candidate).find(
+          (c) => data.date >= c.start && data.date <= c.end,
+        );
+        const count = cycle
+          ? candidate.filter((d) => d >= cycle.start && d <= cycle.end).length
+          : 0;
+        if (count > target) {
+          throw new Error(
+            `Target already met for this cycle — locked until ${cycle?.end ?? data.date}.`,
+          );
+        }
+      }
+    }
+
     if (data.done) {
       await supabase
         .from("habit_logs")

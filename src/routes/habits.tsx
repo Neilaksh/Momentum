@@ -53,6 +53,7 @@ import {
 } from "@/lib/habits.functions";
 import {
   formatHabitTitle,
+  habitCycleProgress,
   parseHabitTitle,
   type HabitsData,
   type HabitStat,
@@ -278,13 +279,23 @@ function HabitsPage() {
           const nextDoneDates = v.done
             ? [...s.doneDates, v.date]
             : s.doneDates.filter((d) => d !== v.date);
-          const weekDone = prev.dates.filter((d) => nextDoneDates.includes(d)).length;
+          // Mirror the server's rolling-cycle math (same shared pure helper)
+          // so the optimistic update matches the recomputed load exactly.
+          const { openCycle, cycleDone, cycleLocked } = habitCycleProgress(
+            nextDoneDates,
+            todayISO,
+            s.weekTarget,
+          );
+          const weekDone = cycleDone;
           const yearDone = v.done ? s.yearDone + 1 : Math.max(0, s.yearDone - 1);
           return {
             ...s,
             doneDates: nextDoneDates,
             weekDone,
             weekPct: Math.round((Math.min(weekDone, s.weekTarget) / s.weekTarget) * 100),
+            cycleStart: openCycle?.start ?? null,
+            cycleEnd: openCycle?.end ?? null,
+            cycleLocked,
             yearDone,
             yearPct: Math.round((Math.min(yearDone, s.yearTarget) / s.yearTarget) * 100),
           };
@@ -296,9 +307,11 @@ function HabitsPage() {
       }
       return { prev };
     },
-    onError: (_err, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(["habits", weekStart], ctx.prev);
-      toast.error("Couldn't save habit update — try again.");
+      // Prefer the server's own reason (e.g. the rolling-cycle lock) when present.
+      const msg = err instanceof Error ? err.message : "";
+      toast.error(msg && msg.length < 160 ? msg : "Couldn't save habit update — try again.");
     },
     onSettled: invalidate,
   });
@@ -368,7 +381,7 @@ function HabitsPage() {
   }
 
   const weekEnd = toISODate(addDays(parseISODate(weekStart), 6));
-  const isWeeklyGoalAchieved =
+  const isCycleGoalAchieved =
     (totals?.weekDone ?? 0) >= (totals?.weekTarget ?? 1) && (totals?.weekTarget ?? 0) > 0;
 
   const habitToFocus = useMemo(() => {
@@ -441,18 +454,18 @@ function HabitsPage() {
       <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Weekly Pie Chart */}
         <section className="flex flex-col items-center justify-between rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6 relative overflow-hidden">
-          {isWeeklyGoalAchieved && (
+          {isCycleGoalAchieved && (
             <div className="absolute top-0 right-0 left-0 bg-primary/15 py-1 text-center text-[11px] font-semibold text-primary">
-              🎉 Weekly Target Reached!
+              🎉 Cycle Target Reached!
             </div>
           )}
 
           <div
-            className={`flex w-full items-center justify-between ${isWeeklyGoalAchieved ? "mt-3" : ""}`}
+            className={`flex w-full items-center justify-between ${isCycleGoalAchieved ? "mt-3" : ""}`}
           >
             <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <Calendar className="h-4 w-4 text-primary" />
-              <span>Weekly Habit Progress</span>
+              <span>Cycle Habit Progress</span>
             </div>
             <span className="num text-xs font-bold text-primary">{totals?.weekPct ?? 0}%</span>
           </div>
@@ -461,7 +474,7 @@ function HabitsPage() {
             <PieStat
               done={totals?.weekDone ?? 0}
               total={totals?.weekTarget ?? 0}
-              label="This Week"
+              label="This Cycle"
               caption={`${totals?.weekDone ?? 0} of ${totals?.weekTarget ?? 0} planned check-ins`}
               size={175}
               showTooltip={true}
@@ -471,9 +484,9 @@ function HabitsPage() {
           <p className="text-center text-xs text-muted-foreground">
             {totals?.weekTarget === 0
               ? "No habits created yet. Choose a preset below!"
-              : isWeeklyGoalAchieved
-                ? "🔥 All weekly habit targets achieved!"
-                : `${(totals?.weekTarget ?? 0) - (totals?.weekDone ?? 0)} more check-ins needed this week`}
+              : isCycleGoalAchieved
+                ? "🔥 All cycle habit targets achieved!"
+                : `${(totals?.weekTarget ?? 0) - (totals?.weekDone ?? 0)} more check-ins needed this cycle`}
           </p>
         </section>
 
@@ -549,7 +562,7 @@ function HabitsPage() {
         </section>
       </div>
 
-      {/* Weekly "Habit to Focus" Highlight Banner */}
+      {/* "Habit to Focus" Highlight Banner (largest deficit in the open cycle) */}
       {habitToFocus && (
         <div className="mt-6 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-card to-card p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -559,7 +572,7 @@ function HabitsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-500">
-                  Focus Habit This Week
+                  Focus Habit This Cycle
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {habitToFocus.stat.weekDone}/{habitToFocus.stat.weekTarget} done (
@@ -780,14 +793,17 @@ function HabitsPage() {
         <div className="mt-4 space-y-4">
           {filteredStats.map((s) => {
             const isDoneToday = s.doneDates.includes(todayISO);
-            const isWeekTargetReached = s.weekDone >= s.weekTarget;
+            const isCycleTargetReached = s.weekDone >= s.weekTarget;
+            // Locked for NEW check-ins only — an already-checked today can still
+            // be un-checked (that path is never guarded, client or server).
+            const isTodayCheckLocked = s.cycleLocked && !isDoneToday;
             const isEditing = editingHabitId === s.habit.id;
 
             return (
               <article
                 key={s.habit.id}
                 className={`grid gap-5 rounded-2xl border p-5 shadow-sm transition-all lg:grid-cols-[1fr_auto] ${
-                  isWeekTargetReached
+                  isCycleTargetReached
                     ? "border-primary/40 bg-card/90"
                     : "border-border bg-card hover:border-border/90"
                 }`}
@@ -886,9 +902,9 @@ function HabitsPage() {
                                   </span>
                                 ) : null}
 
-                                {isWeekTargetReached && (
+                                {isCycleTargetReached && (
                                   <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-                                    Goal Reached
+                                    Cycle Complete
                                   </span>
                                 )}
                               </>
@@ -902,6 +918,12 @@ function HabitsPage() {
                     <div className="flex items-center gap-2">
                       {/* Prominent 1-Click Today Check-in Button */}
                       <button
+                        disabled={isTodayCheckLocked}
+                        title={
+                          isTodayCheckLocked
+                            ? `Cycle target met — locked until ${s.cycleEnd}`
+                            : undefined
+                        }
                         onClick={() =>
                           toggle.mutate({
                             habitId: s.habit.id,
@@ -913,8 +935,18 @@ function HabitsPage() {
                           isDoneToday
                             ? "border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-300"
                             : "border border-border/80 bg-secondary/50 text-muted-foreground hover:border-primary hover:text-foreground"
+                        } ${
+                          isTodayCheckLocked
+                            ? "cursor-not-allowed opacity-40 hover:border-border/80 hover:text-muted-foreground"
+                            : ""
                         }`}
-                        aria-label={isDoneToday ? "Unmark today" : "Check in today"}
+                        aria-label={
+                          isDoneToday
+                            ? "Unmark today"
+                            : isTodayCheckLocked
+                              ? "Cycle target met, check-in locked"
+                              : "Check in today"
+                        }
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         <span>{isDoneToday ? "Done Today" : "Check In Today"}</span>
@@ -949,24 +981,48 @@ function HabitsPage() {
                     </div>
                   </div>
 
-                  {/* 7-Day Checklist Matrix */}
+                  {/* 7-Day Checklist Matrix — calendar-week browsing strip.
+                    Check-in eligibility is rolling-cycle based: future days are
+                    blocked entirely, and once the open cycle's target is met
+                    its unchecked days lock until the cycle ends (checked days
+                    stay tappable so mistakes can be undone). */}
                   <div className="mt-4 flex flex-wrap gap-2">
                     {dates.map((d, i) => {
                       const done = s.doneDates.includes(d);
                       const isTodayCheck = d === todayISO;
+                      const isFuture = d > todayISO;
+                      const isLockedInCycle =
+                        s.cycleLocked &&
+                        !done &&
+                        s.cycleStart !== null &&
+                        d >= s.cycleStart &&
+                        d <= (s.cycleEnd ?? "");
+                      const disabled = isFuture || isLockedInCycle;
 
                       return (
                         <button
                           key={d}
+                          disabled={disabled}
                           onClick={() =>
                             toggle.mutate({ habitId: s.habit.id, date: d, done: !done })
                           }
                           aria-label={`${done ? "Unmark" : "Mark"} ${s.habit.title} on ${formatDayDate(d)}`}
+                          title={
+                            isFuture
+                              ? "Future check-ins are not allowed"
+                              : isLockedInCycle
+                                ? `Cycle target met — locked until ${s.cycleEnd}`
+                                : undefined
+                          }
                           className={`flex h-11 w-11 flex-col items-center justify-center rounded-xl border text-xs font-medium transition-all ${
                             done
                               ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/20"
                               : "border-border/80 bg-secondary/30 text-muted-foreground hover:border-primary hover:text-foreground"
-                          } ${isTodayCheck && !done ? "ring-2 ring-primary/60 border-primary" : ""}`}
+                          } ${isTodayCheck && !done ? "ring-2 ring-primary/60 border-primary" : ""} ${
+                            disabled
+                              ? "cursor-not-allowed opacity-40 hover:border-border/80 hover:text-muted-foreground"
+                              : ""
+                          }`}
                         >
                           <span className="text-[10px] uppercase tracking-wider font-bold">
                             {WEEKDAY_NAMES[i]!.slice(0, 2)}
@@ -989,8 +1045,14 @@ function HabitsPage() {
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center justify-between text-xs text-muted-foreground">
                       <span className="num">
-                        <strong>{s.weekDone}</strong> of {s.weekTarget} done this week ({s.weekPct}
-                        %)
+                        {s.cycleStart !== null ? (
+                          <>
+                            <strong>{s.weekDone}</strong> of {s.weekTarget} done this cycle (
+                            {s.weekPct}%)
+                          </>
+                        ) : (
+                          <>Next check-in starts a new cycle</>
+                        )}
                       </span>
                       <span className="num">
                         <strong>{s.yearDone}</strong> of {s.yearTarget} YTD ({s.yearPct}%)
@@ -1004,7 +1066,7 @@ function HabitsPage() {
                   <PieStat
                     done={s.weekDone}
                     total={s.weekTarget}
-                    label="Week"
+                    label="Cycle"
                     size={100}
                     showTooltip={true}
                   />

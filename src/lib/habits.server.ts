@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, parseISODate, toISODate, weekDates } from "./tracker-shared";
-import type { HabitStat, HabitsData } from "./habits-shared";
+import { habitCycleProgress, type HabitStat, type HabitsData } from "./habits-shared";
 import type { Database } from "@/integrations/supabase/types";
 
 type DB = SupabaseClient<Database>;
@@ -49,6 +49,7 @@ export async function loadHabits(
 ): Promise<HabitsData> {
   const dates = weekDates(weekStart);
   const today = new Date();
+  const todayISO = toISODate(today);
   const yearStart = new Date(today.getFullYear(), 0, 1);
   const yearStartISO = toISODate(yearStart);
 
@@ -82,8 +83,21 @@ export async function loadHabits(
 
   const stats: HabitStat[] = habits.map((habit) => {
     const done = byHabit.get(habit.id) ?? new Set<string>();
-    const weekDone = dates.filter((d) => done.has(d)).length;
     const weekTarget = Math.max(1, habit.target_per_week);
+
+    // Weekly progress is ROLLING-CYCLE based: a habit's "week" is its current
+    // open 7-day cycle (first check-in after the previous cycle ended starts a
+    // new one), not the fixed Monday–Sunday calendar week. doneDates, streaks
+    // and year stats keep their calendar-day meanings; the Goals-side
+    // computeHabitProgress/computeGoalProgress use their own Monday–Sunday
+    // logic and are unaffected by this.
+    const { openCycle, cycleDone, cycleLocked } = habitCycleProgress(
+      Array.from(done),
+      todayISO,
+      weekTarget,
+    );
+    const weekDone = cycleDone;
+    const weekPct = Math.round((Math.min(weekDone, weekTarget) / weekTarget) * 100);
 
     // Year window starts at the later of Jan 1 and the habit's creation date.
     const created = parseISODate(habit.created_at.slice(0, 10));
@@ -97,7 +111,10 @@ export async function loadHabits(
       habit,
       weekDone,
       weekTarget,
-      weekPct: Math.round((Math.min(weekDone, weekTarget) / weekTarget) * 100),
+      weekPct,
+      cycleStart: openCycle?.start ?? null,
+      cycleEnd: openCycle?.end ?? null,
+      cycleLocked,
       yearDone,
       yearTarget,
       yearPct: Math.round((Math.min(yearDone, yearTarget) / yearTarget) * 100),
