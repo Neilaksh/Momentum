@@ -85,6 +85,7 @@ import {
   computeRoutineSleepMinutes,
   formatRoutineTitle,
   parseRoutineTitle,
+  routineSlotEndMinutes,
   startOfWeek,
   timeSlotStartMinutes,
   toISODate,
@@ -717,24 +718,30 @@ function RoutinesPage() {
       .sort((a, b) => Number(b.hours) - Number(a.hours));
 
     // ===================== SLEEP ESTIMATE =====================
-    // Sleep for day D = the bed anchor of day D → the first morning bar of day
-    // D+1. The bed anchor is the LAST bar of D's evening chain: bars starting
+    // Sleep for day D = bedtime after day D's last activity → the first morning
+    // bar of day D+1. The bed anchor is the END of the last evening block (the
+    // activity you finish right before sleeping — "10:05–11:00 PM" anchors at
+    // 11:00 PM, not at 10:05 PM), or its START for a bare point-time bar and for
+    // a block that is itself the sleep block ("11:00 PM–06:00 AM"). Bars starting
     // before the night/morning cutoff (4:00 AM by default) count as the tail of
     // the previous night, so an after-midnight "😴 Sleep 12:00–6:30 AM" or a
     // "12:30 AM" bar is the go-to-sleep anchor instead of D+1's wake anchor.
-    // Schedules whose bars never cross midnight keep the plain
-    // last-bar → first-next-bar behaviour (10:30 PM → 6:30 AM = 8h). The wake
-    // anchor is D+1's first bar at/after the cutoff and before noon, so a night
-    // whose next day has no morning bars stays unmeasured instead of becoming a
-    // 16–24h phantom in the average. Per-day math so different weekend
-    // schedules are handled naturally.
+    // Schedules whose bars never cross midnight keep their plain last-activity →
+    // first-next-morning-bar result. The wake anchor is D+1's first bar at/after
+    // the cutoff and before noon, so a night whose next day has no morning bars
+    // stays unmeasured instead of becoming a 16–24h phantom in the average.
+    // Per-day math so different weekend schedules are handled naturally.
     const sleepMinutes = computeRoutineSleepMinutes(
       tasks
         .filter((t) => t.is_active)
-        .map((t) => ({
-          weekday: t.weekday,
-          startMinutes: timeSlotStartMinutes(parseRoutineTitle(t.title).timeSlot),
-        })),
+        .map((t) => {
+          const slot = parseRoutineTitle(t.title).timeSlot;
+          return {
+            weekday: t.weekday,
+            startMinutes: timeSlotStartMinutes(slot),
+            endMinutes: routineSlotEndMinutes(slot),
+          };
+        }),
     );
     const trackedSleep = sleepMinutes.filter((m): m is number => m !== null);
     const sleepDaysTracked = trackedSleep.length;
@@ -2143,7 +2150,7 @@ function RoutinesPage() {
                         analytics.sleepByDay[dl.weekday] !== "—" && (
                           <span
                             className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 border border-purple-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-purple-400"
-                            title={`Planned sleep: last evening bar → first bar of the next day (bars before ${SLEEP_NIGHT_CUTOFF_LABEL} count as the previous night)`}
+                            title={`Planned sleep: end of the last evening bar → first bar of the next day (bars before ${SLEEP_NIGHT_CUTOFF_LABEL} count as the previous night)`}
                           >
                             <Moon className="h-3 w-3" />
                             {analytics.sleepByDay[dl.weekday]}

@@ -685,6 +685,44 @@ export function calculateSlotDurationMinutes(timeSlot: string): number {
 }
 
 /**
+ * Parse one clock part ("6:00", "12:00 AM", "21:45") into minutes since
+ * midnight. An omitted AM/PM is inherited from the sibling part of the range
+ * (`fallbackAmPm`), so "12:00–6:30 AM" resolves 12:00 to midnight rather than
+ * noon. Returns null when the part is unparseable or out of range.
+ */
+function parseClockPart(part: string, fallbackAmPm?: string): number | null {
+  const trimmed = part.trim().toUpperCase();
+  const isPm = trimmed.includes("PM");
+  const isAm = trimmed.includes("AM");
+  const rawTime = trimmed.replace(/[^\d:]/g, "");
+  if (!rawTime) return null;
+
+  const [hStr, mStr] = rawTime.split(":");
+  let h = parseInt(hStr ?? "0", 10);
+  const m = parseInt(mStr ?? "0", 10);
+  if (isNaN(h)) return null;
+
+  let pm = isPm;
+  if (!isPm && !isAm && fallbackAmPm) pm = fallbackAmPm.includes("PM");
+
+  if (pm && h < 12) h += 12;
+  // 12 o'clock: PM stays noon; AM — explicit or inherited from the end part —
+  // is midnight.
+  if (!pm && (isAm || fallbackAmPm === "AM") && h === 12) h = 0;
+
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + (isNaN(m) ? 0 : m);
+}
+
+/** "PM" / "AM" when a clock part states it explicitly, else undefined. */
+function explicitAmPm(part: string): string | undefined {
+  const upper = part.toUpperCase();
+  if (upper.includes("PM")) return "PM";
+  if (upper.includes("AM")) return "AM";
+  return undefined;
+}
+
+/**
  * Start time of a time slot in minutes since midnight (0–1439), or null if the
  * slot's start can't be parsed. Handles 12-hour ("6:00–7:00 AM", with the
  * AM/PM inherited from the end part when the start omits it, and 12:00 AM
@@ -700,43 +738,35 @@ export function timeSlotStartMinutes(timeSlot: string): number | null {
   const normalized = timeSlot.replace(/[–—]/g, "-").replace(/\s+to\s+/i, "-");
   const parts = normalized.split("-");
 
-  const parseOne = (part: string, fallbackAmPm?: string): number | null => {
-    const trimmed = part.trim().toUpperCase();
-    const isPm = trimmed.includes("PM");
-    const isAm = trimmed.includes("AM");
-    const rawTime = trimmed.replace(/[^\d:]/g, "");
-    if (!rawTime) return null;
-
-    const [hStr, mStr] = rawTime.split(":");
-    let h = parseInt(hStr ?? "0", 10);
-    const m = parseInt(mStr ?? "0", 10);
-    if (isNaN(h)) return null;
-
-    let pm = isPm;
-    if (!isPm && !isAm && fallbackAmPm) pm = fallbackAmPm.includes("PM");
-
-    if (pm && h < 12) h += 12;
-    // 12 o'clock: PM stays noon; AM — explicit or inherited from the end part —
-    // is midnight.
-    if (!pm && (isAm || fallbackAmPm === "AM") && h === 12) h = 0;
-
-    if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-    return h * 60 + (isNaN(m) ? 0 : m);
-  };
-
   if (parts.length < 2) {
     // Bare single time (no range) — parse it on its own.
-    return parseOne(parts[0] ?? "");
+    return parseClockPart(parts[0] ?? "");
   }
 
-  const endPart = parts[1] ?? "";
-  const endAmPm = endPart.toUpperCase().includes("PM")
-    ? "PM"
-    : endPart.toUpperCase().includes("AM")
-      ? "AM"
-      : undefined;
+  return parseClockPart(parts[0] ?? "", explicitAmPm(parts[1] ?? ""));
+}
 
-  return parseOne(parts[0] ?? "", endAmPm);
+/**
+ * End time of a real time RANGE in absolute minutes, or null for a bare point
+ * time ("10:30 PM") which carries no duration. A range that runs past midnight
+ * wraps beyond 1440 ("11:00 PM–06:00 AM" → 1800), so end > start always holds
+ * for spans. Used by the sleep estimate, where the bedtime anchor is the end of
+ * the last evening activity.
+ */
+export function routineSlotEndMinutes(timeSlot: string): number | null {
+  if (!timeSlot) return null;
+
+  const normalized = timeSlot.replace(/[–—]/g, "-").replace(/\s+to\s+/i, "-");
+  const parts = normalized.split("-");
+  const startPart = (parts[0] ?? "").trim();
+  const endPart = (parts[1] ?? "").trim();
+  if (parts.length < 2 || !startPart || !endPart) return null;
+
+  const start = parseClockPart(startPart, explicitAmPm(endPart));
+  const end = parseClockPart(endPart, explicitAmPm(startPart));
+  if (start === null || end === null) return null;
+
+  return end < start ? end + 24 * 60 : end;
 }
 
 /**
@@ -757,47 +787,83 @@ export const ROUTINE_SLEEP_NIGHT_CUTOFF_MIN = 4 * 60;
  */
 export const ROUTINE_SLEEP_MORNING_END_MIN = 12 * 60;
 
-export type RoutineSleepBar = { weekday: number; startMinutes: number | null };
+export type RoutineSleepBar = {
+  weekday: number;
+  startMinutes: number | null;
+  /**
+   * End of the bar in absolute minutes (see routineSlotEndMinutes), or null /
+   * omitted for a bare point-time bar that has no duration.
+   */
+  endMinutes?: number | null;
+};
+
+/**
+ * When a bar puts you to sleep.
+ *
+ * A block's END is the bedtime — the closing activity finishes and you go to
+ * sleep — so "10:05–11:00 PM Recreational" anchors at 11:00 PM, not 10:05 PM.
+ * `limit` is the moment the night is over for that bar: cutoff + 24h for an
+ * evening bar of day D, and plain cutoff for an after-midnight bar of D+1. A bar
+ * whose end reaches or passes that limit is itself the sleep block ("11:00 PM–
+ * 06:00 AM", "12:00–6:30 AM"), so its end is the wake-up side and its START is
+ * the bedtime; a bare point-time bar ("10:30 PM") has no duration and does the
+ * same. Because every anchor therefore stays below `limit`, and the wake anchor
+ * is always at/after the plain cutoff, wake − bed stays strictly positive.
+ */
+function bedAnchorMinutes(bar: { start: number; end: number | null }, limit: number): number {
+  if (bar.end !== null && bar.end < limit) return bar.end;
+  return bar.start;
+}
 
 /**
  * Planned sleep per weekday (0=Mon … 6=Sun) in minutes, or null for a night
  * that can't be measured. For day D:
  *
- *   bed  = latest of (D's bars starting at/after the cutoff) and (D+1's bars
+ *   bed  = latest of (the END of each of D's bars starting at/after the cutoff,
+ *          falling back to its start — see bedAnchorMinutes) and (D+1's bars
  *          starting before the cutoff, shifted +24h — the after-midnight bars
- *          that close out D's night);
+ *          that close out D's night, anchored at their start);
  *   wake = first bar of D+1 starting at/after the cutoff and before noon (the
  *          real morning bar);
  *   sleep = wake + 24h − bed.
  *
- * So "last bar of the evening chain → first bar of the next morning" holds even
+ * So "the last thing you do → the first thing you do next morning" holds even
  * when the bedtime bar itself sits after midnight: 10:30 PM wind-down, a
- * 12:00–6:30 AM Sleep bar and a 6:30 AM wake-up bar measure 6h 30m. Schedules
- * whose bars never cross midnight produce exactly the same numbers as the plain
- * last-bar → first-next-bar rule (10:30 PM → 6:30 AM = 8h). Null when the night
- * has no bedtime anchor or no next-morning bar.
+ * 12:00–6:30 AM Sleep bar and a 6:30 AM wake-up bar measure 6h 30m, and an
+ * evening ending with 10:05–11:00 PM followed by a 6:00 AM wake-up bar measures
+ * 7h 00m (not the 7h 55m you get by anchoring at the block's start). Null when
+ * the night has no bedtime anchor or no next-morning bar.
  */
 export function computeRoutineSleepMinutes(
   bars: RoutineSleepBar[],
   cutoffMin: number = ROUTINE_SLEEP_NIGHT_CUTOFF_MIN,
   morningEndMin: number = ROUTINE_SLEEP_MORNING_END_MIN,
 ): (number | null)[] {
-  const startsByDay: number[][] = Array.from({ length: 7 }, () => []);
+  const byDay: { start: number; end: number | null }[][] = Array.from({ length: 7 }, () => []);
   for (const bar of bars) {
     if (bar.startMinutes === null || bar.weekday < 0 || bar.weekday > 6) continue;
-    startsByDay[bar.weekday]!.push(bar.startMinutes);
+    byDay[bar.weekday]!.push({ start: bar.startMinutes, end: bar.endMinutes ?? null });
   }
 
   const sleepMinutes: (number | null)[] = [];
   for (let d = 0; d < 7; d++) {
-    const today = startsByDay[d]!;
-    const next = startsByDay[(d + 1) % 7]!;
+    const today = byDay[d]!;
+    const next = byDay[(d + 1) % 7]!;
 
     const bedCandidates = [
-      ...today.filter((m) => m >= cutoffMin),
-      ...next.filter((m) => m < cutoffMin).map((m) => m + 24 * 60),
+      ...today
+        .filter((b) => b.start >= cutoffMin)
+        .map((b) => bedAnchorMinutes(b, cutoffMin + 24 * 60)),
+      // After-midnight bars of D+1 belong to D's night: their anchors move a day
+      // later. A bar that runs to/into the morning is the sleep block itself, so
+      // it anchors at its start (see bedAnchorMinutes).
+      ...next
+        .filter((b) => b.start < cutoffMin)
+        .map((b) => bedAnchorMinutes(b, cutoffMin) + 24 * 60),
     ];
-    const wakeCandidates = next.filter((m) => m >= cutoffMin && m < morningEndMin);
+    const wakeCandidates = next
+      .filter((b) => b.start >= cutoffMin && b.start < morningEndMin)
+      .map((b) => b.start);
 
     if (bedCandidates.length === 0 || wakeCandidates.length === 0) {
       sleepMinutes.push(null);
