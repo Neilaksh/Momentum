@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { lazy, Suspense, useMemo, useState, useEffect } from "react";
+import { lazy, Suspense, useMemo, useRef, useState, useEffect } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -219,6 +219,10 @@ function RoutineEmojiPicker({
 const STORAGE_CUSTOM_SLOTS_KEY = "momentum_custom_time_slots";
 const STORAGE_CUSTOM_CATS_KEY = "momentum_custom_categories";
 const STORAGE_SLOT_ORDER_KEY = "momentum_slot_order";
+// Device-local fallback for the per-day on/off switches (see the days-off block
+// in RoutinesPage): used only while the routine_days_off column is not available
+// on the database, and pushed up to the profile automatically once it is.
+const STORAGE_DAYS_OFF_KEY = "momentum_routine_days_off";
 
 // Each weekly routine ("primary" | "alternate") keeps its own time-slot rows,
 // categories, and manual slot ordering. Keys are suffixed per variant, so
@@ -230,6 +234,27 @@ const catsKeyFor = (v: string) =>
   v === "primary" ? STORAGE_CUSTOM_CATS_KEY : `${STORAGE_CUSTOM_CATS_KEY}_${v}`;
 const slotOrderKeyFor = (v: string) =>
   v === "primary" ? STORAGE_SLOT_ORDER_KEY : `${STORAGE_SLOT_ORDER_KEY}_${v}`;
+const daysOffKeyFor = (v: string) =>
+  v === "primary" ? STORAGE_DAYS_OFF_KEY : `${STORAGE_DAYS_OFF_KEY}_${v}`;
+
+/** Read one week's device-local days off (empty when unset or unreadable). */
+function readLocalDaysOff(variant: string): number[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = localStorage.getItem(daysOffKeyFor(variant));
+    return saved ? routineWeekdays(JSON.parse(saved)) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Persist one week's device-local days off. */
+function writeLocalDaysOff(variant: string, days: number[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(daysOffKeyFor(variant), JSON.stringify(days));
+  } catch {}
+}
 
 /**
  * Move Routine Slot Popover
@@ -556,9 +581,19 @@ function RoutinesPage() {
   // still fetched and still drawn in the grid so the plan is never lost — but all
   // derived numbers (weekly hours, per-day load, category breakdown, and the
   // planned-sleep estimate) skip it, and its blocks are read-only in edit mode.
+  //
+  // If the profile column is not available yet (migration not applied), the
+  // switch still works from a device-local list and is pushed up automatically
+  // once the column shows up, so nothing the user set is lost either way.
+  const daysOffSynced = routineData?.daysOffSynced ?? false;
+  const [localDaysOff, setLocalDaysOff] = useState<number[]>([]);
+  useEffect(() => {
+    setLocalDaysOff(readLocalDaysOff(activeVariant));
+  }, [activeVariant]);
+
   const daysOff = useMemo(
-    () => routineWeekdays(routineData?.daysOff) as number[],
-    [routineData?.daysOff],
+    () => (daysOffSynced ? routineWeekdays(routineData?.daysOff) : localDaysOff),
+    [daysOffSynced, routineData?.daysOff, localDaysOff],
   );
   const daysOffSet = useMemo(() => new Set(daysOff), [daysOff]);
   const enabledDayCount = 7 - daysOff.length;
@@ -977,6 +1012,10 @@ function RoutinesPage() {
 
   // -------- Day on/off switches (Edit mode → day header toggle) --------
   const setDaysOffFn = useServerFn(setRoutineDaysOff);
+  // One-time flags: whether the "saved on this device" hint has been shown, and
+  // whether a device-local choice has already been handed off to the profile.
+  const daysOffLocalNoticeShown = useRef(false);
+  const daysOffPushedRef = useRef(false);
   const daysOffMutation = useMutation({
     mutationFn: (weekdays: number[]) =>
       setDaysOffFn({ data: { weekdays, variant: activeVariant } }),
@@ -1014,11 +1053,46 @@ function RoutinesPage() {
       return;
     }
 
+    // Mirror the choice on this device. It doubles as the working store while the
+    // profile column is unavailable, and as the value pushed up by the effect
+    // below once it is.
+    writeLocalDaysOff(activeVariant, next);
+
+    if (!daysOffSynced) {
+      setLocalDaysOff(next);
+      if (!daysOffLocalNoticeShown.current) {
+        daysOffLocalNoticeShown.current = true;
+        toast.info("Saved on this device — it will sync to your account automatically.");
+      }
+      return;
+    }
+
     qc.setQueryData(["routine"], (old: unknown) =>
       old && typeof old === "object" ? { ...(old as object), daysOff: next } : old,
     );
     daysOffMutation.mutate(next);
   };
+
+  // One-time hand-off of a device-local days-off choice to the profile, run as
+  // soon as the column is available and the profile has nothing stored yet. Uses
+  // the ref (not state) so a refetch can never push the same list twice.
+  useEffect(() => {
+    if (!daysOffSynced || daysOffPushedRef.current) return;
+    if ((routineData?.daysOff ?? []).length > 0) return;
+    const local = readLocalDaysOff(activeVariant);
+    if (local.length === 0) return;
+    daysOffPushedRef.current = true;
+    setDaysOffFn({ data: { weekdays: local, variant: activeVariant } })
+      .then(() => {
+        void qc.invalidateQueries({ queryKey: ["routine"] });
+        toast.success(
+          `Your ${routineDaysOffLabel(local) ?? "day off"} choice was saved to your account.`,
+        );
+      })
+      .catch(() => {
+        daysOffPushedRef.current = false;
+      });
+  }, [daysOffSynced, activeVariant, routineData?.daysOff, setDaysOffFn, qc]);
 
   // Export Routine JSON
   const handleExportRoutinesJSON = () => {

@@ -688,7 +688,11 @@ export const getRoutine = createServerFn({ method: "POST" })
     // Days switched off for THIS week (0=Mon … 6=Sun). The rows are still sent —
     // the client keeps them visible in the matrix so re-enabling a day restores
     // its schedule instantly — but they are excluded from every derived number.
-    const daysOff = await loadRoutineDaysOff(context.supabase, context.userId, activeVariant);
+    const { daysOff, daysOffSynced } = await loadRoutineDaysOff(
+      context.supabase,
+      context.userId,
+      activeVariant,
+    );
 
     const { data, error } = await context.supabase
       .from("routine_tasks")
@@ -700,7 +704,7 @@ export const getRoutine = createServerFn({ method: "POST" })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
     if (error) throw new Error(error.message);
-    return { tasks: data ?? [], activeVariant, daysOff };
+    return { tasks: data ?? [], activeVariant, daysOff, daysOffSynced };
   });
 
 export const setActiveRoutineVariant = createServerFn({ method: "POST" })
@@ -718,7 +722,7 @@ export const setActiveRoutineVariant = createServerFn({ method: "POST" })
     // Return the target week's tasks AND its days off in the same round-trip so
     // the client can swap the routine cache atomically — no second fetch, no
     // stale read, and no moment where week B is shown with week A's day offs.
-    const daysOff = await loadRoutineDaysOff(context.supabase, context.userId, data.variant);
+    const daysOffState = await loadRoutineDaysOff(context.supabase, context.userId, data.variant);
 
     const { data: routineRows, error: routineError } = await context.supabase
       .from("routine_tasks")
@@ -730,7 +734,12 @@ export const setActiveRoutineVariant = createServerFn({ method: "POST" })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
     if (routineError) throw new Error(routineError.message);
-    return { tasks: routineRows ?? [], activeVariant: data.variant, daysOff };
+    return {
+      tasks: routineRows ?? [],
+      activeVariant: data.variant,
+      daysOff: daysOffState.daysOff,
+      daysOffSynced: daysOffState.daysOffSynced,
+    };
   });
 
 /**
@@ -789,14 +798,16 @@ async function loadRoutineDaysOff(
   supabase: SupabaseClient<Database>,
   userId: string,
   variant: RoutineVariant,
-): Promise<number[]> {
+): Promise<{ daysOff: number[]; daysOffSynced: boolean }> {
   const { data, error } = await supabase
     .from("profiles")
     .select("routine_days_off")
     .eq("id", userId)
     .maybeSingle();
-  if (error) return [];
-  return routineDaysOffFor(data?.routine_days_off, variant);
+  // `daysOffSynced: false` tells the client the column is unavailable, so it
+  // falls back to its device-local list and pushes it up after the migration.
+  if (error) return { daysOff: [], daysOffSynced: false };
+  return { daysOff: routineDaysOffFor(data?.routine_days_off, variant), daysOffSynced: true };
 }
 
 /** Friendlier message when routine_days_off does not exist in the database yet. */
