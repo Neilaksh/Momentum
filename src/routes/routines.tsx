@@ -26,6 +26,7 @@ import {
   List,
   MoreHorizontal,
   Move,
+  Moon,
   Pause,
   Play,
   Plus,
@@ -704,6 +705,44 @@ function RoutinesPage() {
       }))
       .sort((a, b) => Number(b.hours) - Number(a.hours));
 
+    // ===================== SLEEP ESTIMATE =====================
+    // Sleep for day D = (first bar start of day D+1, offset +24h) − (last bar
+    // start of day D). The last routine bar of the day is the go-to-sleep
+    // anchor and the next day's first bar is the wake-up anchor; the +24h wrap
+    // makes e.g. 10:30 PM → 5:45 AM next day = 7h 15m. Per-day math so
+    // different weekend schedules are handled naturally.
+    const slotStartsByDay: number[][] = Array.from({ length: 7 }, () => []);
+    for (const t of tasks) {
+      if (!t.is_active) continue;
+      const start = timeSlotStartMinutes(parseRoutineTitle(t.title).timeSlot);
+      if (start === null) continue;
+      (slotStartsByDay[t.weekday] ?? []).push(start);
+    }
+    const sleepMinutes: (number | null)[] = [];
+    for (let d = 0; d < 7; d++) {
+      const todayStarts = slotStartsByDay[d] ?? [];
+      const nextStarts = slotStartsByDay[(d + 1) % 7] ?? [];
+      if (todayStarts.length === 0 || nextStarts.length === 0) {
+        sleepMinutes.push(null);
+        continue;
+      }
+      const bed = Math.max(...todayStarts);
+      const wake = Math.min(...nextStarts) + 24 * 60;
+      sleepMinutes.push(wake - bed);
+    }
+    const trackedSleep = sleepMinutes.filter((m): m is number => m !== null);
+    const sleepDaysTracked = trackedSleep.length;
+    const avgSleepMins =
+      sleepDaysTracked > 0
+        ? trackedSleep.reduce((a, b) => a + b, 0) / sleepDaysTracked
+        : null;
+    const minSleepMins = sleepDaysTracked > 0 ? Math.min(...trackedSleep) : null;
+    const maxSleepMins = sleepDaysTracked > 0 ? Math.max(...trackedSleep) : null;
+    const fmtSleep = (mins: number | null): string =>
+      mins === null
+        ? "—"
+        : `${Math.floor(mins / 60)}h ${String(Math.round(mins % 60)).padStart(2, "0")}m`;
+
     return {
       totalWeeklyMins,
       totalWeeklyHours,
@@ -717,6 +756,15 @@ function RoutinesPage() {
         level: d.mins < 240 ? "Light" : d.mins <= 480 ? "Balanced" : "Intense",
       })),
       activeRoutineCount: tasks.filter((t) => t.is_active).length,
+      sleepByDay: sleepMinutes.map((m) => fmtSleep(m)),
+      avgSleepLabel: fmtSleep(avgSleepMins),
+      avgSleepMinsValue: avgSleepMins,
+      sleepRangeLabel:
+        minSleepMins !== null && maxSleepMins !== null
+          ? `${fmtSleep(minSleepMins)}–${fmtSleep(maxSleepMins)}`
+          : null,
+      sleepDaysTracked,
+      sleepHealthy: avgSleepMins !== null && avgSleepMins >= 420 && avgSleepMins <= 540,
     };
   }, [tasks]);
 
@@ -1334,7 +1382,7 @@ function RoutinesPage() {
         </div>
 
         {/* Calculated Stats Overview */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Weekly Scheduled</span>
@@ -1359,6 +1407,32 @@ function RoutinesPage() {
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
               {tasks.length} total registered
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Avg Sleep (planned)</span>
+              <Moon className="h-3.5 w-3.5 text-purple-400" />
+            </div>
+            <div
+              className={`num mt-1 text-2xl font-bold ${
+                analytics.avgSleepMinsValue === null
+                  ? "text-muted-foreground"
+                  : analytics.sleepHealthy
+                    ? "text-emerald-400"
+                    : "text-amber-400"
+              }`}
+            >
+              {analytics.avgSleepLabel}
+              <span className="text-xs font-normal text-muted-foreground">
+                {analytics.avgSleepMinsValue !== null ? " /night" : ""}
+              </span>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              {analytics.sleepRangeLabel !== null
+                ? `${analytics.sleepRangeLabel} across days · ${analytics.sleepDaysTracked}/7 days tracked`
+                : "Add late-night & morning bars to track sleep"}
             </div>
           </div>
         </div>
@@ -2056,11 +2130,21 @@ function RoutinesPage() {
                         />
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex items-center gap-2">
                       <span className="num font-bold">{dl.hours} hrs</span>
                       <span className="text-[10px] text-muted-foreground ml-1.5">
                         ({dl.count} slots)
                       </span>
+                      {analytics.sleepByDay[dl.weekday] &&
+                        analytics.sleepByDay[dl.weekday] !== "—" && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 border border-purple-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-purple-400"
+                          title="Planned sleep: last routine bar of the day → first bar of the next day"
+                        >
+                          <Moon className="h-3 w-3" />
+                          {analytics.sleepByDay[dl.weekday]}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
