@@ -1025,6 +1025,9 @@ function RoutinesPage() {
       qc.setQueryData(["routine"], (old: unknown) =>
         old && typeof old === "object" ? { ...(old as object), daysOff: res.daysOff } : old,
       );
+      // Mirror the stored value on this device, so the fallback list stays the
+      // last known truth even if the profile column ever becomes unavailable.
+      writeLocalDaysOff(res.activeVariant, res.daysOff);
       invalidate();
     },
     onError: () => {
