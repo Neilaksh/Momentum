@@ -16,6 +16,9 @@ dist-ssr
 .nitro
 *.local
 
+# Icon generator preview page
+.icon-preview/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

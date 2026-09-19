@@ -5,7 +5,7 @@
 // Bump on every deploy that changes the precache list or invalidates hashed
 // assets: `activate` deletes every cache that is not the current version, so a
 // stale client that keeps the old name would otherwise hold onto dead assets.
-const CACHE = "momentum-v3";
+const CACHE = "momentum-v4";
 const PRECACHE = [
   "/",
   "/manifest.webmanifest",
