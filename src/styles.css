@@ -131,11 +131,14 @@
     touch-action: manipulation;
   }
 
+  html,
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+    max-width: 100%;
   }
 
   .num {

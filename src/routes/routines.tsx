@@ -1468,7 +1468,7 @@ function RoutinesPage() {
 
   return (
     <AppShell profile={weekData?.profile ?? null}>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-full overflow-x-clip min-w-0">
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-1">
@@ -1634,42 +1634,70 @@ function RoutinesPage() {
         </div>
 
         {/* View Switches & Toolbar */}
-        <div className="flex flex-nowrap items-center gap-4 overflow-x-auto border-b border-border/60 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:justify-between">
-          <div className="flex shrink-0 items-center gap-1 rounded-full bg-secondary/80 p-1 text-xs">
-            <button
-              onClick={() => setViewMode("matrix")}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-all ${
-                viewMode === "matrix"
-                  ? "bg-background text-foreground shadow"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Grid className="h-3.5 w-3.5" /> 7-Day Matrix Grid
-            </button>
-            <button
-              onClick={() => setViewMode("day")}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-all ${
-                viewMode === "day"
-                  ? "bg-background text-foreground shadow"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <List className="h-3.5 w-3.5" /> Day View
-            </button>
-            <button
-              onClick={() => setViewMode("analytics")}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-all ${
-                viewMode === "analytics"
-                  ? "bg-background text-foreground shadow"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <BarChart3 className="h-3.5 w-3.5" /> Calculations & Analytics
-            </button>
+        <div className="space-y-3 border-b border-border/60 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            {/* View Switcher Tabs */}
+            <div className="flex shrink-0 items-center gap-1 rounded-full bg-secondary/80 p-1 text-xs max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <button
+                onClick={() => setViewMode("matrix")}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-all shrink-0 ${
+                  viewMode === "matrix"
+                    ? "bg-background text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Grid className="h-3.5 w-3.5" /> 7-Day Matrix Grid
+              </button>
+              <button
+                onClick={() => setViewMode("day")}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-all shrink-0 ${
+                  viewMode === "day"
+                    ? "bg-background text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <List className="h-3.5 w-3.5" /> Day View
+              </button>
+              <button
+                onClick={() => setViewMode("analytics")}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-all shrink-0 ${
+                  viewMode === "analytics"
+                    ? "bg-background text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <BarChart3 className="h-3.5 w-3.5" /> Calculations & Analytics
+              </button>
+            </div>
+
+            {/* Actions: Clear & Edit Mode Toggle */}
+            <div className="flex shrink-0 items-center gap-2">
+              {tasks.length > 0 || customTimeSlots.length > 0 ? (
+                <button
+                  onClick={() => setIsClearConfirmOpen(true)}
+                  className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors whitespace-nowrap px-2 py-1"
+                >
+                  <RotateCcw className="h-3 w-3" /> Clear Timeslots
+                </button>
+              ) : null}
+
+              <button
+                onClick={() => setEditMode((e) => !e)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
+                  editMode
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "border border-border bg-card text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Edit2 className="h-3.5 w-3.5" />
+                {editMode ? "Done Editing" : "Edit"}
+              </button>
+            </div>
           </div>
 
+          {/* Day Selector Pills (Only in Day View) - dedicated row, no squeeze */}
           {viewMode === "day" && (
-            <div className="flex items-center gap-1 overflow-x-auto">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {WEEKDAY_NAMES.map((name, idx) => {
                 const isOff = daysOffSet.has(idx);
                 return (
@@ -1680,7 +1708,7 @@ function RoutinesPage() {
                     aria-pressed={selectedDay === idx}
                     aria-label={isOff ? `${name}, day off` : name}
                     title={isOff ? `${name} is switched off (day off)` : name}
-                    className={`rounded-lg px-3 py-2 sm:py-1 min-h-[36px] flex items-center justify-center text-xs font-medium transition-colors ${
+                    className={`rounded-lg px-3 py-2 sm:py-1 min-h-[36px] flex items-center justify-center text-xs font-medium transition-colors shrink-0 ${
                       selectedDay === idx
                         ? "bg-primary text-primary-foreground font-semibold shadow-sm"
                         : isOff
@@ -1694,36 +1722,14 @@ function RoutinesPage() {
               })}
             </div>
           )}
-
-          {tasks.length > 0 || customTimeSlots.length > 0 ? (
-            <button
-              onClick={() => setIsClearConfirmOpen(true)}
-              className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors ml-auto"
-            >
-              <RotateCcw className="h-3 w-3" /> Clear Timeslots & Schedule
-            </button>
-          ) : null}
-
-          {/* Matrix Edit / Done Editing toggle (view mode by default) */}
-          <button
-            onClick={() => setEditMode((e) => !e)}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-              editMode
-                ? "bg-primary text-primary-foreground shadow"
-                : "border border-border bg-card text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Edit2 className="h-3.5 w-3.5" />
-            {editMode ? "Done Editing" : "Edit"}
-          </button>
         </div>
 
         {/* Edit-mode hint for the per-day on/off switches, so the new control is
             discoverable exactly when it is available. */}
         {editMode && (
-          <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-card/40 px-4 py-2.5 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-card/40 px-4 py-2.5 text-[11px] text-muted-foreground min-w-0">
             <Power className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-            <span>
+            <span className="min-w-0">
               Tap the power icon on any day to switch that day off. Its slots are kept — they just
               stop counting toward your weekly hours, categories and sleep estimate.
             </span>
@@ -1756,7 +1762,11 @@ function RoutinesPage() {
         {viewMode === "matrix" && (
           <div className="space-y-4">
             <ScrollHint containerClassName="rounded-xl border border-border/80 bg-card shadow-sm">
-              <table className="w-full border-collapse text-left text-xs min-w-[950px]">
+              <table
+                className={`w-full border-collapse text-left text-xs ${
+                  editMode ? "min-w-[1050px]" : "min-w-[950px]"
+                }`}
+              >
                 {/* Header Row */}
                 <thead className="sticky top-0 z-20">
                   <tr className="border-b border-border bg-secondary/95 backdrop-blur">
@@ -2187,7 +2197,7 @@ function RoutinesPage() {
                 )}
               </div>
 
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <div className="flex w-full sm:w-auto max-w-full flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -2197,7 +2207,7 @@ function RoutinesPage() {
                     setCopyTargetDay((selectedDay + 1) % 7);
                     setIsCopyScheduleOpen(true);
                   }}
-                  className="gap-1.5 text-xs border-border hover:bg-secondary"
+                  className="gap-1.5 text-xs border-border hover:bg-secondary flex-1 sm:flex-initial"
                   title={
                     isSelectedDayOff
                       ? `Switch ${WEEKDAY_NAMES[selectedDay]} back on to copy it`
@@ -2211,6 +2221,7 @@ function RoutinesPage() {
                     size="sm"
                     disabled={isSelectedDayOff}
                     onClick={() => openAddModal(selectedDay)}
+                    className="flex-1 sm:flex-initial"
                     title={
                       isSelectedDayOff
                         ? `Switch ${WEEKDAY_NAMES[selectedDay]} back on to add slots`
@@ -2228,7 +2239,7 @@ function RoutinesPage() {
                     variant={isSelectedDayOff ? "default" : "outline"}
                     size="sm"
                     onClick={() => toggleDayOff(selectedDay)}
-                    className="gap-1.5 text-xs"
+                    className="gap-1.5 text-xs flex-1 sm:flex-initial"
                     title={
                       isSelectedDayOff
                         ? `Switch ${WEEKDAY_NAMES[selectedDay]} back on`

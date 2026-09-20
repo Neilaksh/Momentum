@@ -137,7 +137,7 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
       </header>
 
       {/* Main content with safe area and bottom nav padding */}
-      <main className="mx-auto max-w-7xl px-4 py-5 pb-[calc(4.25rem+max(1.25rem,env(safe-area-inset-bottom)))] sm:px-6 sm:py-8 md:pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <main className="mx-auto max-w-7xl w-full min-w-0 px-4 py-5 pb-[calc(4.25rem+max(1.25rem,env(safe-area-inset-bottom)))] sm:px-6 sm:py-8 md:pb-[max(2rem,env(safe-area-inset-bottom))] overflow-x-clip">
         {children}
       </main>
 
