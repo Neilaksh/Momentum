@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { RequireAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
 import { PieStat } from "@/components/PieStat";
+import { ScrollHint } from "@/components/ScrollHint";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -143,7 +144,7 @@ function HabitYearHeatmapDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span>{parseHabitTitle(stat.habit.title).displayTitle}</span>
@@ -159,7 +160,7 @@ function HabitYearHeatmapDialog({
         </DialogHeader>
 
         {/* Heatmap Grid */}
-        <div className="mt-4 overflow-x-auto pb-2">
+        <ScrollHint containerClassName="mt-4 pb-2">
           <div className="inline-flex flex-col gap-1 min-w-[650px]">
             {[0, 1, 2, 3, 4, 5, 6].map((dayIdx) => {
               const dayName = WEEKDAY_NAMES[dayIdx]!.slice(0, 1);
@@ -202,25 +203,25 @@ function HabitYearHeatmapDialog({
               );
             })}
           </div>
+        </ScrollHint>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground border-t border-border/60 pt-3">
-            <div className="flex items-center gap-4">
-              <span>
-                <strong>{stat.yearDone}</strong> completed days
-              </span>
-              <span>
-                <strong>{stat.yearPct}%</strong> yearly target
-              </span>
-              <span>
-                <strong>{stat.habit.target_per_week}×</strong> / week goal
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-[11px]">
-              <span>Less</span>
-              <div className="h-2.5 w-2.5 rounded-[2px] bg-secondary/70" />
-              <div className="h-2.5 w-2.5 rounded-[2px] bg-emerald-500" />
-              <span>More</span>
-            </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground border-t border-border/60 pt-3">
+          <div className="flex items-center gap-4">
+            <span>
+              <strong>{stat.yearDone}</strong> completed days
+            </span>
+            <span>
+              <strong>{stat.yearPct}%</strong> yearly target
+            </span>
+            <span>
+              <strong>{stat.habit.target_per_week}×</strong> / week goal
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span>Less</span>
+            <div className="h-2.5 w-2.5 rounded-[2px] bg-secondary/70" />
+            <div className="h-2.5 w-2.5 rounded-[2px] bg-emerald-500" />
+            <span>More</span>
           </div>
         </div>
       </DialogContent>
@@ -758,7 +759,7 @@ function HabitsPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search habits..."
-              className="h-11 md:h-8 w-full rounded-md border border-border bg-secondary/50 pl-8 pr-10 md:pr-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-11 md:h-8 w-full rounded-md border border-border bg-secondary/50 pl-8 pr-10 md:pr-3 text-base md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
             {searchQuery && (
               <button

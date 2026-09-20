@@ -646,7 +646,7 @@ function UnifiedTasksPage() {
             </div>
           </div>
 
-          <div className="mt-4 h-36 min-w-0">
+          <div className="mt-4 h-36 min-w-0 [content-visibility:auto] [contain-intrinsic-size:144px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={chartData}
@@ -720,12 +720,16 @@ function UnifiedTasksPage() {
             const dayDone = d.tasks.filter((t) => t.completed_at).length;
             const dayTotal = d.tasks.length;
             const isComplete = dayTotal > 0 && dayDone === dayTotal;
+            const dayLabel = `${WEEKDAY_NAMES[i]}, ${d.date}. ${dayDone} of ${dayTotal} completed.${isDayToday ? " Today." : ""}${hasExam ? " Exam scheduled." : ""}`;
 
             return (
               <button
                 key={d.date}
+                type="button"
                 onClick={() => setSelectedDate(d.date)}
-                className={`flex flex-col items-center justify-between rounded-xl border p-1.5 sm:p-3 text-center transition-all ${
+                aria-pressed={isSelected}
+                aria-label={dayLabel}
+                className={`flex min-h-[64px] sm:min-h-[76px] select-none flex-col items-center justify-between rounded-xl border p-1.5 sm:p-3 text-center transition-all ${
                   isSelected
                     ? "border-primary bg-primary/10 shadow-sm shadow-primary/20 ring-1 ring-primary"
                     : "border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/40"
@@ -733,7 +737,8 @@ function UnifiedTasksPage() {
               >
                 <div className="flex w-full items-center justify-between">
                   <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate">
-                    {WEEKDAY_NAMES[i]!.slice(0, 3)}
+                    <span className="sm:hidden">{WEEKDAY_NAMES[i]!.slice(0, 2)}</span>
+                    <span className="hidden sm:inline">{WEEKDAY_NAMES[i]!.slice(0, 3)}</span>
                   </span>
                   <div className="flex items-center gap-0.5 sm:gap-1">
                     {hasExam && (
@@ -761,7 +766,7 @@ function UnifiedTasksPage() {
                   </div>
                 </div>
 
-                <div className="my-0.5 sm:my-1.5 text-sm sm:text-lg font-bold num">
+                <div className="my-0.5 sm:my-1 text-sm sm:text-lg font-bold num">
                   {parseISODate(d.date).getDate()}
                 </div>
 
@@ -1225,9 +1230,7 @@ function UnifiedTasksPage() {
                                 ? `${t.title} cannot be deleted — past days are read-only`
                                 : `Delete ${t.title}`
                             }
-                            title={
-                              isActiveDayPast ? "Past day — tasks are read-only" : undefined
-                            }
+                            title={isActiveDayPast ? "Past day — tasks are read-only" : undefined}
                             className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 p-3 -m-2 md:p-1 md:m-0 transition-opacity text-muted-foreground ${
                               isActiveDayPast ? "cursor-not-allowed" : "hover:text-destructive"
                             }`}
@@ -1289,6 +1292,8 @@ function UnifiedTasksPage() {
                           </label>
                           <input
                             type="number"
+                            inputMode="numeric"
+                            enterKeyHint="done"
                             min={1}
                             max={1440}
                             value={estDrafts[t.id] ?? ""}
@@ -1297,7 +1302,7 @@ function UnifiedTasksPage() {
                             }
                             placeholder="e.g. 30"
                             disabled={goalLocked || isActiveDayLocked}
-                            className="h-7 w-24 rounded-md border border-border bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                            className="h-8 sm:h-7 w-24 rounded-md border border-border bg-secondary/40 px-2 text-sm sm:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                           />
                           <span className="text-[11px] text-muted-foreground">
                             minutes (optional)
@@ -1317,7 +1322,9 @@ function UnifiedTasksPage() {
                             type="button"
                             size="sm"
                             className="h-7 px-2.5 text-xs"
-                            disabled={goalLocked || isActiveDayLocked || updateDescription.isPending}
+                            disabled={
+                              goalLocked || isActiveDayLocked || updateDescription.isPending
+                            }
                             onClick={() => {
                               const rawEst = estDrafts[t.id]?.trim();
                               const parsedEst = rawEst ? parseInt(rawEst, 10) : null;
@@ -1417,8 +1424,8 @@ function UnifiedTasksPage() {
         </form>
         {isActiveDayPast && (
           <p className="mt-2 text-xs text-muted-foreground">
-            Past days are read-only — select today to change tasks or a future day to add or
-            delete them.
+            Past days are read-only — select today to change tasks or a future day to add or delete
+            them.
           </p>
         )}
       </section>
@@ -1434,47 +1441,43 @@ function UnifiedTasksPage() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Click any day to view it — check off today's tasks, plan future days (add or
-              delete tasks); past days are read-only.
+              Click any day to view it — check off today's tasks, plan future days (add or delete
+              tasks); past days are read-only.
             </p>
           </div>
-
         </div>
 
-          <div className="flex sm:grid gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible pb-3 sm:pb-0 snap-x snap-mandatory sm:grid-cols-2 xl:grid-cols-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
-            {days$.map((day, i) => {
-              const isSelected = day.date === selectedDate;
-              const isDayToday = day.date === todayISO;
+        <div className="flex sm:grid gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible pb-3 sm:pb-0 snap-x snap-mandatory sm:grid-cols-2 xl:grid-cols-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
+          {days$.map((day, i) => {
+            const isSelected = day.date === selectedDate;
+            const isDayToday = day.date === todayISO;
 
-              return (
-                <div
-                  key={day.date}
-                  className="w-[85vw] max-w-[320px] shrink-0 snap-center sm:w-auto"
-                >
-                  <DayCard
-                    name={WEEKDAY_NAMES[i]!}
-                    date={day.date}
-                    isToday={isDayToday}
-                    isPast={day.date < todayISO}
-                    isSelected={isSelected}
-                    tasks={day.tasks}
-                    chainCompletedIds={chainCompletedIds}
-                    onSelectDay={() => {
-                      setSelectedDate(day.date);
-                      setTimeout(
-                        () =>
-                          focusPanelRef.current?.scrollIntoView({
-                            behavior: "smooth",
-                            block: "start",
-                          }),
-                        50,
-                      );
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
+            return (
+              <div key={day.date} className="w-[85vw] max-w-[320px] shrink-0 snap-center sm:w-auto">
+                <DayCard
+                  name={WEEKDAY_NAMES[i]!}
+                  date={day.date}
+                  isToday={isDayToday}
+                  isPast={day.date < todayISO}
+                  isSelected={isSelected}
+                  tasks={day.tasks}
+                  chainCompletedIds={chainCompletedIds}
+                  onSelectDay={() => {
+                    setSelectedDate(day.date);
+                    setTimeout(
+                      () =>
+                        focusPanelRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        }),
+                      50,
+                    );
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {/* Rename-task modal (pencil icon on a task row) */}

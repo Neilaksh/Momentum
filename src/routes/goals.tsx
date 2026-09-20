@@ -838,13 +838,14 @@ function HabitDurationControl({
     <div className="mt-1 flex items-center gap-1.5">
       <input
         type="number"
+        inputMode="numeric"
         min={1}
         max={3650}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         placeholder="days"
         aria-label="Tracking duration in days"
-        className="h-6 w-16 rounded-md border border-border bg-secondary/50 px-1.5 text-[10px] num text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        className="h-7 md:h-6 w-20 md:w-16 rounded-md border border-border bg-secondary/50 px-1.5 text-base md:text-[10px] num text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
       />
       <button
         disabled={!draftValid}

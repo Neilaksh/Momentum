@@ -112,7 +112,7 @@ export function WeeklyReviewView({ weekStart }: { weekStart: string }) {
               <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
                 Daily completions · Mon – Sun
               </p>
-              <div className="mt-3 h-48">
+              <div className="mt-3 h-48 [content-visibility:auto] [contain-intrinsic-size:192px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
                     <CartesianGrid vertical={false} stroke="var(--border)" />
@@ -243,7 +243,7 @@ export function WeeklyReviewView({ weekStart }: { weekStart: string }) {
               </p>
             ) : (
               <div className="mt-3 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
-                <div className="h-48">
+                <div className="h-48 [content-visibility:auto] [contain-intrinsic-size:192px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={review.subjects.map((e) => ({

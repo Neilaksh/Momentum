@@ -5,9 +5,10 @@
 // Bump on every deploy that changes the precache list or invalidates hashed
 // assets: `activate` deletes every cache that is not the current version, so a
 // stale client that keeps the old name would otherwise hold onto dead assets.
-const CACHE = "momentum-v4";
+const CACHE = "momentum-v5";
 const PRECACHE = [
   "/",
+  "/offline.html",
   "/manifest.webmanifest",
   "/favicon.ico",
   "/pwa-192.png",
@@ -74,7 +75,12 @@ self.addEventListener("fetch", (event) => {
           return res;
         } catch (err) {
           const cache = await caches.open(CACHE);
-          return (await cache.match(req)) || (await cache.match("/")) || Response.error();
+          return (
+            (await cache.match(req)) ||
+            (await cache.match("/")) ||
+            (await cache.match("/offline.html")) ||
+            Response.error()
+          );
         }
       })(),
     );

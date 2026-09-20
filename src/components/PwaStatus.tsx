@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Download, WifiOff } from "lucide-react";
 import { toast } from "sonner";
+import { usePlatform } from "@/hooks/use-platform";
+import { InstallGuideDialog } from "@/components/InstallGuideDialog";
 
 /**
  * `beforeinstallprompt` is not part of the DOM lib yet, so the deferred event is
@@ -16,15 +18,14 @@ const INSTALL_KEY = "momentum:install-prompt";
 
 /**
  * Owns the PWA lifecycle: service-worker registration, the "new version ready"
- * prompt, the install prompt and the offline indicator. Mounted once from the
- * root route.
- *
- * Nothing here may touch `navigator`/`location` during render — the root route
- * is server-rendered, so all browser access lives inside effects (which also
- * keeps the first client render byte-identical to the server output).
+ * prompt, the install prompt, the install guide dialog, and the offline indicator.
+ * Mounted once from the root route.
  */
 export function PwaStatus() {
   const [offline, setOffline] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const platform = usePlatform();
 
   // Offline indicator. Starts `false` so the banner can never flash during SSR
   // or before hydration; the effect syncs it to the real value immediately.
@@ -36,6 +37,15 @@ export function PwaStatus() {
     return () => {
       window.removeEventListener("online", sync);
       window.removeEventListener("offline", sync);
+    };
+  }, []);
+
+  // Listen for programmatic open requests (e.g. from AppShell install button)
+  useEffect(() => {
+    const handleOpen = () => setGuideOpen(true);
+    window.addEventListener("momentum:open-install-guide", handleOpen);
+    return () => {
+      window.removeEventListener("momentum:open-install-guide", handleOpen);
     };
   }, []);
 
@@ -77,6 +87,19 @@ export function PwaStatus() {
               if (installing.state === "installed") promptReload();
             });
           });
+
+          // Periodic check when returning to long-lived tabs (e.g. Firefox Android shortcut tabs)
+          let lastCheck = Date.now();
+          const checkUpdate = () => {
+            const now = Date.now();
+            if (now - lastCheck < 30 * 60 * 1000) return;
+            lastCheck = now;
+            void registration.update().catch(() => {});
+          };
+          window.addEventListener("focus", checkUpdate);
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") checkUpdate();
+          });
         })
         .catch((err) => {
           console.warn("[pwa] service worker registration failed", err);
@@ -90,30 +113,33 @@ export function PwaStatus() {
     }
   }, []);
 
-  // Install offer. Chrome fires `beforeinstallprompt` only once the app is
-  // actually installable (manifest + service worker + engagement), so the toast
-  // is never shown to browsers that cannot install. The choice is remembered in
-  // localStorage so the prompt appears at most once.
+  // Install offer handling.
+  // 1. For Chromium browsers: listens to `beforeinstallprompt` and offers native install or guide.
+  // 2. For non-Chromium browsers (Firefox Android, iOS Safari): offers a guide toast if not dismissed.
   useEffect(() => {
     const remember = () => {
       try {
         localStorage.setItem(INSTALL_KEY, "1");
       } catch {
-        // Storage can be unavailable (private mode); nagging at most once per
-        // session is an acceptable fallback.
+        // Storage can be unavailable in private mode
+      }
+    };
+
+    const isDismissed = () => {
+      try {
+        return localStorage.getItem(INSTALL_KEY) === "1";
+      } catch {
+        return false;
       }
     };
 
     const onBeforeInstall = (event: Event) => {
-      // Without preventDefault Chrome shows its own mini-infobar instead of
-      // letting us surface the install action in-app.
       event.preventDefault();
-      try {
-        if (localStorage.getItem(INSTALL_KEY) === "1") return;
-      } catch {
-        /* ignore */
-      }
+      if (isDismissed()) return;
+
       const installEvent = event as BeforeInstallPromptEvent;
+      setDeferredPrompt(installEvent);
+
       toast("Install Momentum", {
         id: "pwa-install",
         icon: <Download className="h-4 w-4" />,
@@ -122,10 +148,6 @@ export function PwaStatus() {
         action: {
           label: "Install",
           onClick: () => {
-            // `prompt()` may only be called once per event, so the toast is
-            // dismissed either way. A dismissal is remembered too, otherwise the
-            // offer would reappear on the next visit even though the user
-            // declined the native install sheet.
             void installEvent.prompt().then(async () => {
               const { outcome } = await installEvent.userChoice;
               if (outcome === "dismissed") remember();
@@ -140,29 +162,89 @@ export function PwaStatus() {
 
     const onInstalled = () => {
       toast.dismiss("pwa-install");
+      setDeferredPrompt(null);
       remember();
     };
 
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);
+
+    // For non-Chromium browsers that never fire beforeinstallprompt (Firefox Android, iOS Safari):
+    // Show manual install guide offer after a short settling delay if not already installed.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (
+      platform.isClient &&
+      !platform.isStandalone &&
+      !platform.isCapacitor &&
+      (platform.isFirefoxAndroid || platform.isIOSSafari) &&
+      !isDismissed()
+    ) {
+      timer = setTimeout(() => {
+        if (isDismissed()) return;
+        toast("Install Momentum", {
+          id: "pwa-install-guide-toast",
+          icon: <Download className="h-4 w-4" />,
+          description: platform.isFirefoxAndroid
+            ? "Add to home screen for instant access in Firefox."
+            : "Add to your home screen for full-screen offline access.",
+          duration: 15000,
+          action: {
+            label: "Guide",
+            onClick: () => {
+              setGuideOpen(true);
+              remember();
+              toast.dismiss("pwa-install-guide-toast");
+            },
+          },
+          cancel: { label: "Not now", onClick: remember },
+          onDismiss: remember,
+        });
+      }, 4000);
+    }
+
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
+      if (timer) clearTimeout(timer);
     };
-  }, []);
+  }, [platform]);
 
-  if (!offline) return null;
+  const handleTriggerNativePrompt = () => {
+    if (!deferredPrompt) return;
+    void deferredPrompt.prompt().then(async () => {
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === "dismissed") {
+        try {
+          localStorage.setItem(INSTALL_KEY, "1");
+        } catch {
+          /* ignore */
+        }
+      }
+      toast.dismiss("pwa-install");
+    });
+  };
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
-    >
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs shadow-lg">
-        <WifiOff className="h-3.5 w-3.5 text-amber-400" />
-        <span className="text-muted-foreground">Offline — showing your last synced data</span>
-      </div>
-    </div>
+    <>
+      <InstallGuideDialog
+        open={guideOpen}
+        onOpenChange={setGuideOpen}
+        hasPrompt={Boolean(deferredPrompt)}
+        onTriggerPrompt={handleTriggerNativePrompt}
+      />
+
+      {offline && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        >
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs shadow-lg">
+            <WifiOff className="h-3.5 w-3.5 text-amber-400" />
+            <span className="text-muted-foreground">Offline — showing your last synced data</span>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

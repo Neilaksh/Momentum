@@ -6,7 +6,10 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "background_color": "#0b0d11",
   "theme_color": "#0b0d11",
   "categories": ["productivity", "lifestyle"],

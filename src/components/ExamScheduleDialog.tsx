@@ -179,7 +179,7 @@ export function ExamScheduleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-7">
+      <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto p-6 sm:p-7">
         <DialogHeader className="border-b border-border/60 pb-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">

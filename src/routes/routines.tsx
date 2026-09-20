@@ -63,6 +63,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollHint } from "@/components/ScrollHint";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   batchAddRoutineTasks,
@@ -1667,13 +1675,16 @@ function RoutinesPage() {
                 return (
                   <button
                     key={name}
+                    type="button"
                     onClick={() => setSelectedDay(idx)}
+                    aria-pressed={selectedDay === idx}
+                    aria-label={isOff ? `${name}, day off` : name}
                     title={isOff ? `${name} is switched off (day off)` : name}
-                    className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+                    className={`rounded-lg px-3 py-2 sm:py-1 min-h-[36px] flex items-center justify-center text-xs font-medium transition-colors ${
                       selectedDay === idx
-                        ? "bg-primary text-primary-foreground font-semibold"
+                        ? "bg-primary text-primary-foreground font-semibold shadow-sm"
                         : isOff
-                          ? "bg-card text-rose-300/70 line-through hover:text-rose-200"
+                          ? "bg-card text-rose-200 line-through decoration-rose-400/60 hover:text-rose-100"
                           : "bg-card text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -1744,12 +1755,12 @@ function RoutinesPage() {
         {/* View Mode 1: 7-Day Timetable Matrix */}
         {viewMode === "matrix" && (
           <div className="space-y-4">
-            <div className="relative overflow-x-auto rounded-xl border border-border/80 bg-card shadow-sm">
+            <ScrollHint containerClassName="rounded-xl border border-border/80 bg-card shadow-sm">
               <table className="w-full border-collapse text-left text-xs min-w-[950px]">
                 {/* Header Row */}
-                <thead>
-                  <tr className="border-b border-border bg-secondary/70 backdrop-blur">
-                    <th className="sticky left-0 z-20 w-32 md:w-44 border-r border-border bg-secondary p-3 font-semibold uppercase tracking-wider text-muted-foreground text-center">
+                <thead className="sticky top-0 z-20">
+                  <tr className="border-b border-border bg-secondary/95 backdrop-blur">
+                    <th className="sticky top-0 left-0 z-30 w-32 md:w-44 border-r border-border bg-secondary p-3 font-semibold uppercase tracking-wider text-muted-foreground text-center">
                       Time Slot
                     </th>
                     {WEEKDAY_NAMES.map((dayName, idx) => {
@@ -2133,7 +2144,7 @@ function RoutinesPage() {
                   )}
                 </tbody>
               </table>
-            </div>
+            </ScrollHint>
 
             {/* Quick Add Time Slot Footer Prompt */}
             <div className="flex items-center justify-between rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground bg-card/40">
@@ -2534,668 +2545,646 @@ function RoutinesPage() {
       </div>
 
       {/* Routine Add / Edit Dialog Overlay */}
-      {isDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95 my-8">
-            <div className="flex items-center justify-between border-b border-border/60 pb-3">
-              <h3 className="font-bold text-lg flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                {editingTask ? "Edit Routine Slot" : "Add Routine Slot"}
-              </h3>
-              <button
-                onClick={closeModal}
-                className="text-muted-foreground hover:text-foreground text-sm font-semibold p-1"
-              >
-                ✕
-              </button>
-            </div>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => !open && closeModal()}>
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto p-5 sm:p-6">
+          <DialogHeader className="border-b border-border/60 pb-3">
+            <DialogTitle className="font-bold text-lg flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              {editingTask ? "Edit Routine Slot" : "Add Routine Slot"}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              {editingTask ? "Edit routine slot details" : "Create new routine slot"}
+            </DialogDescription>
+          </DialogHeader>
 
-            <form onSubmit={handleSubmitForm} className="mt-4 space-y-4">
-              {/* Title & Emoji Selector */}
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                  Routine Title
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                    placeholder="e.g. Morning Exercise, Study Block 1, Swimming"
-                    className="flex-1"
-                    autoFocus
-                  />
-                </div>
-              </div>
-
-              {/* Quick Fill from Pre-Existing Tasks */}
-              {existingTasks.length > 0 && !editingTask && (
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 mb-1">
-                    <Layers className="h-3 w-3 text-purple-400" /> Or pick from existing tasks:
-                  </label>
-                  <select
-                    value={formTaskId ?? ""}
-                    onChange={(e) => handleTaskSelect(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-secondary/50 p-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="">-- Custom Routine Title --</option>
-                    {existingTasks.map((t) => (
-                      <option key={t.id} value={t.title}>
-                        {t.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Emoji Quick Picker (collapsed by default; expands into a popover) */}
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                  Choose Icon / Emoji
-                </label>
-                <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-secondary transition-colors"
-                    >
-                      <span className="text-lg leading-none">{formEmoji}</span>
-                      <span className="font-medium">Choose icon</span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="start"
-                    className="w-[20rem] max-w-[90vw] overflow-hidden border-border bg-popover p-0"
-                  >
-                    <RoutineEmojiPicker
-                      selectedEmoji={formEmoji}
-                      onSelectEmoji={(emoji) => {
-                        setFormEmoji(emoji);
-                        setEmojiPickerOpen(false);
-                      }}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {/* Category & Time Slot */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Category
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddCategoryOpen(true)}
-                      className="text-[10px] text-cyan-400 hover:underline"
-                    >
-                      + New
-                    </button>
-                  </div>
-                  <select
-                    value={formCategory}
-                    onChange={(e) => handleCategoryChange(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    {categories.map((cat) => (
-                      <option key={cat.name} value={cat.name}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Time Slot
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddSlotOpen(true)}
-                      className="text-[10px] text-primary hover:underline"
-                    >
-                      + New
-                    </button>
-                  </div>
-                  <select
-                    value={formTimeSlot}
-                    onChange={(e) => setFormTimeSlot(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    {allTimeSlots.map((slot) => (
-                      <option key={slot} value={slot}>
-                        {slot} ({calculateSlotDurationMinutes(slot)}m)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Per-Block Color Override */}
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
-                  Block Color Override
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {(
-                    Object.entries(COLOR_PALETTE) as Array<
-                      [ColorKey, (typeof COLOR_PALETTE)[ColorKey]]
-                    >
-                  ).map(([key, palette]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      title={palette.label}
-                      aria-label={`Set color to ${palette.label}`}
-                      onClick={() => setFormColorKey(key)}
-                      className={`h-7 w-7 rounded-full border-2 transition-all ${
-                        formColorKey === key
-                          ? "border-foreground scale-110 shadow-sm"
-                          : "border-transparent hover:scale-105 hover:border-border"
-                      } ${palette.bg} flex items-center justify-center`}
-                    >
-                      {formColorKey === key && (
-                        <span className={`text-[10px] font-bold ${palette.text}`}>✓</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Overrides the category's default color for this specific block.
-                </p>
-              </div>
-
-              {/* Weekday Multi-Select (For creating new) */}
-              {!editingTask && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Repeat Days
-                    </label>
-                    <div className="flex gap-2 text-[10px]">
-                      <button
-                        type="button"
-                        onClick={() => setFormWeekdays([0, 1, 2, 3, 4, 5, 6])}
-                        className="text-primary hover:underline"
-                      >
-                        All Days
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFormWeekdays([0, 1, 2, 3, 4])}
-                        className="text-cyan-400 hover:underline"
-                      >
-                        Weekdays
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFormWeekdays([5, 6])}
-                        className="text-rose-400 hover:underline"
-                      >
-                        Weekends
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-1">
-                    {WEEKDAY_NAMES.map((dayName, idx) => {
-                      const selected = formWeekdays.includes(idx);
-                      const isOff = daysOffSet.has(idx);
-                      return (
-                        <button
-                          key={dayName}
-                          type="button"
-                          title={
-                            isOff
-                              ? `${dayName} is switched off — slots here are kept but not counted`
-                              : dayName
-                          }
-                          onClick={() => {
-                            if (selected) {
-                              if (formWeekdays.length > 1) {
-                                setFormWeekdays(formWeekdays.filter((w) => w !== idx));
-                              }
-                            } else {
-                              setFormWeekdays([...formWeekdays, idx]);
-                            }
-                          }}
-                          className={`rounded-lg py-2 text-xs font-semibold transition-colors ${
-                            selected
-                              ? "bg-primary text-primary-foreground shadow"
-                              : "bg-secondary text-muted-foreground hover:text-foreground"
-                          } ${isOff && !selected ? "text-rose-300/80" : ""}`}
-                        >
-                          {dayName.slice(0, 3)}
-                          {isOff && (
-                            <span className="ml-0.5 align-super text-[8px] font-bold">off</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/60">
-                <Button type="button" variant="outline" size="sm" onClick={closeModal}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={updateMutation.isPending || batchAddMutation.isPending}
-                >
-                  {editingTask ? "Save Changes" : "Create Routine"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Custom Time Slot Modal */}
-      {isAddSlotOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-border/60 pb-3">
-              <h3 className="font-bold text-base flex items-center gap-2">
-                <Clock className="h-4 w-4 text-primary" /> Create Custom Time Slot
-              </h3>
-              <button
-                onClick={() => setIsAddSlotOpen(false)}
-                className="text-muted-foreground hover:text-foreground text-sm font-semibold p-1"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleAddCustomTimeSlot} className="mt-4 space-y-4">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                  Start & End Times (e.g. 04:30 PM - 06:00 PM)
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    value={newSlotStart}
-                    onChange={(e) => setNewSlotStart(e.target.value)}
-                    placeholder="08:00 AM"
-                  />
-                  <Input
-                    value={newSlotEnd}
-                    onChange={(e) => setNewSlotEnd(e.target.value)}
-                    placeholder="09:30 AM"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                  Or Custom Display Label (Optional)
-                </label>
+          <form onSubmit={handleSubmitForm} className="mt-2 space-y-4">
+            {/* Title & Emoji Selector */}
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                Routine Title
+              </label>
+              <div className="flex gap-2">
                 <Input
-                  value={newSlotCustomLabel}
-                  onChange={(e) => setNewSlotCustomLabel(e.target.value)}
-                  placeholder="e.g. 11:45 PM Night Owl"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAddSlotOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm">
-                  Add Time Slot
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Custom Category Modal */}
-      {isAddCategoryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-border/60 pb-3">
-              <h3 className="font-bold text-base flex items-center gap-2">
-                <Tag className="h-4 w-4 text-cyan-400" /> Create Custom Category
-              </h3>
-              <button
-                onClick={() => setIsAddCategoryOpen(false)}
-                className="text-muted-foreground hover:text-foreground text-sm font-semibold p-1"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleAddCustomCategory} className="mt-4 space-y-4">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                  Category Name
-                </label>
-                <Input
-                  value={newCatName}
-                  onChange={(e) => setNewCatName(e.target.value)}
-                  placeholder="e.g. Deep Work, Languages, Side Project"
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder="e.g. Morning Exercise, Study Block 1, Swimming"
+                  className="flex-1"
                   autoFocus
                 />
               </div>
+            </div>
 
-              {/* Manage existing custom categories: delete any user-created one.
-                  Built-in defaults are never listed/deletable here. */}
-              {customCategories.length > 0 && (
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                    Manage Custom Categories
+            {/* Quick Fill from Pre-Existing Tasks */}
+            {existingTasks.length > 0 && !editingTask && (
+              <div>
+                <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 mb-1">
+                  <Layers className="h-3 w-3 text-purple-400" /> Or pick from existing tasks:
+                </label>
+                <select
+                  value={formTaskId ?? ""}
+                  onChange={(e) => handleTaskSelect(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-secondary/50 p-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">-- Custom Routine Title --</option>
+                  {existingTasks.map((t) => (
+                    <option key={t.id} value={t.title}>
+                      {t.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Emoji Quick Picker (collapsed by default; expands into a popover) */}
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                Choose Icon / Emoji
+              </label>
+              <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-secondary transition-colors"
+                  >
+                    <span className="text-lg leading-none">{formEmoji}</span>
+                    <span className="font-medium">Choose icon</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-[20rem] max-w-[90vw] overflow-hidden border-border bg-popover p-0"
+                >
+                  <RoutineEmojiPicker
+                    selectedEmoji={formEmoji}
+                    onSelectEmoji={(emoji) => {
+                      setFormEmoji(emoji);
+                      setEmojiPickerOpen(false);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Category & Time Slot */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Category
                   </label>
-                  <ul className="space-y-1.5">
-                    {customCategories.map((cat) => {
-                      const usedBy = (slotIdsByCategory.get(cat.name) ?? []).length;
-                      const color = COLOR_PALETTE[cat.colorKey] ?? COLOR_PALETTE.slate;
-                      return (
-                        <li
-                          key={cat.name}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-secondary/30 px-3 py-2 text-xs"
-                        >
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span
-                              className={`h-2.5 w-2.5 shrink-0 rounded-full ${color.bg} ${color.border}`}
-                            />
-                            <span className="truncate font-medium text-foreground">{cat.name}</span>
-                            <span className="shrink-0 text-muted-foreground">
-                              {usedBy > 0 ? `${usedBy} slot${usedBy === 1 ? "" : "s"}` : "unused"}
-                            </span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCategory(cat.name)}
-                            title={`Delete "${cat.name}"`}
-                            aria-label={`Delete category ${cat.name}`}
-                            className="p-3 -m-2 md:p-1 md:m-0 text-muted-foreground transition-colors hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    Built-in categories can't be deleted. Deleting a custom category reassigns its
-                    routine slots to "{FALLBACK_CATEGORY_NAME}".
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddCategoryOpen(true)}
+                    className="text-[10px] text-cyan-400 hover:underline"
+                  >
+                    + New
+                  </button>
                 </div>
-              )}
+                <select
+                  value={formCategory}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {categories.map((cat) => (
+                    <option key={cat.name} value={cat.name}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                  Color Theme
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {(Object.keys(COLOR_PALETTE) as ColorKey[]).map((cKey) => {
-                    const c = COLOR_PALETTE[cKey];
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Time Slot
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddSlotOpen(true)}
+                    className="text-[10px] text-primary hover:underline"
+                  >
+                    + New
+                  </button>
+                </div>
+                <select
+                  value={formTimeSlot}
+                  onChange={(e) => setFormTimeSlot(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-secondary/50 p-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {allTimeSlots.map((slot) => (
+                    <option key={slot} value={slot}>
+                      {slot} ({calculateSlotDurationMinutes(slot)}m)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Per-Block Color Override */}
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                Block Color Override
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  Object.entries(COLOR_PALETTE) as Array<
+                    [ColorKey, (typeof COLOR_PALETTE)[ColorKey]]
+                  >
+                ).map(([key, palette]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    title={palette.label}
+                    aria-label={`Set color to ${palette.label}`}
+                    onClick={() => setFormColorKey(key)}
+                    className={`h-7 w-7 rounded-full border-2 transition-all ${
+                      formColorKey === key
+                        ? "border-foreground scale-110 shadow-sm"
+                        : "border-transparent hover:scale-105 hover:border-border"
+                    } ${palette.bg} flex items-center justify-center`}
+                  >
+                    {formColorKey === key && (
+                      <span className={`text-[10px] font-bold ${palette.text}`}>✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Overrides the category's default color for this specific block.
+              </p>
+            </div>
+
+            {/* Weekday Multi-Select (For creating new) */}
+            {!editingTask && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Repeat Days
+                  </label>
+                  <div className="flex gap-2 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setFormWeekdays([0, 1, 2, 3, 4, 5, 6])}
+                      className="text-primary hover:underline"
+                    >
+                      All Days
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormWeekdays([0, 1, 2, 3, 4])}
+                      className="text-cyan-400 hover:underline"
+                    >
+                      Weekdays
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormWeekdays([5, 6])}
+                      className="text-rose-400 hover:underline"
+                    >
+                      Weekends
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1">
+                  {WEEKDAY_NAMES.map((dayName, idx) => {
+                    const selected = formWeekdays.includes(idx);
+                    const isOff = daysOffSet.has(idx);
                     return (
                       <button
-                        key={cKey}
+                        key={dayName}
                         type="button"
-                        onClick={() => setNewCatColor(cKey)}
-                        className={`rounded-lg border p-2 text-xs font-semibold transition-all ${c.bg} ${c.text} ${c.border} ${
-                          newCatColor === cKey
-                            ? "ring-2 ring-primary scale-105"
-                            : "opacity-75 hover:opacity-100"
-                        }`}
+                        title={
+                          isOff
+                            ? `${dayName} is switched off — slots here are kept but not counted`
+                            : dayName
+                        }
+                        onClick={() => {
+                          if (selected) {
+                            if (formWeekdays.length > 1) {
+                              setFormWeekdays(formWeekdays.filter((w) => w !== idx));
+                            }
+                          } else {
+                            setFormWeekdays([...formWeekdays, idx]);
+                          }
+                        }}
+                        className={`rounded-lg py-2 text-xs font-semibold transition-colors ${
+                          selected
+                            ? "bg-primary text-primary-foreground shadow"
+                            : "bg-secondary text-muted-foreground hover:text-foreground"
+                        } ${isOff && !selected ? "text-rose-300/80" : ""}`}
                       >
-                        {c.label}
+                        {dayName.slice(0, 3)}
+                        {isOff && (
+                          <span className="ml-0.5 align-super text-[8px] font-bold">off</span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
               </div>
+            )}
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAddCategoryOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm">
-                  Create Category
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Copy Weekday Schedule Modal */}
-      {isCopyScheduleOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-border/60 pb-3">
-              <h3 className="font-bold text-base flex items-center gap-2">
-                <Copy className="h-4 w-4 text-indigo-400" /> Copy Weekday Schedule
-              </h3>
-              <button
-                onClick={() => setIsCopyScheduleOpen(false)}
-                className="text-muted-foreground hover:text-foreground text-sm font-semibold p-1"
+            {/* Submit Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/60">
+              <Button type="button" variant="outline" size="sm" onClick={closeModal}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={updateMutation.isPending || batchAddMutation.isPending}
               >
-                ✕
-              </button>
+                {editingTask ? "Save Changes" : "Create Routine"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Custom Time Slot Modal */}
+      <Dialog open={isAddSlotOpen} onOpenChange={setIsAddSlotOpen}>
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto p-5 sm:p-6">
+          <DialogHeader className="border-b border-border/60 pb-3">
+            <DialogTitle className="font-bold text-base flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" /> Create Custom Time Slot
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Create a custom time interval for routines
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleAddCustomTimeSlot} className="mt-4 space-y-4">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                Start & End Times (e.g. 04:30 PM - 06:00 PM)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  value={newSlotStart}
+                  onChange={(e) => setNewSlotStart(e.target.value)}
+                  placeholder="08:00 AM"
+                />
+                <Input
+                  value={newSlotEnd}
+                  onChange={(e) => setNewSlotEnd(e.target.value)}
+                  placeholder="09:30 AM"
+                />
+              </div>
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (copySourceDay === copyTargetDay) {
-                  toast.error("Source and target weekday cannot be the same");
-                  return;
-                }
-                copyMutation.mutate({
-                  sourceWeekday: copySourceDay,
-                  targetWeekday: copyTargetDay,
-                  overwriteTarget: copyOverwrite,
-                });
-              }}
-              className="mt-4 space-y-4"
-            >
-              <div className="grid grid-cols-2 gap-3">
-                {/* `min-w-0` so the grid tracks may shrink below the selects'
-                    min-content width (~longest weekday label) instead of
-                    overflowing this narrow modal on small phones. */}
-                <div className="min-w-0">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                    Copy From (Source)
-                  </label>
-                  <select
-                    value={copySourceDay}
-                    onChange={(e) => setCopySourceDay(Number(e.target.value))}
-                    className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    {WEEKDAY_NAMES.map((name, idx) => (
-                      <option key={name} value={idx}>
-                        {name} ({tasks.filter((t) => t.weekday === idx).length} slots)
-                        {daysOffSet.has(idx) ? " — day off" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                Or Custom Display Label (Optional)
+              </label>
+              <Input
+                value={newSlotCustomLabel}
+                onChange={(e) => setNewSlotCustomLabel(e.target.value)}
+                placeholder="e.g. 11:45 PM Night Owl"
+              />
+            </div>
 
-                <div className="min-w-0">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                    Copy To (Target)
-                  </label>
-                  <select
-                    value={copyTargetDay}
-                    onChange={(e) => setCopyTargetDay(Number(e.target.value))}
-                    className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    {WEEKDAY_NAMES.map((name, idx) => (
-                      <option key={name} value={idx}>
-                        {name} ({tasks.filter((t) => t.weekday === idx).length} slots)
-                        {daysOffSet.has(idx) ? " — day off" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Copying only moves routine slots — it never changes whether a day is on or off.
-                  </p>
-                </div>
-              </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddSlotOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm">
+                Add Time Slot
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-              <div className="rounded-lg border border-border/70 bg-secondary/30 p-3">
-                <label className="flex items-center gap-2.5 text-xs font-medium cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={copyOverwrite}
-                    onChange={(e) => setCopyOverwrite(e.target.checked)}
-                    className="rounded border-border"
-                  />
-                  <span>Overwrite existing routine slots on target weekday</span>
+      {/* Add Custom Category Modal */}
+      <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto p-5 sm:p-6">
+          <DialogHeader className="border-b border-border/60 pb-3">
+            <DialogTitle className="font-bold text-base flex items-center gap-2">
+              <Tag className="h-4 w-4 text-cyan-400" /> Create Custom Category
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Add or manage custom categories for routines
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleAddCustomCategory} className="mt-4 space-y-4">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                Category Name
+              </label>
+              <Input
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="e.g. Deep Work, Languages, Side Project"
+                autoFocus
+              />
+            </div>
+
+            {/* Manage existing custom categories: delete any user-created one.
+                Built-in defaults are never listed/deletable here. */}
+            {customCategories.length > 0 && (
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                  Manage Custom Categories
                 </label>
-                <p className="text-[11px] text-muted-foreground mt-1 ml-5">
-                  If unchecked, source slots will be appended alongside existing items.
+                <ul className="space-y-1.5">
+                  {customCategories.map((cat) => {
+                    const usedBy = (slotIdsByCategory.get(cat.name) ?? []).length;
+                    const color = COLOR_PALETTE[cat.colorKey] ?? COLOR_PALETTE.slate;
+                    return (
+                      <li
+                        key={cat.name}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-secondary/30 px-3 py-2 text-xs"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${color.bg} ${color.border}`}
+                          />
+                          <span className="truncate font-medium text-foreground">{cat.name}</span>
+                          <span className="shrink-0 text-muted-foreground">
+                            {usedBy > 0 ? `${usedBy} slot${usedBy === 1 ? "" : "s"}` : "unused"}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategory(cat.name)}
+                          title={`Delete "${cat.name}"`}
+                          aria-label={`Delete category ${cat.name}`}
+                          className="p-3 -m-2 md:p-1 md:m-0 text-muted-foreground transition-colors hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Built-in categories can't be deleted. Deleting a custom category reassigns its
+                  routine slots to "{FALLBACK_CATEGORY_NAME}".
                 </p>
               </div>
+            )}
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsCopyScheduleOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={copyMutation.isPending}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                >
-                  {copyMutation.isPending ? "Copying..." : "Copy Schedule"}
-                </Button>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                Color Theme
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {(Object.keys(COLOR_PALETTE) as ColorKey[]).map((cKey) => {
+                  const c = COLOR_PALETTE[cKey];
+                  return (
+                    <button
+                      key={cKey}
+                      type="button"
+                      onClick={() => setNewCatColor(cKey)}
+                      className={`rounded-lg border p-2 text-xs font-semibold transition-all ${c.bg} ${c.text} ${c.border} ${
+                        newCatColor === cKey
+                          ? "ring-2 ring-primary scale-105"
+                          : "opacity-75 hover:opacity-100"
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddCategoryOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm">
+                Create Category
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Copy Weekday Schedule Modal */}
+      <Dialog open={isCopyScheduleOpen} onOpenChange={setIsCopyScheduleOpen}>
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto p-5 sm:p-6">
+          <DialogHeader className="border-b border-border/60 pb-3">
+            <DialogTitle className="font-bold text-base flex items-center gap-2">
+              <Copy className="h-4 w-4 text-indigo-400" /> Copy Weekday Schedule
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Copy routine slots from one weekday to another
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (copySourceDay === copyTargetDay) {
+                toast.error("Source and target weekday cannot be the same");
+                return;
+              }
+              copyMutation.mutate({
+                sourceWeekday: copySourceDay,
+                targetWeekday: copyTargetDay,
+                overwriteTarget: copyOverwrite,
+              });
+            }}
+            className="mt-4 space-y-4"
+          >
+            <div className="grid grid-cols-2 gap-3">
+              {/* `min-w-0` so the grid tracks may shrink below the selects'
+                  min-content width (~longest weekday label) instead of
+                  overflowing this narrow modal on small phones. */}
+              <div className="min-w-0">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                  Copy From (Source)
+                </label>
+                <select
+                  value={copySourceDay}
+                  onChange={(e) => setCopySourceDay(Number(e.target.value))}
+                  className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {WEEKDAY_NAMES.map((name, idx) => (
+                    <option key={name} value={idx}>
+                      {name} ({tasks.filter((t) => t.weekday === idx).length} slots)
+                      {daysOffSet.has(idx) ? " — day off" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="min-w-0">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                  Copy To (Target)
+                </label>
+                <select
+                  value={copyTargetDay}
+                  onChange={(e) => setCopyTargetDay(Number(e.target.value))}
+                  className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {WEEKDAY_NAMES.map((name, idx) => (
+                    <option key={name} value={idx}>
+                      {name} ({tasks.filter((t) => t.weekday === idx).length} slots)
+                      {daysOffSet.has(idx) ? " — day off" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Copying only moves routine slots — it never changes whether a day is on or off.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border/70 bg-secondary/30 p-3">
+              <label className="flex items-center gap-2.5 text-xs font-medium cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={copyOverwrite}
+                  onChange={(e) => setCopyOverwrite(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <span>Overwrite existing routine slots on target weekday</span>
+              </label>
+              <p className="text-[11px] text-muted-foreground mt-1 ml-5">
+                If unchecked, source slots will be appended alongside existing items.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCopyScheduleOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={copyMutation.isPending}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                {copyMutation.isPending ? "Copying..." : "Copy Schedule"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Import Routines JSON Modal */}
-      {isImportOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-border/60 pb-3">
-              <h3 className="font-bold text-base flex items-center gap-2">
-                <FileJson className="h-4 w-4 text-amber-400" /> Import Schedule JSON
-              </h3>
-              <button
+      <Dialog
+        open={isImportOpen}
+        onOpenChange={(open) => {
+          setIsImportOpen(open);
+          if (!open) setImportError(null);
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto p-5 sm:p-6">
+          <DialogHeader className="border-b border-border/60 pb-3">
+            <DialogTitle className="font-bold text-base flex items-center gap-2">
+              <FileJson className="h-4 w-4 text-amber-400" /> Import Schedule JSON
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Import routines, custom slots, and categories from JSON backup
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                Upload Backup File (.json)
+              </label>
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      setImportJsonText(event.target?.result as string);
+                      setImportError(null);
+                    };
+                    reader.readAsText(file);
+                  }
+                }}
+                className="block w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-border file:bg-secondary file:text-xs file:font-semibold file:text-foreground hover:file:bg-secondary/80 cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                Or Paste JSON Content
+              </label>
+              <textarea
+                value={importJsonText}
+                onChange={(e) => {
+                  setImportJsonText(e.target.value);
+                  setImportError(null);
+                }}
+                rows={6}
+                placeholder={`{\n  "customTimeSlots": [...],\n  "categories": [...],\n  "routineTasks": [...]\n}`}
+                className="w-full rounded-md border border-border bg-secondary/50 p-2.5 font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            {importError && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{importError}</span>
+              </div>
+            )}
+
+            <div className="rounded-lg border border-border/70 bg-secondary/30 p-3">
+              <label className="flex items-center gap-2.5 text-xs font-medium cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={importOverwrite}
+                  onChange={(e) => setImportOverwrite(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <span>Replace existing schedule completely</span>
+              </label>
+              <p className="text-[11px] text-muted-foreground mt-1 ml-5">
+                If unchecked, imported routine slots will be merged with your current schedule.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => {
                   setIsImportOpen(false);
                   setImportError(null);
                 }}
-                className="text-muted-foreground hover:text-foreground text-sm font-semibold p-1"
               >
-                ✕
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-4">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                  Upload Backup File (.json)
-                </label>
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (event) => {
-                        setImportJsonText(event.target?.result as string);
-                        setImportError(null);
-                      };
-                      reader.readAsText(file);
-                    }
-                  }}
-                  className="block w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-border file:bg-secondary file:text-xs file:font-semibold file:text-foreground hover:file:bg-secondary/80 cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                  Or Paste JSON Content
-                </label>
-                <textarea
-                  value={importJsonText}
-                  onChange={(e) => {
-                    setImportJsonText(e.target.value);
-                    setImportError(null);
-                  }}
-                  rows={6}
-                  placeholder={`{\n  "customTimeSlots": [...],\n  "categories": [...],\n  "routineTasks": [...]\n}`}
-                  className="w-full rounded-md border border-border bg-secondary/50 p-2.5 font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              {importError && (
-                <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span>{importError}</span>
-                </div>
-              )}
-
-              <div className="rounded-lg border border-border/70 bg-secondary/30 p-3">
-                <label className="flex items-center gap-2.5 text-xs font-medium cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={importOverwrite}
-                    onChange={(e) => setImportOverwrite(e.target.checked)}
-                    className="rounded border-border"
-                  />
-                  <span>Replace existing schedule completely</span>
-                </label>
-                <p className="text-[11px] text-muted-foreground mt-1 ml-5">
-                  If unchecked, imported routine slots will be merged with your current schedule.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setIsImportOpen(false);
-                    setImportError(null);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleImportRoutinesJSON}
-                  disabled={!importJsonText.trim() || batchAddMutation.isPending}
-                  className="bg-amber-600 hover:bg-amber-700 text-white"
-                >
-                  {batchAddMutation.isPending ? "Importing..." : "Import Schedule"}
-                </Button>
-              </div>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                onClick={handleImportRoutinesJSON}
+                disabled={!importJsonText.trim() || batchAddMutation.isPending}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                {batchAddMutation.isPending ? "Importing..." : "Import Schedule"}
+              </Button>
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete-category confirmation (destructive, gated): affects every routine
           slot using the category, which get reassigned to the fallback. */}

@@ -399,7 +399,7 @@ function HistoryPage() {
             </div>
           </div>
 
-          <div className="mt-4 h-48">
+          <div className="mt-4 h-48 [content-visibility:auto] [contain-intrinsic-size:192px]">
             <ResponsiveContainer width="100%" height="100%">
               {chartMetric === "pct" ? (
                 <LineChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
@@ -538,7 +538,7 @@ function HistoryPage() {
         ) : (
           <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
             {/* Bar chart — subject name vs completed count, colored per subject */}
-            <div className="h-56 min-w-0">
+            <div className="h-56 min-w-0 [content-visibility:auto] [contain-intrinsic-size:224px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={subjectChartRows}

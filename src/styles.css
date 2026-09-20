@@ -116,6 +116,19 @@
        pill row, Routines matrix/day-pill bar, view-switcher) keep scrolling
        inside their own `overflow-x-auto` boxes. */
     overflow-x: clip;
+    /* Prevent Firefox Android from inflating text sizes arbitrarily */
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent 300ms tap delay / accidental double-tap-zoom on interactive controls */
+  button,
+  [role="button"],
+  a,
+  select,
+  label {
+    touch-action: manipulation;
   }
 
   body {
@@ -128,5 +141,15 @@
   .num {
     font-family: "JetBrains Mono", ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

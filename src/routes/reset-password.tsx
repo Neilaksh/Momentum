@@ -37,7 +37,7 @@ function ResetPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
+    <main className="flex min-h-dvh items-center justify-center px-4">
       <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4">
         <h1 className="text-3xl font-semibold tracking-tight">Set a new password</h1>
         <div className="space-y-2">
