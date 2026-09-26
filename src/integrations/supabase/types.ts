@@ -383,6 +383,63 @@ export type Database = {
           },
         ];
       };
+      study_sessions: {
+        Row: {
+          created_at: string;
+          duration_seconds: number | null;
+          ended_at: string | null;
+          goal_id: string | null;
+          id: string;
+          mode: string;
+          notes: string | null;
+          started_at: string;
+          subject_id: string | null;
+          target_seconds: number | null;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          ended_at?: string | null;
+          goal_id?: string | null;
+          id?: string;
+          mode?: string;
+          notes?: string | null;
+          started_at?: string;
+          subject_id?: string | null;
+          target_seconds?: number | null;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          ended_at?: string | null;
+          goal_id?: string | null;
+          id?: string;
+          mode?: string;
+          notes?: string | null;
+          started_at?: string;
+          subject_id?: string | null;
+          target_seconds?: number | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "study_sessions_goal_id_fkey";
+            columns: ["goal_id"];
+            isOneToOne: false;
+            referencedRelation: "goals";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "study_sessions_subject_id_fkey";
+            columns: ["subject_id"];
+            isOneToOne: false;
+            referencedRelation: "subjects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       subjects: {
         Row: {
           color: string;

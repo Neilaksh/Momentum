@@ -21,8 +21,10 @@ const ROOT = process.cwd();
 const OUT = path.join(ROOT, "src", "integrations", "supabase", "types.ts");
 
 // ---------------------------------------------------------------------------
-// Live schema — column: [pg type, nullable, has default] (alphabetical)
-// Derived from supabase/migrations (20260824150755 … 20260830190000).
+// Live schema — column: [pg type, nullable, has default]. Keys are listed in
+// the generator's output order (tables alphabetical; day_tasks keeps physical
+// column order, where progress_pct precedes priority).
+// Derived from supabase/migrations (20260824150755 … 20260926090000).
 // ---------------------------------------------------------------------------
 const schema = {
   day_tasks: {
@@ -116,6 +118,19 @@ const schema = {
     user_id: ["uuid", false, false],
     week_variant: ["text", false, true],
     weekday: ["smallint", false, false],
+  },
+  study_sessions: {
+    created_at: ["timestamptz", false, true],
+    duration_seconds: ["integer", true, false],
+    ended_at: ["timestamptz", true, false],
+    goal_id: ["uuid", true, false],
+    id: ["uuid", false, true],
+    mode: ["text", false, true],
+    notes: ["text", true, false],
+    started_at: ["timestamptz", false, true],
+    subject_id: ["uuid", true, false],
+    target_seconds: ["integer", true, false],
+    user_id: ["uuid", false, false],
   },
   subjects: {
     color: ["text", false, true],
@@ -220,6 +235,22 @@ const relationships = {
       referencedColumns: ["id"],
     },
   ],
+  study_sessions: [
+    {
+      foreignKeyName: "study_sessions_goal_id_fkey",
+      columns: ["goal_id"],
+      isOneToOne: false,
+      referencedRelation: "goals",
+      referencedColumns: ["id"],
+    },
+    {
+      foreignKeyName: "study_sessions_subject_id_fkey",
+      columns: ["subject_id"],
+      isOneToOne: false,
+      referencedRelation: "subjects",
+      referencedColumns: ["id"],
+    },
+  ],
   subjects: [],
   weekly_reviews: [],
 };
@@ -243,31 +274,34 @@ function tsType(pg, nullable) {
 }
 
 function tableBlock(name, cols, rels) {
-  const names = Object.keys(cols).sort();
-  const row = names.map((c) => `          ${c}: ${tsType(...cols[c])}`).join("\n");
+  // Declaration order, not sorted: each table's columns are listed in the same
+  // order `supabase gen types` emits them (physical column order), which for
+  // day_tasks differs from alphabetical (progress_pct precedes priority).
+  const names = Object.keys(cols);
+  const row = names.map((c) => `          ${c}: ${tsType(...cols[c])};`).join("\n");
   const insert = names
     .map((c) => {
       const [pg, nullable, hasDefault] = cols[c];
       const t = tsType(pg, nullable);
-      return hasDefault || nullable ? `          ${c}?: ${t}` : `          ${c}: ${t}`;
+      return hasDefault || nullable ? `          ${c}?: ${t};` : `          ${c}: ${t};`;
     })
     .join("\n");
-  const update = names.map((c) => `          ${c}?: ${tsType(...cols[c])}`).join("\n");
+  const update = names.map((c) => `          ${c}?: ${tsType(...cols[c])};`).join("\n");
   const relSrc = rels.length
     ? `        Relationships: [\n${rels
         .map(
           (r) =>
-            `          {\n            foreignKeyName: "${r.foreignKeyName}"\n            columns: [${r.columns
+            `          {\n            foreignKeyName: "${r.foreignKeyName}";\n            columns: [${r.columns
               .map((c) => `"${c}"`)
               .join(
                 ", ",
-              )}]\n            isOneToOne: ${r.isOneToOne}\n            referencedRelation: "${r.referencedRelation}"\n            referencedColumns: [${r.referencedColumns
+              )}];\n            isOneToOne: ${r.isOneToOne};\n            referencedRelation: "${r.referencedRelation}";\n            referencedColumns: [${r.referencedColumns
               .map((c) => `"${c}"`)
-              .join(", ")}]\n          },`,
+              .join(", ")}];\n          },`,
         )
-        .join("\n")}\n        ]`
-    : "        Relationships: []";
-  return `      ${name}: {\n        Row: {\n${row}\n        }\n        Insert: {\n${insert}\n        }\n        Update: {\n${update}\n        }\n${relSrc}\n      }`;
+        .join("\n")}\n        ];`
+    : "        Relationships: [];";
+  return `      ${name}: {\n        Row: {\n${row}\n        };\n        Insert: {\n${insert}\n        };\n        Update: {\n${update}\n        };\n${relSrc}\n      };`;
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +348,7 @@ for (const table of Object.keys(schema).sort()) {
 const current = fs.readFileSync(OUT, "utf8");
 const NL = current.includes("\r\n") ? "\r\n" : "\n";
 const headMarker = `    Tables: {${NL}`;
-const tailMarker = `    }${NL}    Views: {`;
+const tailMarker = `    };${NL}    Views: {`;
 const headEnd = current.indexOf(headMarker);
 const tailStart = current.indexOf(tailMarker);
 if (headEnd < 0 || tailStart < 0)
