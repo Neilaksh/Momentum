@@ -33,6 +33,7 @@ export default defineConfig({
       { path: "/history" },
       { path: "/reset-password" },
       { path: "/routines" },
+      { path: "/study" },
       { path: "/subjects" },
       { path: "/today" },
     ],

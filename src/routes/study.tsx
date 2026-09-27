@@ -14,8 +14,7 @@ export const Route = createFileRoute("/study")({
       { title: "Study Timer — Momentum" },
       {
         name: "description",
-        content:
-          "Run a Pomodoro, stopwatch or countdown study session and tag it to a subject or goal.",
+        content: "Run a Pomodoro, stopwatch or countdown study session and tag it to a subject.",
       },
       { property: "og:title", content: "Study Timer — Momentum" },
       {
@@ -53,7 +52,7 @@ function StudyPage() {
       </div>
       <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
         Time a focused study block with a Pomodoro, an open stopwatch or a countdown, and tag it to
-        a subject or goal so the hours land where they matter.
+        a subject so the hours land where they matter.
       </p>
 
       <div className="mt-6">

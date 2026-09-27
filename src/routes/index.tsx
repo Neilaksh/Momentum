@@ -131,6 +131,7 @@ function UnifiedTasksPage() {
   const [draft, setDraft] = useState("");
   const [draftSubjectId, setDraftSubjectId] = useState<string | null>(initialSubjectFilter);
   const [draftPriority, setDraftPriority] = useState<GoalPriority | null>(null);
+  const [draftEstMinutes, setDraftEstMinutes] = useState<string>("");
   const [filter, setFilter] = useState<TaskFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string | null>(initialSubjectFilter);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
@@ -204,6 +205,7 @@ function UnifiedTasksPage() {
       title: string;
       subjectId?: string | null;
       priority?: GoalPriority | null;
+      estMinutes?: number | null;
     }) => addFn({ data: v }),
     onSuccess: () => {
       invalidate();
@@ -1366,15 +1368,20 @@ function UnifiedTasksPage() {
             const inflightKey = addTaskKey(activeDay.date, title);
             if (addInflightKeys.current.has(inflightKey)) return;
             addInflightKeys.current.add(inflightKey);
+            const estRaw = draftEstMinutes.trim();
+            const estParsed = estRaw ? parseInt(estRaw, 10) : null;
+            const estMinutes = estParsed && estParsed > 0 ? estParsed : null;
             addTask.mutate({
               date: activeDay.date,
               title: draft.trim(),
               subjectId: draftSubjectId,
               priority: draftPriority,
+              estMinutes,
             });
             setDraft("");
             setDraftSubjectId(null);
             setDraftPriority(null);
+            setDraftEstMinutes("");
           }}
         >
           <Input
@@ -1384,7 +1391,7 @@ function UnifiedTasksPage() {
             className="h-10 min-w-0 flex-1 text-base md:text-sm"
             disabled={isActiveDayPast}
           />
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
             <select
               value={draftSubjectId ?? ""}
               onChange={(e) => setDraftSubjectId(e.target.value || null)}
@@ -1411,6 +1418,19 @@ function UnifiedTasksPage() {
               <option value="Med">🟡 Med</option>
               <option value="Low">🟢 Low</option>
             </select>
+            <input
+              type="number"
+              inputMode="numeric"
+              enterKeyHint="done"
+              min={1}
+              max={1440}
+              value={draftEstMinutes}
+              onChange={(e) => setDraftEstMinutes(e.target.value)}
+              placeholder="⏱ min"
+              aria-label="Estimated minutes (optional)"
+              disabled={isActiveDayPast}
+              className="h-10 w-full min-w-0 rounded-lg border border-border bg-secondary/50 px-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-20"
+            />
           </div>
           <Button
             type="submit"

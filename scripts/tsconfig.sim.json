@@ -13,6 +13,8 @@
   "include": [
     "simulate-rollover-rename.ts",
     "simulate-rollover-identity-merge.ts",
+    "simulate-subject-study-marks.ts",
+    "../src/lib/study-sessions-shared.ts",
     "../src/lib/tracker.server.ts",
     "../src/lib/tracker-shared.ts"
   ]

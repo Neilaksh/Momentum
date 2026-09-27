@@ -1,0 +1,518 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.rolloverIncompleteGoalTasks = void 0;
+exports.ensureProfile = ensureProfile;
+exports.carryForwardIncompleteTasks = carryForwardIncompleteTasks;
+exports.materializeWeek = materializeWeek;
+exports.loadWeek = loadWeek;
+exports.recomputeStats = recomputeStats;
+exports.loadHistory = loadHistory;
+const tracker_shared_1 = require("./tracker-shared");
+async function ensureProfile(supabase, userId) {
+    const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+    if (data)
+        return data;
+    const { data: created } = await supabase
+        .from("profiles")
+        .insert({ id: userId })
+        .select("*")
+        .maybeSingle();
+    return created ?? null;
+}
+/** Key identifying "the same task" across days. */
+function taskKey(t) {
+    return `${(t.title ?? "").trim().toLowerCase()}|${t.goal_id ?? ""}|${t.routine_task_id ?? ""}`;
+}
+/** Title-level identity shared by plain and goal-linked copies of the same task. */
+function titleKey(t) {
+    return (t.title ?? "").trim().toLowerCase();
+}
+/** How many days in a row an uncompleted task may roll over before going stale. */
+const STALE_LIMIT = 3;
+/**
+ * Incomplete tasks from past days stay where they are (they render as "Due"),
+ * and a copy carrying the same title / description / subject / goal link / routine
+ * link / progress is created for today. Works for manual dashboard tasks as well
+ * as goal-scheduled tasks.
+ *
+ * Rollover counting: every copy inherits the parent's rollover_count, so the whole
+ * chain is the same task identity. Once a task has rolled over rollover limit times
+ * in a row without being completed, it is marked "Stale" (is_stale = true) and no
+ * further copies are created. The most recent copy is parked into today's list so
+ * the user can still see and resolve it; the original stays in its original day as
+ * a historical record (only the newest copy, never the original, is ever moved).
+ *
+ * Identity merge: a plain (non-goal) task and a goal-linked task with the
+ * same normalized title are treated as ONE task by this pass — they dedupe
+ * against each other for today and completing either stops both chains from
+ * rolling (lastDonePlain / lastDoneGoal). Different goals sharing a title
+ * stay independent.
+ */
+async function carryForwardIncompleteTasksInternal(supabase, userId) {
+    const todayISO = (0, tracker_shared_1.toISODate)(new Date());
+    const { data } = await supabase
+        .from("day_tasks")
+        .select("id, task_date, title, description, source, sort_order, routine_task_id, goal_id, subject_id, priority, completed_at, progress_pct, rollover_count, is_stale")
+        .eq("user_id", userId)
+        .lte("task_date", todayISO);
+    const rows = data ?? [];
+    if (rows.length === 0)
+        return 0;
+    const overdue = rows.filter((r) => !r.completed_at && r.task_date < todayISO && !r.is_stale);
+    if (overdue.length === 0)
+        return 0;
+    // Goal-linked rows are processed before plain ones so that when both
+    // identities of a title are overdue, the goal-linked chain (which feeds goal
+    // progress) is the one that lands on today. Older rows first otherwise.
+    overdue.sort((a, b) => {
+        if (!!a.goal_id !== !!b.goal_id)
+            return a.goal_id ? -1 : 1;
+        return a.task_date.localeCompare(b.task_date);
+    });
+    // Goal tasks only carry forward while their goal is still active.
+    const goalIds = [...new Set(overdue.map((r) => r.goal_id).filter(Boolean))];
+    let activeGoalIds = new Set();
+    if (goalIds.length > 0) {
+        const { data: goals } = await supabase
+            .from("goals")
+            .select("id, status")
+            .eq("user_id", userId)
+            .neq("status", "completed")
+            .in("id", goalIds);
+        activeGoalIds = new Set((goals ?? []).map((g) => g.id));
+    }
+    // Latest date on which each task key was actually completed.
+    const lastDone = new Map();
+    // Title-level completion memory spanning the plain <-> goal-linked identity
+    // split: to the user, a plain copy and a goal-linked copy of the same title
+    // are the same task, so completing either must stop BOTH chains from rolling
+    // forward. Goal-vs-goal (different goals) stays independent — those are
+    // genuinely different tasks that merely share a title.
+    const lastDonePlain = new Map(); // title -> latest plain-identity done
+    const lastDoneGoal = new Map(); // title -> latest goal-identity done (any goal)
+    for (const r of rows) {
+        if (!r.completed_at)
+            continue;
+        const k = taskKey(r);
+        const prev = lastDone.get(k);
+        if (!prev || r.task_date > prev)
+            lastDone.set(k, r.task_date);
+        const title = titleKey(r);
+        const byTitle = r.goal_id ? lastDoneGoal : lastDonePlain;
+        const prevTitle = byTitle.get(title);
+        if (!prevTitle || r.task_date > prevTitle)
+            byTitle.set(title, r.task_date);
+    }
+    const todayKeys = new Set(rows.filter((r) => r.task_date === todayISO).map(taskKey));
+    // Same-goal dedupe for today: goal-linked tasks are also created by
+    // materializeWeek / scheduleGoalTasks, which may use a different
+    // routine_task_id (or none). Key on goal + title so the rollover never adds a
+    // second row for a goal task that already exists today.
+    const todayGoalKeys = new Set(rows.filter((r) => r.task_date === todayISO && r.goal_id).map((r) => (0, tracker_shared_1.goalLinkKey)(todayISO, r)));
+    // Title-level dedupe for today spanning the plain <-> goal-linked identity
+    // split: a plain task and a goal-linked task with the same title are ONE task
+    // to the user, so only one of them may exist per day. Without this guard a
+    // plain overdue row and a goal-linked overdue row of the same title EACH
+    // spawned a copy for today — the duplicate "Due" rows with differing badges.
+    const todayPlainTitles = new Set(rows.filter((r) => r.task_date === todayISO && !r.goal_id).map(titleKey));
+    const todayGoalTitles = new Set(rows.filter((r) => r.task_date === todayISO && r.goal_id).map(titleKey));
+    const dateById = new Map(rows.map((r) => [r.id, r.task_date]));
+    // Track the oldest ("original") and newest (active copy) overdue row per task key.
+    const oldestIdByKey = new Map();
+    const newestIdByKey = new Map();
+    for (const t of overdue) {
+        const k = taskKey(t);
+        const oldest = oldestIdByKey.get(k);
+        if (!oldest || (dateById.get(t.id) ?? "") < (dateById.get(oldest) ?? ""))
+            oldestIdByKey.set(k, t.id);
+        const newest = newestIdByKey.get(k);
+        if (!newest || (dateById.get(t.id) ?? "") > (dateById.get(newest) ?? ""))
+            newestIdByKey.set(k, t.id);
+    }
+    const toInsert = [];
+    const toUpdate = [];
+    for (const t of overdue) {
+        if (t.goal_id && !activeGoalIds.has(t.goal_id))
+            continue;
+        const k = taskKey(t);
+        const tTitle = titleKey(t);
+        // A copy of this task already exists for today (created by an earlier pass or
+        // pre-existing). Never create a second one — otherwise every week refetch
+        // would spawn a fresh zero-progress duplicate while the chain is under the
+        // stale limit. The existing copy carries the chain's rollover_count already.
+        if (todayKeys.has(k))
+            continue;
+        // Goal-linked tasks: also skip if a row for the same goal + title already
+        // exists today (it may have a different routine_task_id, e.g. created by
+        // materializeWeek or scheduleGoalTasks).
+        if (t.goal_id && todayGoalKeys.has((0, tracker_shared_1.goalLinkKey)(todayISO, t)))
+            continue;
+        // Plain <-> goal-linked merge: a copy already exists for today under the
+        // other identity with the same title. Plain rows merge against any
+        // identity; goal rows only against plain copies, so different goals
+        // sharing a title stay independent.
+        if (t.goal_id) {
+            if (todayPlainTitles.has(tTitle))
+                continue;
+        }
+        else if (todayPlainTitles.has(tTitle) || todayGoalTitles.has(tTitle)) {
+            continue;
+        }
+        // Already caught up on a later day — no need to keep dragging it forward.
+        const done = lastDone.get(k);
+        if (done && done > t.task_date)
+            continue;
+        // Cross-identity catch-up: the OTHER identity of this title was completed
+        // on a later day. The task is already done — stop dragging this chain.
+        const doneOther = t.goal_id ? lastDonePlain.get(tTitle) : lastDoneGoal.get(tTitle);
+        if (doneOther && doneOther > t.task_date)
+            continue;
+        const countSoFar = t.rollover_count ?? 0;
+        const becomesStale = countSoFar + 1 >= STALE_LIMIT;
+        if (countSoFar >= STALE_LIMIT || becomesStale) {
+            // Rollover limit reached (or already reached in a previous pass): mark the
+            // task stale and stop creating further copies. The newest copy gets parked
+            // into today's list so it stays visible until the user resolves it.
+            const isNewest = newestIdByKey.get(k) === t.id;
+            const isOriginal = oldestIdByKey.get(k) === t.id;
+            const parkToday = isNewest && !isOriginal && !todayKeys.has(k);
+            // A parked copy lands on today — reserve the title so a same-title row of
+            // the other identity later in this pass cannot also create a copy.
+            if (parkToday) {
+                if (t.goal_id)
+                    todayGoalTitles.add(tTitle);
+                else
+                    todayPlainTitles.add(tTitle);
+            }
+            toUpdate.push({
+                id: t.id,
+                rollover_count: Math.max(countSoFar, STALE_LIMIT),
+                is_stale: true,
+                parkToday,
+            });
+            continue;
+        }
+        // Rolling over: mark progress on this row and create the next-day copy, which
+        // INHERITS the rollover count so the identity self-limits after 3 days.
+        const newCount = countSoFar + 1;
+        todayKeys.add(k);
+        todayGoalKeys.add((0, tracker_shared_1.goalLinkKey)(todayISO, t));
+        if (t.goal_id)
+            todayGoalTitles.add(tTitle);
+        else
+            todayPlainTitles.add(tTitle);
+        toUpdate.push({ id: t.id, rollover_count: newCount, is_stale: false });
+        toInsert.push({
+            user_id: userId,
+            task_date: todayISO,
+            title: t.title,
+            description: t.description ?? null,
+            sort_order: t.sort_order ?? 0,
+            source: t.source ?? "oneoff",
+            routine_task_id: t.routine_task_id ?? null,
+            goal_id: t.goal_id ?? null,
+            subject_id: t.subject_id ?? null,
+            priority: t.priority ?? null,
+            progress_pct: t.progress_pct ?? 0,
+            rollover_count: newCount,
+        });
+    }
+    // Apply rollover count / stale updates (and park the newest stale copy in today).
+    for (const u of toUpdate) {
+        if (u.parkToday) {
+            await supabase
+                .from("day_tasks")
+                .update({
+                task_date: todayISO,
+                rollover_count: u.rollover_count,
+                is_stale: u.is_stale,
+            })
+                .eq("id", u.id);
+        }
+        else {
+            await supabase
+                .from("day_tasks")
+                .update({ rollover_count: u.rollover_count, is_stale: u.is_stale })
+                .eq("id", u.id);
+        }
+    }
+    if (toInsert.length > 0) {
+        // Final idempotency check, immediately before writing: another invocation
+        // (a concurrent loader that started before this one, a second tab, or
+        // another server instance) may have created a copy for one of these tasks
+        // after this pass took its snapshot. Re-read today's rows and drop any copy
+        // whose task identity already exists for today, so a "Due" copy is only
+        // ever created once per (user, task_date, originating task) — no matter how
+        // many times this function gets invoked.
+        const { data: freshToday } = await supabase
+            .from("day_tasks")
+            .select("title, goal_id, routine_task_id")
+            .eq("user_id", userId)
+            .eq("task_date", todayISO);
+        const freshKeys = new Set((freshToday ?? []).map(taskKey));
+        // Same plain <-> goal-linked title merge as above, re-checked against fresh
+        // state so a concurrent pass cannot slip a duplicate past the snapshot.
+        const freshPlainTitles = new Set((freshToday ?? []).filter((r) => !r.goal_id).map(titleKey));
+        const freshGoalTitles = new Set((freshToday ?? []).filter((r) => !!r.goal_id).map(titleKey));
+        const pending = toInsert.filter((r) => {
+            if (freshKeys.has(taskKey(r)))
+                return false;
+            const rTitle = titleKey(r);
+            if (r.goal_id)
+                return !freshPlainTitles.has(rTitle);
+            return !freshPlainTitles.has(rTitle) && !freshGoalTitles.has(rTitle);
+        });
+        if (pending.length > 0) {
+            await supabase.from("day_tasks").insert(pending);
+        }
+        return pending.length;
+    }
+    return toInsert.length;
+}
+/*
+ * Rollover passes must never run concurrently for the same user. The dashboard
+ * fires getWeek + getDay + getGoals on mount and each of those triggers a
+ * carry-forward pass; two passes racing could both observe "no copy for today"
+ * and both insert one, producing duplicate "Due" rows milliseconds apart. Every
+ * pass for a user is therefore chained behind a per-user promise so they run
+ * strictly in order and each one re-reads fresh state before deciding.
+ */
+const rolloverQueues = new Map();
+function runRolloverExclusive(userId, fn) {
+    const prev = rolloverQueues.get(userId) ?? Promise.resolve();
+    const run = prev.then(fn, fn); // run even if the previous pass failed
+    const tail = run.catch(() => undefined); // stored tail never rejects
+    rolloverQueues.set(userId, tail);
+    void tail.then(() => {
+        if (rolloverQueues.get(userId) === tail)
+            rolloverQueues.delete(userId);
+    });
+    return run;
+}
+/** Carry-forward pass, serialized per user (see rolloverQueues above). */
+function carryForwardIncompleteTasks(supabase, userId) {
+    return runRolloverExclusive(userId, () => carryForwardIncompleteTasksInternal(supabase, userId));
+}
+/** @deprecated kept for compatibility — now copies forward instead of moving. */
+exports.rolloverIncompleteGoalTasks = carryForwardIncompleteTasks;
+/**
+ * ROUTINE MATERIALIZATION IS DISABLED (product decision): the Routines tab is now a
+ * pure reference/template view — routine_tasks templates are no longer converted into
+ * day_tasks rows, so nothing is auto-created from the weekly routine anymore.
+ *
+ * day_tasks rows that were materialized in the past are historical data and are left
+ * exactly as they are. The legacy cleanup that used to delete unlinked routine rows
+ * from day_tasks has been removed entirely, so no code path can delete them — even if
+ * this flag is ever flipped back on. Flipping it to true restores only the insert side
+ * of the old behavior. The carry-forward pass is independent and keeps rolling existing
+ * uncompleted tasks forward.
+ */
+const ROUTINE_MATERIALIZATION_ENABLED = false;
+/** Materialize goal-linked repeating routine tasks into day_tasks for the given week (idempotent).
+ * General routine schedule blocks (without a goal_id) are kept in the Routines tab and not placed into day_tasks.
+ * (Currently gated OFF by ROUTINE_MATERIALIZATION_ENABLED — see above.)
+ */
+async function materializeWeekInternal(supabase, userId, weekStart) {
+    // Internal (unqueued) call: this whole body already runs inside the per-user
+    // rollover queue — calling the queued wrapper here would deadlock.
+    await carryForwardIncompleteTasksInternal(supabase, userId);
+    // Materialization disabled — see ROUTINE_MATERIALIZATION_ENABLED above. Only the
+    // carry-forward pass runs; no day_tasks rows are created, deleted or modified.
+    if (!ROUTINE_MATERIALIZATION_ENABLED)
+        return;
+    const dates = (0, tracker_shared_1.weekDates)(weekStart);
+    // Fetch all active repeating routine tasks that are linked to goals
+    const { data: goalRoutines } = await supabase
+        .from("routine_tasks")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .not("goal_id", "is", null);
+    const { data: existing } = await supabase
+        .from("day_tasks")
+        .select("task_date, routine_task_id, goal_id, title")
+        .eq("user_id", userId)
+        .gte("task_date", dates[0])
+        .lte("task_date", dates[6]);
+    const have = new Set((existing ?? [])
+        .filter((r) => r.routine_task_id)
+        .map((r) => `${r.task_date}|${r.routine_task_id}`));
+    // Same-goal dedupe: a goal task may already exist on a date as a rollover copy
+    // or via another routine entry with a different/null routine_task_id. Key on
+    // goal + title so we never materialize a second row for the same goal task.
+    const haveGoal = new Set((existing ?? []).filter((r) => r.goal_id).map((r) => (0, tracker_shared_1.goalLinkKey)(r.task_date, r)));
+    const rows = [];
+    for (const rt of goalRoutines ?? []) {
+        const date = dates[rt.weekday];
+        if (!date)
+            continue;
+        if (have.has(`${date}|${rt.id}`))
+            continue;
+        const parsed = (0, tracker_shared_1.parseRoutineTitle)(rt.title);
+        // Habits linked to goals are tracked in the Habits/Goals tabs and must not create task items in the Tasks section
+        if (parsed.habitId && parsed.habitId !== "none")
+            continue;
+        const goalKey = (0, tracker_shared_1.goalLinkKey)(date, {
+            goal_id: rt.goal_id,
+            title: parsed.displayTitle || rt.title,
+        });
+        if (rt.goal_id && haveGoal.has(goalKey))
+            continue;
+        haveGoal.add(goalKey);
+        rows.push({
+            user_id: userId,
+            task_date: date,
+            title: parsed.displayTitle || rt.title,
+            sort_order: rt.sort_order ?? 0,
+            source: "routine",
+            routine_task_id: rt.id,
+            goal_id: rt.goal_id,
+            subject_id: rt.subject_id ?? null,
+        });
+    }
+    if (rows.length > 0) {
+        await supabase.from("day_tasks").insert(rows);
+    }
+}
+/** Weekly materialization, serialized per user (same queue as the rollover pass). */
+function materializeWeek(supabase, userId, weekStart) {
+    return runRolloverExclusive(userId, () => materializeWeekInternal(supabase, userId, weekStart));
+}
+async function loadWeek(supabase, userId, weekStart) {
+    await (0, exports.rolloverIncompleteGoalTasks)(supabase, userId);
+    await materializeWeek(supabase, userId, weekStart);
+    const dates = (0, tracker_shared_1.weekDates)(weekStart);
+    // ±CHAIN_CONTEXT_BUFFER_DAYS lookaround on the SAME single query (no extra
+    // round-trip): rollover chains are capped at STALE_LIMIT (3) rolls, so a
+    // chain can never reach further than a few calendar days past either edge of
+    // the visible week. Widening the fetch lets the client's "Completed late"
+    // badge see a chain's completed copy even when the chain crosses a
+    // Sunday/Monday boundary. Rows outside the visible week are split out below
+    // and are never rendered — they exist only so buildRolloverChains on the
+    // client sees whole chains.
+    const CHAIN_CONTEXT_BUFFER_DAYS = 7;
+    const rangeStart = (0, tracker_shared_1.toISODate)((0, tracker_shared_1.addDays)((0, tracker_shared_1.parseISODate)(dates[0]), -CHAIN_CONTEXT_BUFFER_DAYS));
+    const rangeEnd = (0, tracker_shared_1.toISODate)((0, tracker_shared_1.addDays)((0, tracker_shared_1.parseISODate)(dates[6]), CHAIN_CONTEXT_BUFFER_DAYS));
+    const { data } = await supabase
+        .from("day_tasks")
+        .select("*")
+        .eq("user_id", userId)
+        .gte("task_date", rangeStart)
+        .lte("task_date", rangeEnd)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+    const tasks = data ?? [];
+    const visibleTasks = tasks.filter((t) => t.task_date >= dates[0] && t.task_date <= dates[6]);
+    const chainContextTasks = tasks.filter((t) => t.task_date < dates[0] || t.task_date > dates[6]);
+    const profile = await ensureProfile(supabase, userId);
+    const { data: subjectRows } = await supabase
+        .from("subjects")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+    return {
+        weekStart,
+        days: dates.map((date, i) => ({
+            date,
+            weekday: i,
+            tasks: visibleTasks.filter((t) => t.task_date === date),
+        })),
+        profile,
+        subjects: subjectRows ?? [],
+        chainContextTasks,
+    };
+}
+/** Recompute XP, level and streaks from the full task history. */
+async function recomputeStats(supabase, userId) {
+    const { data } = await supabase
+        .from("day_tasks")
+        .select("task_date, completed_at")
+        .eq("user_id", userId);
+    const rows = data ?? [];
+    const byDate = new Map();
+    for (const r of rows) {
+        const entry = byDate.get(r.task_date) ?? { total: 0, done: 0 };
+        entry.total += 1;
+        if (r.completed_at)
+            entry.done += 1;
+        byDate.set(r.task_date, entry);
+    }
+    let xp = 0;
+    for (const e of byDate.values()) {
+        xp += e.done * tracker_shared_1.XP_PER_TASK;
+        if (e.total > 0 && e.done === e.total)
+            xp += tracker_shared_1.XP_PERFECT_DAY;
+    }
+    // Streak activity = the real days on which the user completed something,
+    // keyed by the UTC calendar date of completed_at (PostgREST returns
+    // timestamptz in UTC) — NOT the scheduled task_date. Keying streak days by
+    // task_date let a task moved to a future day and ticked early inflate
+    // current/best streak with a day that never happened (or, for users ahead
+    // of UTC, wipe the current streak to 0 because "last active day" landed in
+    // the future). Completion-time dating is timezone-agnostic: pre-completing
+    // tomorrow's task credits today, and a future day can never become an
+    // active day, so the today/yesterday grace check below stays correct.
+    const activeDays = [
+        ...new Set(rows.filter((r) => r.completed_at).map((r) => r.completed_at.slice(0, 10))),
+    ].sort();
+    let best = 0;
+    let run = 0;
+    let prev = null;
+    for (const d of activeDays) {
+        const cur = (0, tracker_shared_1.parseISODate)(d);
+        if (prev && (cur.getTime() - prev.getTime()) / 86400000 === 1)
+            run += 1;
+        else
+            run = 1;
+        best = Math.max(best, run);
+        prev = cur;
+    }
+    const today = new Date();
+    const todayISO = (0, tracker_shared_1.toISODate)(today);
+    const yesterdayISO = (0, tracker_shared_1.toISODate)(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1));
+    const last = activeDays[activeDays.length - 1];
+    const current = last === todayISO || last === yesterdayISO ? run : 0;
+    const { data: updated } = await supabase
+        .from("profiles")
+        .update({
+        total_xp: xp,
+        level: (0, tracker_shared_1.levelFromXp)(xp),
+        current_streak: current,
+        best_streak: best,
+        last_active_day: last ?? null,
+    })
+        .eq("id", userId)
+        .select("*")
+        .maybeSingle();
+    return updated ?? null;
+}
+async function loadHistory(supabase, userId, weeks) {
+    const { data } = await supabase
+        .from("day_tasks")
+        .select("task_date, completed_at")
+        .eq("user_id", userId)
+        .order("task_date", { ascending: true });
+    const rows = data ?? [];
+    const byWeek = new Map();
+    for (const r of rows) {
+        const d = (0, tracker_shared_1.parseISODate)(r.task_date);
+        const offset = (d.getDay() + 6) % 7;
+        const ws = (0, tracker_shared_1.toISODate)(new Date(d.getFullYear(), d.getMonth(), d.getDate() - offset));
+        const e = byWeek.get(ws) ?? { total: 0, done: 0 };
+        e.total += 1;
+        if (r.completed_at)
+            e.done += 1;
+        byWeek.set(ws, e);
+    }
+    const list = [...byWeek.entries()]
+        .map(([weekStart, e]) => ({
+        weekStart,
+        total: e.total,
+        done: e.done,
+        pct: e.total ? Math.round((e.done / e.total) * 100) : 0,
+    }))
+        .sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1))
+        .slice(0, weeks);
+    const totalDone = rows.filter((r) => r.completed_at).length;
+    return { weeks: list, totalDone, totalTasks: rows.length };
+}

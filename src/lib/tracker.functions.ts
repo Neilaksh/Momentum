@@ -215,6 +215,7 @@ export const addDayTask = createServerFn({ method: "POST" })
       goalId?: string | null;
       subjectId?: string | null;
       priority?: GoalPriority | null;
+      estMinutes?: number | null;
     }) =>
       z
         .object({
@@ -223,6 +224,7 @@ export const addDayTask = createServerFn({ method: "POST" })
           goalId: z.string().nullable().optional(),
           subjectId: z.string().nullable().optional(),
           priority: z.enum(["High", "Med", "Low"]).nullable().optional(),
+          estMinutes: z.number().int().min(1).max(1440).nullable().optional(),
         })
         .parse(input),
   )
@@ -245,6 +247,12 @@ export const addDayTask = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
     if (existing) return { task: existing };
+    // A custom duration entered at creation is stored exactly like the note
+    // editor's estimate: embedded in `description` as `\n---est:N---`. No schema
+    // change is needed and the study timer picks it up automatically.
+    const description =
+      data.estMinutes != null ? formatTaskDescriptionServer(title, data.estMinutes) : null;
+
     const { data: row } = await context.supabase
       .from("day_tasks")
       .insert({
@@ -258,6 +266,7 @@ export const addDayTask = createServerFn({ method: "POST" })
         // provisioned yet (migration pending), a `priority: null` key would
         // make PostgREST reject the whole insert.
         ...(data.priority ? { priority: data.priority } : {}),
+        ...(description !== null ? { description } : {}),
         sort_order: 1000,
       })
       .select("*")

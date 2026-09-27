@@ -9,10 +9,13 @@ import {
   BookOpen,
   CalendarDays,
   Check,
+  CheckCircle2,
+  Circle,
   GraduationCap,
   Palette,
   Plus,
   RefreshCw,
+  Timer,
   Trash2,
   X,
 } from "lucide-react";
@@ -35,6 +38,16 @@ import {
 import { SUBJECT_COLORS, subjectColorHex, type Subject } from "@/lib/subjects-shared";
 import { getWeek } from "@/lib/tracker.functions";
 import { startOfWeek, toISODate, type WeekData } from "@/lib/tracker-shared";
+import { getActiveStudySession, getStudyWeek } from "@/lib/study-sessions.functions";
+import {
+  formatStudyDuration,
+  isSessionActive,
+  isStudiedToday,
+  summarizeStudyBySubject,
+  type StudySession,
+  type StudySessionRow,
+  type SubjectStudySummary,
+} from "@/lib/study-sessions-shared";
 
 export const Route = createFileRoute("/subjects")({
   head: () => ({
@@ -62,57 +75,146 @@ function SubjectActivityMiniChart({
   subjectId,
   days,
   colorHex,
+  studyByDate,
+  weekStudySeconds,
 }: {
   subjectId: string;
   days: Array<{ date: string; tasks: any[] }>;
   colorHex: string;
+  /** Seconds studied per local date (YYYY-MM-DD); empty when nothing is logged. */
+  studyByDate: Record<string, number>;
+  /** Total seconds studied this week, shown beside the task tally. */
+  weekStudySeconds: number;
 }) {
   const dayStats = days.map((d) => {
     const matching = d.tasks.filter((t) => t.subject_id === subjectId);
     const done = matching.filter((t) => t.completed_at).length;
     const total = matching.length;
-    return { date: d.date, done, total };
+    return { date: d.date, done, total, studySeconds: studyByDate[d.date] ?? 0 };
   });
 
   const maxTotal = Math.max(1, ...dayStats.map((d) => d.total));
+  const maxStudy = Math.max(1, ...dayStats.map((d) => d.studySeconds));
+  const hasStudy = dayStats.some((d) => d.studySeconds > 0);
   const totalDone = dayStats.reduce((a, b) => a + b.done, 0);
   const totalTasks = dayStats.reduce((a, b) => a + b.total, 0);
 
   return (
     <div className="mt-3.5 pt-3 border-t border-border/50 flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-xs text-muted-foreground">This Week:</span>
         <span className="text-xs font-semibold text-foreground">
           {totalDone} / {totalTasks} tasks done
         </span>
+        {weekStudySeconds > 0 && (
+          <span className="text-xs font-semibold text-emerald-500">
+            &middot; {formatStudyDuration(weekStudySeconds)} studied
+          </span>
+        )}
       </div>
 
-      {/* 7-day mini bars */}
+      {/* 7-day mini bars: the subject colour for tasks, emerald for study time */}
       <div className="flex items-end gap-1.5 h-6">
         {dayStats.map((d, i) => {
           const dayName = ["M", "T", "W", "T", "F", "S", "S"][i];
           const heightPct = d.total > 0 ? Math.max(25, Math.round((d.done / maxTotal) * 100)) : 15;
+          const studyPct =
+            d.studySeconds > 0 ? Math.max(20, Math.round((d.studySeconds / maxStudy) * 100)) : 0;
           return (
             <div
               key={d.date}
               className="flex flex-col items-center gap-0.5"
-              title={`${d.done}/${d.total} tasks done`}
+              title={`${d.done}/${d.total} tasks done${
+                d.studySeconds > 0 ? ` \u00b7 ${formatStudyDuration(d.studySeconds)} studied` : ""
+              }`}
             >
-              <div className="w-2.5 h-4 bg-secondary/80 rounded-xs flex items-end overflow-hidden">
-                <div
-                  className="w-full transition-all rounded-xs"
-                  style={{
-                    height: `${heightPct}%`,
-                    backgroundColor:
-                      d.done > 0 ? colorHex : d.total > 0 ? "rgba(255,255,255,0.2)" : "transparent",
-                  }}
-                />
+              <div className="flex items-end gap-0.5">
+                <div className="w-2.5 h-4 bg-secondary/80 rounded-xs flex items-end overflow-hidden">
+                  <div
+                    className="w-full transition-all rounded-xs"
+                    style={{
+                      height: `${heightPct}%`,
+                      backgroundColor:
+                        d.done > 0
+                          ? colorHex
+                          : d.total > 0
+                            ? "rgba(255,255,255,0.2)"
+                            : "transparent",
+                    }}
+                  />
+                </div>
+                {hasStudy && (
+                  <div className="w-1 h-4 bg-secondary/80 rounded-xs flex items-end overflow-hidden">
+                    <div
+                      className="w-full transition-all rounded-xs bg-emerald-500/80"
+                      style={{ height: `${studyPct}%` }}
+                    />
+                  </div>
+                )}
               </div>
               <span className="text-[9px] text-muted-foreground">{dayName}</span>
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The study mark on a subject card - the study-side twin of a task's completed
+ * tick. A finished block today turns it into an emerald check ("Studied today ·
+ * 45m"), a still-running block linked to the subject shows as a pulsing
+ * "Studying now" timer, and the week's total sits on the right. With nothing
+ * logged the row stays muted, so a subject reads as marked or unmarked at a
+ * glance exactly like a task does.
+ */
+function SubjectStudyMark({
+  summary,
+  activeSeconds,
+}: {
+  summary: SubjectStudySummary | null;
+  /** Elapsed seconds of a session linked to this subject right now, else null. */
+  activeSeconds: number | null;
+}) {
+  const studiedToday = isStudiedToday(summary);
+  const isRunning = activeSeconds !== null;
+
+  return (
+    <div
+      className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
+        isRunning
+          ? "border-primary/30 bg-primary/5"
+          : studiedToday
+            ? "border-emerald-500/30 bg-emerald-500/5"
+            : "border-border/60 bg-secondary/20"
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        {isRunning ? (
+          <Timer className="h-3.5 w-3.5 shrink-0 animate-pulse text-primary" />
+        ) : studiedToday ? (
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+        ) : (
+          <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+        )}
+        <span
+          className={`font-semibold ${isRunning || studiedToday ? "text-emerald-500" : "text-muted-foreground"}`}
+        >
+          {isRunning
+            ? `Studying now \u00b7 ${formatStudyDuration(activeSeconds ?? 0)}`
+            : studiedToday
+              ? `Studied today \u00b7 ${formatStudyDuration(summary?.todaySeconds ?? 0)}`
+              : "Not studied today"}
+        </span>
+      </span>
+      <span className="text-[11px] text-muted-foreground">
+        {summary && summary.weekSeconds > 0
+          ? `${formatStudyDuration(summary.weekSeconds)} this week \u00b7 ${summary.weekSessions} session${
+              summary.weekSessions !== 1 ? "s" : ""
+            }`
+          : "No study logged this week"}
+      </span>
     </div>
   );
 }
@@ -126,7 +228,13 @@ function SubjectsPage() {
   const checkUsageFn = useServerFn(checkSubjectUsage);
   const qc = useQueryClient();
 
-  const weekStart = toISODate(startOfWeek(new Date()));
+  // The visible week. `weekStart` is the local Monday as YYYY-MM-DD (what the
+  // task/week queries use) and `weekStartIso` the same instant, so the study
+  // query can filter started_at by the CALLER's week boundary, not the server's.
+  const weekStartDate = useMemo(() => startOfWeek(new Date()), []);
+  const weekStart = toISODate(weekStartDate);
+  const weekStartIso = useMemo(() => weekStartDate.toISOString(), [weekStartDate]);
+  const today = toISODate(new Date());
 
   const {
     data,
@@ -146,6 +254,51 @@ function SubjectsPage() {
   });
 
   const subjects = data?.subjects ?? [];
+
+  // Study activity. Finished blocks this week mark each subject, and a block that
+  // is still running shows as "Studying now" on the subject the timer is linked
+  // to. Both keys are shared with the Study tab, so saving a session there
+  // refreshes this page (and vice versa) instead of drifting out of date.
+  const fetchStudyWeek = useServerFn(getStudyWeek);
+  const fetchActiveStudy = useServerFn(getActiveStudySession);
+
+  const { data: studyWeekData } = useQuery({
+    queryKey: ["study-week", weekStartIso],
+    queryFn: () =>
+      fetchStudyWeek({ data: { weekStartIso } }) as Promise<{ sessions: StudySessionRow[] }>,
+  });
+
+  const { data: activeStudyData } = useQuery({
+    queryKey: ["active-study-session"],
+    queryFn: async () => {
+      const res = await fetchActiveStudy();
+      return (res?.session ?? null) as StudySession | null;
+    },
+    refetchInterval: (query) => (query.state.data ? 5000 : false),
+  });
+
+  const activeStudySession = activeStudyData ?? null;
+  const isStudyRunning = isSessionActive(activeStudySession);
+
+  // Elapsed time of the running block, so the "Studying now" mark counts up.
+  const [studyNow, setStudyNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    if (!isStudyRunning) return;
+    const interval = setInterval(() => setStudyNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [isStudyRunning]);
+
+  const activeStudyStartedMs =
+    isStudyRunning && activeStudySession ? new Date(activeStudySession.started_at).getTime() : null;
+  const activeStudySeconds =
+    activeStudyStartedMs !== null
+      ? Math.max(0, Math.floor((studyNow - activeStudyStartedMs) / 1000))
+      : null;
+
+  const studyBySubject = useMemo(
+    () => summarizeStudyBySubject(studyWeekData?.sessions ?? [], { today, weekStart }),
+    [studyWeekData, today, weekStart],
+  );
 
   // Exam Schedules integration
   const { exams } = useExamSchedules();
@@ -437,6 +590,11 @@ function SubjectsPage() {
             const isBlocked = blockedDelete?.id === s.id;
             const isConfirming = confirmDeleteId === s.id;
             const isArchived = archivedIds.includes(s.id);
+            // This subject's study mark: finished blocks this week, plus a timer
+            // currently running against it.
+            const study = studyBySubject.get(s.id) ?? null;
+            const studiedToday = isStudiedToday(study);
+            const isStudyingNow = isStudyRunning && activeStudySession?.subject_id === s.id;
 
             if (isEditing) {
               return (
@@ -489,16 +647,60 @@ function SubjectsPage() {
                     ? "border-destructive/50 bg-destructive/5"
                     : isArchived
                       ? "border-border/60 bg-card/60 opacity-80"
-                      : "border-border bg-card"
+                      : studiedToday
+                        ? "border-emerald-500/30 bg-card"
+                        : isStudyingNow
+                          ? "border-primary/40 bg-card"
+                          : "border-border bg-card"
                 }`}
               >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  {/* Study-mark checkbox — mirrors the task completion tick */}
                   <span
-                    className="h-4 w-4 shrink-0 rounded-full border border-white/10"
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-all ${
+                      isStudyingNow
+                        ? "border-primary/50 bg-primary/15 animate-pulse"
+                        : studiedToday
+                          ? "border-emerald-500/40 bg-emerald-500/20"
+                          : "border-border bg-transparent"
+                    }`}
+                  >
+                    {isStudyingNow ? (
+                      <Timer className="h-3.5 w-3.5 text-primary" />
+                    ) : studiedToday ? (
+                      <svg
+                        viewBox="0 0 12 12"
+                        className="h-3.5 w-3.5 stroke-emerald-400"
+                        fill="none"
+                        strokeWidth={2.5}
+                      >
+                        <path
+                          d="M2.5 6.3l2.4 2.4 4.6-5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : null}
+                  </span>
+
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full border border-white/10"
                     style={{ background: subjectColorHex(s.color) }}
                   />
-                  <h3 className="flex-1 truncate font-semibold tracking-tight">
+                  <h3 className={`flex-1 truncate font-semibold tracking-tight ${
+                    studiedToday && !isStudyingNow ? "text-emerald-500" : ""
+                  }`}>
                     {s.name}
+                    {isStudyingNow && (
+                      <span className="ml-2 animate-pulse rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-[10px] font-semibold text-primary uppercase tracking-wider">
+                        Studying
+                      </span>
+                    )}
+                    {studiedToday && !isStudyingNow && (
+                      <span className="ml-2 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">
+                        Studied today
+                      </span>
+                    )}
                     {isArchived && (
                       <span className="ml-2 rounded-full bg-secondary/80 border border-border/80 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                         Archived
@@ -595,6 +797,14 @@ function SubjectsPage() {
                   subjectId={s.id}
                   days={weekData?.days ?? []}
                   colorHex={subjectColorHex(s.color)}
+                  studyByDate={study?.dailySeconds ?? {}}
+                  weekStudySeconds={study?.weekSeconds ?? 0}
+                />
+
+                {/* Study mark: the study-side twin of a task's completed tick */}
+                <SubjectStudyMark
+                  summary={study}
+                  activeSeconds={isStudyingNow ? activeStudySeconds : null}
                 />
 
                 {/* Upcoming Exam Indicator if scheduled for this subject */}

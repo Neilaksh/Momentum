@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   getActiveSession as loadActiveSession,
+  listFinishedSessionsSince,
   startStudySession as startSessionRow,
   stopStudySession as stopSessionRow,
 } from "./study-sessions.server";
@@ -19,9 +20,6 @@ export const getActiveStudySession = createServerFn({ method: "POST" })
 /**
  * Start a timer. Passing no input starts a default Pomodoro; when a session is
  * already running its row is returned instead of starting a second timer.
- *
- * Also reports `taskLinkSkipped` so a client can explain a task link that the
- * database could not store (see study-sessions.server.ts).
  */
 export const startStudySession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -30,8 +28,6 @@ export const startStudySession = createServerFn({ method: "POST" })
       input:
         | {
             subjectId?: string | null;
-            goalId?: string | null;
-            taskId?: string | null;
             mode?: StudySessionMode;
             targetSeconds?: number | null;
           }
@@ -40,8 +36,6 @@ export const startStudySession = createServerFn({ method: "POST" })
       z
         .object({
           subjectId: z.string().uuid().nullable().optional(),
-          goalId: z.string().uuid().nullable().optional(),
-          taskId: z.string().uuid().nullable().optional(),
           mode: z.enum(STUDY_SESSION_MODES).optional(),
           targetSeconds: z.number().int().min(1).max(86400).nullable().optional(),
         })
@@ -52,8 +46,6 @@ export const startStudySession = createServerFn({ method: "POST" })
     startSessionRow(context.supabase, context.userId, {
       mode: data?.mode,
       subjectId: data?.subjectId ?? null,
-      goalId: data?.goalId ?? null,
-      taskId: data?.taskId ?? null,
       targetSeconds: data?.targetSeconds ?? null,
     }),
   );
@@ -67,7 +59,6 @@ export const stopStudySession = createServerFn({ method: "POST" })
         | {
             sessionId?: string | null;
             notes?: string | null;
-            markTaskComplete?: boolean;
           }
         | undefined,
     ) =>
@@ -75,16 +66,27 @@ export const stopStudySession = createServerFn({ method: "POST" })
         .object({
           sessionId: z.string().uuid().nullable().optional(),
           notes: z.string().max(2000).nullable().optional(),
-          markTaskComplete: z.boolean().optional(),
         })
         .optional()
         .parse(input),
   )
-  .handler(async ({ data, context }) => {
-    const result = await stopSessionRow(context.supabase, context.userId, {
+  .handler(async ({ data, context }) =>
+    stopSessionRow(context.supabase, context.userId, {
       sessionId: data?.sessionId ?? null,
       notes: data?.notes,
-      markTaskComplete: data?.markTaskComplete,
-    });
-    return result;
-  });
+    }),
+  );
+
+/**
+ * Finished sessions from the start of the caller's week, used to mark subjects on
+ * the Subjects tab. `weekStartIso` is the local Monday 00:00 as an ISO instant so
+ * the week boundary is the caller's, not the server's.
+ */
+export const getStudyWeek = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { weekStartIso: string }) =>
+    z.object({ weekStartIso: z.string().min(1).max(40) }).parse(input),
+  )
+  .handler(async ({ data, context }) => ({
+    sessions: await listFinishedSessionsSince(context.supabase, context.userId, data.weekStartIso),
+  }));
