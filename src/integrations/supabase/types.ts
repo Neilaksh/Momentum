@@ -395,6 +395,7 @@ export type Database = {
           started_at: string;
           subject_id: string | null;
           target_seconds: number | null;
+          task_id: string | null;
           user_id: string;
         };
         Insert: {
@@ -408,6 +409,7 @@ export type Database = {
           started_at?: string;
           subject_id?: string | null;
           target_seconds?: number | null;
+          task_id?: string | null;
           user_id: string;
         };
         Update: {
@@ -421,6 +423,7 @@ export type Database = {
           started_at?: string;
           subject_id?: string | null;
           target_seconds?: number | null;
+          task_id?: string | null;
           user_id?: string;
         };
         Relationships: [
@@ -436,6 +439,13 @@ export type Database = {
             columns: ["subject_id"];
             isOneToOne: false;
             referencedRelation: "subjects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "study_sessions_task_id_fkey";
+            columns: ["task_id"];
+            isOneToOne: false;
+            referencedRelation: "day_tasks";
             referencedColumns: ["id"];
           },
         ];

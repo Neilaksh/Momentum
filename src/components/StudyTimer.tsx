@@ -16,11 +16,20 @@ import {
   type StudySessionMode,
 } from "@/lib/study-sessions-shared";
 import { subjectColorHex } from "@/lib/subjects-shared";
-import { getGoals } from "@/lib/tracker.functions";
-import type { Goal } from "@/lib/tracker-shared";
+import { getGoals, getWeek } from "@/lib/tracker.functions";
+import {
+  formatMinutes,
+  parseTaskDescription,
+  startOfWeek,
+  toISODate,
+  type DayTask,
+  type Goal,
+  type WeekData,
+} from "@/lib/tracker-shared";
 
 import { useSubjects } from "@/components/SubjectSelect";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -31,15 +40,41 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const DEFAULT_POMODORO_SECONDS = 25 * 60;
-const DEFAULT_COUNTDOWN_SECONDS = 30 * 60;
+/** Preset target lengths, in minutes, for the timed modes. */
+const POMODORO_PRESETS = [15, 25, 45, 50];
+const COUNTDOWN_PRESETS = [15, 30, 45, 60];
 
-const COUNTDOWN_PRESETS = [
-  { label: "15m", seconds: 15 * 60 },
-  { label: "30m", seconds: 30 * 60 },
-  { label: "45m", seconds: 45 * 60 },
-  { label: "60m", seconds: 60 * 60 },
-];
+/** The presets offered for a mode (stopwatch has no target to preset). */
+function durationPresetsFor(mode: StudySessionMode): number[] {
+  return mode === "countdown" ? COUNTDOWN_PRESETS : POMODORO_PRESETS;
+}
+
+/** Default focus/countdown length when a mode is (re)selected. */
+const DEFAULT_DURATION_MINUTES: Record<"pomodoro" | "countdown", number> = {
+  pomodoro: 25,
+  countdown: 30,
+};
+
+/** Bounds for the custom duration input — 1 minute up to 12 hours. */
+const MIN_DURATION_MINUTES = 1;
+const MAX_DURATION_MINUTES = 720;
+
+/** The default target length for a mode (stopwatch has no target). */
+function defaultDurationFor(mode: StudySessionMode): number {
+  return mode === "countdown"
+    ? DEFAULT_DURATION_MINUTES.countdown
+    : DEFAULT_DURATION_MINUTES.pomodoro;
+}
+
+/**
+ * Coerce a typed duration into a usable target: blank/unparsable input falls
+ * back to the caller's default and out-of-range values clamp to the allowed
+ * 1–720 minute window, so the timer can never start with a 0s target.
+ */
+function clampDurationMinutes(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(MAX_DURATION_MINUTES, Math.max(MIN_DURATION_MINUTES, Math.round(value)));
+}
 
 /**
  * Only the goals list is needed for the tag picker, so this mirrors goals.tsx's
@@ -82,7 +117,12 @@ export function StudyTimer() {
   const [mode, setMode] = useState<StudySessionMode>("pomodoro");
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("none");
   const [selectedGoalId, setSelectedGoalId] = useState<string>("none");
-  const [countdownTarget, setCountdownTarget] = useState<number>(DEFAULT_COUNTDOWN_SECONDS);
+  const [selectedTaskId, setSelectedTaskId] = useState<string>("none");
+  // Raw text of the duration input so it can be cleared and retyped freely;
+  // `durationMinutes` is its clamped, always-usable reading.
+  const [durationInput, setDurationInput] = useState<string>(
+    String(DEFAULT_DURATION_MINUTES.pomodoro),
+  );
   const [notes, setNotes] = useState<string>("");
   const [now, setNow] = useState<number>(() => Date.now());
 
@@ -114,25 +154,121 @@ export function StudyTimer() {
     return (goalsData?.goals ?? []).filter((g) => g.status === "active");
   }, [goalsData]);
 
+  const fetchWeekFn = useServerFn(getWeek);
+  const todayISO = toISODate(new Date());
+  const weekStart = toISODate(startOfWeek(new Date()));
+
+  // Same query key/shape as the study page and every other tab, so the cached
+  // week — and therefore today's task list — is shared rather than refetched.
+  const { data: weekData } = useQuery({
+    queryKey: ["week", weekStart],
+    queryFn: () => fetchWeekFn({ data: { weekStart } }) as Promise<WeekData>,
+  });
+
+  /** Today's open tasks — the ones a study session can move forward. */
+  const todayTasks = useMemo<DayTask[]>(() => {
+    const day = weekData?.days.find((d) => d.date === todayISO);
+    return (day?.tasks ?? [])
+      .filter((t) => !t.completed_at)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  }, [weekData, todayISO]);
+
+  /** Every one of today's rows (completed included) so a task id can resolve. */
+  const todayTasksById = useMemo(() => {
+    const map = new Map<string, DayTask>();
+    for (const t of weekData?.days.find((d) => d.date === todayISO)?.tasks ?? []) {
+      map.set(t.id, t);
+    }
+    return map;
+  }, [weekData, todayISO]);
+
+  const selectedTask =
+    selectedTaskId === "none" ? null : (todayTasksById.get(selectedTaskId) ?? null);
+  const activeTask = activeSession?.task_id
+    ? (todayTasksById.get(activeSession.task_id) ?? null)
+    : null;
+
+  // Keep the chosen task listed even if it was completed in another tab (a
+  // completed task drops out of `todayTasks`), so the select never loses value.
+  const taskOptions = useMemo<DayTask[]>(() => {
+    if (selectedTask && !todayTasks.some((t) => t.id === selectedTask.id)) {
+      return [selectedTask, ...todayTasks];
+    }
+    return todayTasks;
+  }, [todayTasks, selectedTask]);
+
+  const selectedTaskEstMinutes = selectedTask
+    ? parseTaskDescription(selectedTask.description).estMinutes
+    : null;
+  const activeTaskEstMinutes = activeTask
+    ? parseTaskDescription(activeTask.description).estMinutes
+    : null;
+
+  const durationMinutes = clampDurationMinutes(
+    Number.parseInt(durationInput, 10),
+    defaultDurationFor(mode),
+  );
+  const parsedDurationInput = Number.parseInt(durationInput, 10);
+  const isDurationClamped =
+    Number.isFinite(parsedDurationInput) && parsedDurationInput !== durationMinutes;
+
+  // Explains what picking a task does to the finished session's progress.
+  const taskHint =
+    todayTasks.length === 0
+      ? "No open tasks for today - add one on the Today page to link it here."
+      : !selectedTask
+        ? "Pick a task to credit this session's minutes to its progress."
+        : selectedTaskEstMinutes != null
+          ? `Study time counts toward this task's ${formatMinutes(selectedTaskEstMinutes)} estimate; its goal and subject are filled in below.`
+          : "This task has no estimate: every 25 min of study counts as 25% of its progress.";
+
+  /** Keep the target length sensible for the mode being switched to. */
+  const selectMode = (next: StudySessionMode) => {
+    if (next === mode) return;
+    setMode(next);
+    if (next !== "stopwatch") setDurationInput(String(DEFAULT_DURATION_MINUTES[next]));
+  };
+
+  /**
+   * Pick today's task: its goal and subject are inherited so the completed
+   * session lands where the task lives (both stay changeable in the pickers).
+   */
+  const selectTask = (value: string) => {
+    setSelectedTaskId(value);
+    if (value === "none") return;
+    const task = todayTasksById.get(value);
+    if (!task) return;
+    if (task.goal_id) setSelectedGoalId(task.goal_id);
+    if (task.subject_id) setSelectedSubjectId(task.subject_id);
+  };
+
   const startMutation = useMutation({
     mutationFn: async () => {
-      let targetSeconds: number | null = null;
-      if (mode === "pomodoro") targetSeconds = DEFAULT_POMODORO_SECONDS;
-      if (mode === "countdown") targetSeconds = countdownTarget;
+      // Pomodoro and countdown run against the configured target length; a
+      // stopwatch stays open-ended.
+      const targetSeconds = mode === "stopwatch" ? null : durationMinutes * 60;
 
-      const res = await startFn({
+      return startFn({
         data: {
           mode,
           subjectId: selectedSubjectId === "none" ? null : selectedSubjectId,
           goalId: selectedGoalId === "none" ? null : selectedGoalId,
+          taskId: selectedTaskId === "none" ? null : selectedTaskId,
           targetSeconds,
         },
       });
-      return res.session;
     },
-    onSuccess: (session) => {
+    onSuccess: ({ session, taskLinkSkipped }) => {
       queryClient.setQueryData(["active-study-session"], session);
       toast.success("Study session started!");
+      // The session is saved either way — only the task link needs the
+      // study_sessions.task_id column (see study-sessions.server.ts).
+      if (taskLinkSkipped) {
+        toast.info("Task link needs a database migration", {
+          description:
+            "This session was not credited to the task: study_sessions.task_id is missing from the database. Apply the migration to track task progress.",
+        });
+      }
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to start study session");
@@ -147,17 +283,33 @@ export function StudyTimer() {
           notes: notes.trim() ? notes.trim() : null,
         },
       });
-      return res.session;
+      return res;
     },
-    onSuccess: (stoppedSession) => {
+    onSuccess: (result) => {
       queryClient.setQueryData(["active-study-session"], null);
       setNotes("");
-      const duration = stoppedSession?.duration_seconds ?? 0;
+      const duration = result.session?.duration_seconds ?? 0;
       toast.success(`Session saved! (${formatDurationHuman(duration)})`, {
         icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
       });
+      // A task-linked session also moved that task forward on the server.
+      if (result.taskUpdated) {
+        const updated = result.taskUpdated;
+        toast.success(
+          updated.completed
+            ? `Task completed: ${updated.title}`
+            : `Task progress ${updated.newProgressPct}% (+${updated.deltaPct}%) · ${updated.title}`,
+          { icon: <CheckCircle2 className="h-4 w-4 text-primary" /> },
+        );
+        // A finished task never stays selected for the next session.
+        if (updated.completed) {
+          setSelectedTaskId((current) => (current === updated.id ? "none" : current));
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ["week"] });
       queryClient.invalidateQueries({ queryKey: ["subjects"] });
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: ["history"] });
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to stop study session");
@@ -165,9 +317,9 @@ export function StudyTimer() {
   });
 
   const activeMode = activeSession?.mode ?? mode;
-  const activeTargetSeconds =
-    activeSession?.target_seconds ??
-    (mode === "pomodoro" ? DEFAULT_POMODORO_SECONDS : countdownTarget);
+  // While idle this previews the target the current configuration would use.
+  const previewTargetSeconds = mode === "stopwatch" ? null : durationMinutes * 60;
+  const activeTargetSeconds = activeSession?.target_seconds ?? previewTargetSeconds;
 
   let elapsedSeconds = 0;
   if (isRunning && activeSession) {
@@ -248,6 +400,14 @@ export function StudyTimer() {
           {activeGoal && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
               🎯 {activeGoal.title}
+            </span>
+          )}
+
+          {activeTask && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-3 py-1 text-xs font-medium">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {activeTask.title}
+              {activeTaskEstMinutes != null ? ` · ${formatMinutes(activeTaskEstMinutes)} est.` : ""}
             </span>
           )}
 
@@ -349,7 +509,7 @@ export function StudyTimer() {
                       <button
                         key={m}
                         type="button"
-                        onClick={() => setMode(m)}
+                        onClick={() => selectMode(m)}
                         className={`flex flex-col items-center justify-center rounded-xl border p-3 text-center transition-all ${
                           isSelected
                             ? "border-primary bg-primary/10 text-primary font-medium shadow-xs"
@@ -366,25 +526,50 @@ export function StudyTimer() {
                 </div>
               </div>
 
-              {mode === "countdown" && (
+              {mode !== "stopwatch" && (
                 <div className="space-y-2">
-                  <Label className="text-sm">Target Duration</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {COUNTDOWN_PRESETS.map((p) => {
-                      const isSelected = countdownTarget === p.seconds;
-                      return (
-                        <Button
-                          key={p.seconds}
-                          type="button"
-                          variant={isSelected ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setCountdownTarget(p.seconds)}
-                        >
-                          {p.label}
-                        </Button>
-                      );
-                    })}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label htmlFor="study-duration" className="text-sm">
+                      Target Duration
+                    </Label>
+                    {selectedTaskEstMinutes != null && (
+                      <span className="text-xs text-muted-foreground">
+                        Task estimate: {formatMinutes(selectedTaskEstMinutes)}
+                      </span>
+                    )}
                   </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {durationPresetsFor(mode).map((minutes) => (
+                      <Button
+                        key={minutes}
+                        type="button"
+                        variant={durationMinutes === minutes ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setDurationInput(String(minutes))}
+                      >
+                        {minutes}m
+                      </Button>
+                    ))}
+                    <Input
+                      id="study-duration"
+                      type="number"
+                      inputMode="numeric"
+                      enterKeyHint="done"
+                      min={MIN_DURATION_MINUTES}
+                      max={MAX_DURATION_MINUTES}
+                      value={durationInput}
+                      onChange={(e) => setDurationInput(e.target.value)}
+                      placeholder="Custom"
+                      className="h-8 w-24"
+                    />
+                    <span className="text-xs text-muted-foreground">min</span>
+                  </div>
+                  {isDurationClamped && (
+                    <p className="text-xs text-amber-500">
+                      Custom duration clamped to {durationMinutes} min ({MIN_DURATION_MINUTES}-
+                      {MAX_DURATION_MINUTES} min allowed).
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -392,6 +577,34 @@ export function StudyTimer() {
             {/* Subject / goal pickers — ExamScheduleDialog's grid-cols-1
               sm:grid-cols-2 form-row pattern. */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:max-w-2xl">
+              {/* Today's task: the finished session's minutes are credited to
+                  its progress and its goal/subject are filled in below. */}
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="study-task" className="text-sm">
+                  Task (optional)
+                </Label>
+                <Select value={selectedTaskId} onValueChange={selectTask}>
+                  <SelectTrigger id="study-task" className="w-full">
+                    <SelectValue placeholder="Select today's task" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {taskOptions.map((t) => {
+                      const est = parseTaskDescription(t.description).estMinutes;
+                      const progress = t.progress_pct ?? 0;
+                      return (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.title}
+                          {est != null ? ` (est. ${formatMinutes(est)})` : ""}
+                          {progress > 0 ? ` - ${progress}%` : ""}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{taskHint}</p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="study-subject" className="text-sm">
                   Subject (optional)

@@ -130,6 +130,7 @@ const schema = {
     started_at: ["timestamptz", false, true],
     subject_id: ["uuid", true, false],
     target_seconds: ["integer", true, false],
+    task_id: ["uuid", true, false],
     user_id: ["uuid", false, false],
   },
   subjects: {
@@ -248,6 +249,13 @@ const relationships = {
       columns: ["subject_id"],
       isOneToOne: false,
       referencedRelation: "subjects",
+      referencedColumns: ["id"],
+    },
+    {
+      foreignKeyName: "study_sessions_task_id_fkey",
+      columns: ["task_id"],
+      isOneToOne: false,
+      referencedRelation: "day_tasks",
       referencedColumns: ["id"],
     },
   ],

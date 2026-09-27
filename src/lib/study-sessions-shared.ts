@@ -11,6 +11,7 @@ export type StudySession = {
   user_id: string;
   subject_id: string | null;
   goal_id: string | null;
+  task_id: string | null;
   started_at: string;
   ended_at: string | null;
   duration_seconds: number | null;
