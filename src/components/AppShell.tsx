@@ -10,6 +10,7 @@ import {
   LogOut,
   MoreHorizontal,
   Target,
+  Timer,
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -30,6 +31,7 @@ const NAV = [
   { to: "/habits", label: "Habits" },
   { to: "/goals", label: "Goals" },
   { to: "/subjects", label: "Subjects" },
+  { to: "/study", label: "Study" },
   { to: "/history", label: "History" },
 ] as const;
 
@@ -48,7 +50,8 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
   const platform = usePlatform();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const isMoreActive = currentPath === "/subjects" || currentPath === "/history";
+  const isMoreActive =
+    currentPath === "/subjects" || currentPath === "/study" || currentPath === "/history";
 
   return (
     <div className="min-h-dvh">
@@ -219,6 +222,15 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
 
           {/* Secondary Views Links */}
           <div className="mt-4 space-y-1">
+            <Link
+              to="/study"
+              onClick={() => setMoreOpen(false)}
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary active:bg-secondary/80"
+            >
+              <Timer className="h-4 w-4 text-amber-400" />
+              <span>Study Timer</span>
+            </Link>
+
             <Link
               to="/subjects"
               onClick={() => setMoreOpen(false)}
