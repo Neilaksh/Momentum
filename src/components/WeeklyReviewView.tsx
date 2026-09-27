@@ -18,6 +18,7 @@ import {
   Flame,
   Save,
   Target,
+  Timer,
   TrendingUp,
   Zap,
 } from "lucide-react";
@@ -27,8 +28,13 @@ import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/StatCard";
 import { getWeeklyReview, saveWeeklyReflection } from "@/lib/weekly-review.functions";
 import { subjectColorHex } from "@/lib/subjects-shared";
-import { formatDayDate } from "@/lib/tracker-shared";
-import type { WeeklyReview } from "@/lib/weekly-review-shared";
+import { formatDayDate, formatMinutes } from "@/lib/tracker-shared";
+import {
+  formatStudyDuration,
+  formatStudyMinutesTick,
+  studyTimeColor,
+  type WeeklyReview,
+} from "@/lib/weekly-review-shared";
 
 const STREAK_LABEL: Record<string, string> = {
   extended: "Extended",
@@ -75,7 +81,7 @@ export function WeeklyReviewView({ weekStart }: { weekStart: string }) {
             </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard
               icon={<CheckCircle2 className="h-4 w-4" />}
               label="Completion rate"
@@ -103,6 +109,18 @@ export function WeeklyReviewView({ weekStart }: { weekStart: string }) {
               label="Habits"
               value={`${review.habitRate}%`}
               sub={`${review.habitDone} / ${review.habitTarget} target`}
+            />
+            <StatCard
+              icon={<Timer className="h-4 w-4" />}
+              label="Study time"
+              value={formatStudyDuration(review.totalStudySeconds)}
+              sub={
+                review.studyTime.length > 0
+                  ? `across ${review.studyTime.length} subject${
+                      review.studyTime.length === 1 ? "" : "s"
+                    }`
+                  : "no sessions logged"
+              }
             />
           </div>
 
@@ -138,7 +156,7 @@ export function WeeklyReviewView({ weekStart }: { weekStart: string }) {
                         borderRadius: 12,
                         fontSize: 12,
                       }}
-                      formatter={(val: any) => [`${val} completed`, "Tasks"]}
+                      formatter={(val: unknown) => [`${val} completed`, "Tasks"]}
                     />
                     <Bar dataKey="done" radius={[6, 6, 0, 0]}>
                       {chart.map((_, i) => (
@@ -280,7 +298,7 @@ export function WeeklyReviewView({ weekStart }: { weekStart: string }) {
                           borderRadius: 12,
                           fontSize: 12,
                         }}
-                        formatter={(val: any) => [`${val} completed`, "Tasks"]}
+                        formatter={(val: unknown) => [`${val} completed`, "Tasks"]}
                       />
                       <Bar dataKey="count" radius={[0, 6, 6, 0]}>
                         {review.subjects.map((e, i) => (
@@ -305,6 +323,98 @@ export function WeeklyReviewView({ weekStart }: { weekStart: string }) {
                       />
                       <span className="min-w-0 flex-1 truncate text-xs font-medium">{e.name}</span>
                       <span className="num text-xs font-semibold text-primary">{e.count}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </section>
+
+          {/* Study time breakdown. A separate section from the task counts above
+              because the units differ (duration vs. count) — a second series on
+              one chart would need a dual axis and read worse than two bars. */}
+          <section className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center gap-2 text-primary">
+              <Timer className="h-4 w-4" />
+              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
+                Study Time by Subject
+              </p>
+            </div>
+            {review.studyTime.length === 0 ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No completed study sessions this week.
+              </p>
+            ) : (
+              <div className="mt-3 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+                <div className="h-48 [content-visibility:auto] [contain-intrinsic-size:192px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={review.studyTime.map((e) => ({
+                        name: e.name,
+                        // Axis and bars work in whole minutes; the legend keeps
+                        // the exact "Xh Ym" label.
+                        minutes: Math.round(e.totalSeconds / 60),
+                      }))}
+                      layout="vertical"
+                      margin={{ top: 4, right: 16, bottom: 0, left: 8 }}
+                    >
+                      <CartesianGrid horizontal={false} stroke="var(--border)" />
+                      <XAxis
+                        type="number"
+                        allowDecimals={false}
+                        tickFormatter={formatStudyMinutesTick}
+                        tickLine={false}
+                        axisLine={false}
+                        fontSize={11}
+                        stroke="var(--muted-foreground)"
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={110}
+                        tickLine={false}
+                        axisLine={false}
+                        fontSize={11}
+                        stroke="var(--muted-foreground)"
+                      />
+                      <Tooltip
+                        cursor={{ fill: "var(--secondary)" }}
+                        contentStyle={{
+                          background: "var(--popover)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 12,
+                          fontSize: 12,
+                        }}
+                        formatter={(val: unknown) => [
+                          formatMinutes(Number(val) || 0),
+                          "Study time",
+                        ]}
+                      />
+                      <Bar dataKey="minutes" radius={[0, 6, 6, 0]}>
+                        {review.studyTime.map((e, i) => (
+                          <Cell key={`${e.name}-${i}`} fill={studyTimeColor(e)} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <ol className="space-y-2 self-start">
+                  {review.studyTime.map((e, i) => (
+                    <li
+                      key={e.subjectId ?? "untagged"}
+                      className="flex items-center gap-2.5 rounded-lg bg-secondary/40 px-3 py-2"
+                    >
+                      <span className="num w-4 shrink-0 text-[10px] font-bold text-muted-foreground">
+                        {i + 1}
+                      </span>
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: studyTimeColor(e) }}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-xs font-medium">{e.name}</span>
+                      <span className="num text-xs font-semibold text-primary">
+                        {formatStudyDuration(e.totalSeconds)}
+                      </span>
                     </li>
                   ))}
                 </ol>

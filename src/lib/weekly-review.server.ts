@@ -12,12 +12,15 @@ import {
   XP_PER_TASK,
   XP_PERFECT_DAY,
 } from "./tracker-shared";
-import type {
-  ReviewPromptStatus,
-  WeekReviewGoal,
-  WeekReviewHabit,
-  WeekReviewStreakStatus,
-  WeeklyReview,
+import {
+  UNTAGGED_STUDY_COLOR,
+  UNTAGGED_STUDY_LABEL,
+  type ReviewPromptStatus,
+  type WeekReviewGoal,
+  type WeekReviewHabit,
+  type WeekReviewStreakStatus,
+  type WeekReviewStudyTimeEntry,
+  type WeeklyReview,
 } from "./weekly-review-shared";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -47,7 +50,33 @@ export async function getWeeklyReview(
 ): Promise<WeeklyReview> {
   const dates = weekDates(weekStart);
 
-  const [taskRes, habitRes, logRes, goalRes, reviewRes, profileRes, subjectEntries] =
+  // Week boundaries. weekStartMin/weekEndMax are absolute instants (local midweek
+  // edges) so they can be compared against timestamptz columns — goals.updated_at
+  // and study_sessions.started_at. weekEndMax is used by the goal section below;
+  // the study window is half-open [Mon 00:00, next Mon 00:00) so a Sunday-night
+  // session that runs past midnight isn't counted twice.
+  const weekStartDate = parseISODate(weekStart);
+  const weekStartMin = new Date(
+    weekStartDate.getFullYear(),
+    weekStartDate.getMonth(),
+    weekStartDate.getDate(),
+    0,
+    0,
+    0,
+  );
+  const weekEndDate = parseISODate(dates[6]!);
+  const weekEndMax = new Date(
+    weekEndDate.getFullYear(),
+    weekEndDate.getMonth(),
+    weekEndDate.getDate(),
+    23,
+    59,
+    59,
+    999,
+  );
+  const nextWeekStart = addDays(weekEndDate, 1);
+
+  const [taskRes, habitRes, logRes, goalRes, reviewRes, profileRes, subjectEntries, studyRes] =
     await Promise.all([
       supabase.from("day_tasks").select("task_date, completed_at").eq("user_id", userId),
       supabase
@@ -78,6 +107,15 @@ export async function getWeeklyReview(
         .eq("id", userId)
         .maybeSingle(),
       getSubjectBreakdown(supabase, userId, dates[0]!, dates[6]!),
+      // Completed study sessions that STARTED inside this week. Ended sessions
+      // only: a still-running timer has no final duration to attribute.
+      supabase
+        .from("study_sessions")
+        .select("subject_id, duration_seconds, subjects(name, color)")
+        .eq("user_id", userId)
+        .not("ended_at", "is", null)
+        .gte("started_at", weekStartMin.toISOString())
+        .lt("started_at", nextWeekStart.toISOString()),
     ]);
 
   const taskRows = taskRes.data ?? [];
@@ -149,26 +187,52 @@ export async function getWeeklyReview(
   const habitTarget = weekHabits.reduce((a, h) => a + h.target, 0);
   const habitRate = habitTarget ? Math.round((habitDone / habitTarget) * 100) : 0;
 
+  // --- Study time by subject (completed sessions only, untagged bucketed) ---
+  const studyRows = (studyRes.data ?? []) as unknown as Array<{
+    subject_id: string | null;
+    duration_seconds: number | null;
+    subjects: { name: string; color: string } | null;
+  }>;
+
+  // Sessions with no subject_id (or a subject that no longer joins) are grouped
+  // into one "Untagged" bucket instead of being dropped, because the headline
+  // total should reflect time actually studied. That bucket is appended after
+  // the ranked named subjects — see UNTAGGED_STUDY_LABEL in weekly-review-shared.
+  const studyBySubject = new Map<string, WeekReviewStudyTimeEntry>();
+  let untaggedStudySeconds = 0;
+  let totalStudySeconds = 0;
+  for (const r of studyRows) {
+    // A completed session with no recorded duration contributes nothing, and a
+    // zero-length bar would be noise — skip it entirely.
+    const seconds = r.duration_seconds ?? 0;
+    if (seconds <= 0) continue;
+    totalStudySeconds += seconds;
+    if (!r.subject_id || !r.subjects) {
+      untaggedStudySeconds += seconds;
+      continue;
+    }
+    const entry = studyBySubject.get(r.subject_id) ?? {
+      subjectId: r.subject_id,
+      name: r.subjects.name,
+      color: r.subjects.color,
+      totalSeconds: 0,
+    };
+    entry.totalSeconds += seconds;
+    studyBySubject.set(r.subject_id, entry);
+  }
+  const studyTime: WeekReviewStudyTimeEntry[] = [...studyBySubject.values()].sort(
+    (a, b) => b.totalSeconds - a.totalSeconds,
+  );
+  if (untaggedStudySeconds > 0) {
+    studyTime.push({
+      subjectId: null,
+      name: UNTAGGED_STUDY_LABEL,
+      color: UNTAGGED_STUDY_COLOR,
+      totalSeconds: untaggedStudySeconds,
+    });
+  }
+
   // --- Goals with status changes / newly completed that week ---
-  const weekStartDate = parseISODate(weekStart);
-  const weekStartMin = new Date(
-    weekStartDate.getFullYear(),
-    weekStartDate.getMonth(),
-    weekStartDate.getDate(),
-    0,
-    0,
-    0,
-  );
-  const weekEndDate = parseISODate(dates[6]!);
-  const weekEndMax = new Date(
-    weekEndDate.getFullYear(),
-    weekEndDate.getMonth(),
-    weekEndDate.getDate(),
-    23,
-    59,
-    59,
-    999,
-  );
   const weekGoals: WeekReviewGoal[] = [];
   for (const g of goals) {
     const created = new Date(g.created_at);
@@ -204,16 +268,25 @@ export async function getWeeklyReview(
     habitRate,
     goals: weekGoals.sort((a, b) => Number(b.isNewlyCompleted) - Number(a.isNewlyCompleted)),
     subjects: subjectEntries,
+    studyTime,
+    totalStudySeconds,
     reflection: reviewRes.data?.reflection_text ?? null,
   };
 }
 
 /** Distinct Monday week-starts that have any tracked data or a saved review, newest first. */
 export async function listWeeklyReviews(supabase: DB, userId: string): Promise<string[]> {
-  const [tasks, logs, reviews] = await Promise.all([
+  const [tasks, logs, reviews, studyStarts] = await Promise.all([
     supabase.from("day_tasks").select("task_date").eq("user_id", userId),
     supabase.from("habit_logs").select("log_date").eq("user_id", userId),
     supabase.from("weekly_reviews").select("week_start_date").eq("user_id", userId),
+    // A week can contain study sessions and nothing else — without this the
+    // review for such a week would be unreachable from the History list.
+    supabase
+      .from("study_sessions")
+      .select("started_at")
+      .eq("user_id", userId)
+      .not("ended_at", "is", null),
   ]);
 
   const weeks = new Set<string>();
@@ -227,6 +300,9 @@ export async function listWeeklyReviews(supabase: DB, userId: string): Promise<s
   for (const r of tasks.data ?? []) addWeek(r.task_date);
   for (const r of logs.data ?? []) addWeek(r.log_date);
   for (const r of reviews.data ?? []) addWeek(r.week_start_date);
+  // started_at is a timestamptz, so convert to its LOCAL calendar date before
+  // bucketing — a late-evening session must land in the week the user saw.
+  for (const r of studyStarts.data ?? []) addWeek(toISODate(new Date(r.started_at)));
 
   // Exclude weeks that haven't started yet — future-dated data only. The
   // current in-progress week is kept, since it has already begun.

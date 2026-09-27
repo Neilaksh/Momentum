@@ -49,6 +49,8 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
   const lp = levelProgress(profile?.total_xp ?? 0);
   const platform = usePlatform();
   const [moreOpen, setMoreOpen] = useState(false);
+  const contentMaxWidth =
+    platform.isStandalone || platform.isCapacitor ? "max-w-7xl" : "max-w-[1600px]";
 
   const isMoreActive =
     currentPath === "/subjects" || currentPath === "/study" || currentPath === "/history";
@@ -60,7 +62,9 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
           installed PWA (we opt into `viewport-fit=cover`). It resolves to 0 in a
           normal browser tab, so desktop layout is untouched. */}
       <header className="sticky top-0 z-30 border-b border-border/70 bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 sm:gap-4 sm:px-6 sm:py-3">
+        <div
+          className={`mx-auto flex ${contentMaxWidth} items-center justify-between gap-3 px-4 py-2.5 sm:gap-4 sm:px-6 sm:py-3`}
+        >
           <div className="flex items-center gap-6">
             <Link to="/" className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-primary" />
@@ -140,7 +144,9 @@ export function AppShell({ profile, children }: { profile?: Profile | null; chil
       </header>
 
       {/* Main content with safe area and bottom nav padding */}
-      <main className="mx-auto max-w-7xl w-full min-w-0 px-4 py-5 pb-[calc(4.25rem+max(1.25rem,env(safe-area-inset-bottom)))] sm:px-6 sm:py-8 md:pb-[max(2rem,env(safe-area-inset-bottom))] overflow-x-clip">
+      <main
+        className={`mx-auto ${contentMaxWidth} w-full min-w-0 px-4 py-5 pb-[calc(4.25rem+max(1.25rem,env(safe-area-inset-bottom)))] sm:px-6 sm:py-8 md:pb-[max(2rem,env(safe-area-inset-bottom))] overflow-x-clip`}
+      >
         {children}
       </main>
 
