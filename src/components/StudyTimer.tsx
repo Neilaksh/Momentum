@@ -4,15 +4,27 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   AlertCircle,
+  ArrowLeft,
   CheckCircle2,
   Coffee,
+  FileText,
   Hourglass,
+  Maximize2,
+  Minimize2,
   Play,
   Settings2,
   SkipForward,
   Square,
   Timer,
 } from "lucide-react";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import {
   getActiveStudySession,
@@ -129,6 +141,9 @@ export function StudyTimer() {
   const [notes, setNotes] = useState<string>("");
   const [now, setNow] = useState<number>(() => Date.now());
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [userMinimized, setUserMinimized] = useState<boolean>(false);
+  const [isNotesOpen, setIsNotesOpen] = useState<boolean>(false);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
   // The 1s ticker re-renders constantly, so each automatic transition is guarded
   // to fire exactly once per phase.
@@ -203,6 +218,7 @@ export function StudyTimer() {
       // Invalidate so the Subjects tab refetches and shows "Studying now" immediately.
       queryClient.invalidateQueries({ queryKey: ["active-study-session"] });
       hasCompletedFocusRef.current = false;
+      setUserMinimized(false);
       // Starting a focus block clears any pending or running break.
       if (mode === "pomodoro") updateCycle({ phase: "focus", phaseEndsAt: null });
       toast.success(mode === "pomodoro" ? "Pomodoro started!" : "Study session started!");
@@ -225,6 +241,8 @@ export function StudyTimer() {
     onSuccess: (result) => {
       queryClient.setQueryData(["active-study-session"], null);
       setNotes("");
+      setIsNotesOpen(false);
+      setUserMinimized(false);
       hasCompletedFocusRef.current = false;
       const duration = result.session?.duration_seconds ?? 0;
 
@@ -370,6 +388,7 @@ export function StudyTimer() {
 
   const startBreak = useCallback(() => {
     hasCompletedBreakRef.current = false;
+    setUserMinimized(false);
     const length = pomodoroPhaseSeconds(cycle.phase, settings);
     updateCycle({ phaseEndsAt: Date.now() + length * 1000 });
   }, [cycle.phase, settings, updateCycle]);
@@ -383,6 +402,84 @@ export function StudyTimer() {
       `${pomodoroPhaseLabel(skipped)} skipped - ready for pomodoro ${pomodoroCyclePosition(cycle.completedFocus, settings)}`,
     );
   }, [cycle.phase, cycle.completedFocus, settings, updateCycle]);
+
+  // Focus view is automatically active whenever a session is running or in break,
+  // unless the user explicitly tapped the "Back" button to return to the standard overview.
+  const isFocusViewActive = (isRunning || isBreak) && !userMinimized;
+
+  // Request a Screen Wake Lock while the focus view is active so mobile screens
+  // stay awake while propped up on a desk in landscape mode.
+  useEffect(() => {
+    if (!isFocusViewActive || typeof navigator === "undefined" || !("wakeLock" in navigator)) {
+      return;
+    }
+    let sentinel: { release: () => Promise<void> } | null = null;
+    let cancelled = false;
+
+    const requestLock = async () => {
+      try {
+        if (!cancelled && "wakeLock" in navigator) {
+          sentinel = await (navigator as any).wakeLock.request("screen");
+        }
+      } catch {
+        // Silently ignored if unsupported, low battery, or denied
+      }
+    };
+
+    void requestLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && isFocusViewActive && !cancelled) {
+        void requestLock();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (sentinel) {
+        sentinel.release().catch(() => {});
+      }
+    };
+  }, [isFocusViewActive]);
+
+  // Lock background scroll when the full focus view is mounted.
+  useEffect(() => {
+    if (!isFocusViewActive || typeof document === "undefined") return;
+    const orig = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = orig;
+    };
+  }, [isFocusViewActive]);
+
+  // Sync fullscreen state with document
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    if (typeof document === "undefined") return;
+    if (!document.fullscreenElement) {
+      try {
+        await document.documentElement.requestFullscreen();
+      } catch {
+        // Silently ignored
+      }
+    } else {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // Silently ignored
+      }
+    }
+  }, []);
+
   if (isSessionLoading) {
     return (
       <div className="flex h-64 items-center justify-center rounded-2xl border border-border bg-card">
@@ -397,6 +494,19 @@ export function StudyTimer() {
     <div className="space-y-6">
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-6 sm:p-10 text-center shadow-xs">
         <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
+          {(isRunning || isBreak) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setUserMinimized(false)}
+              className="h-7 gap-1.5 rounded-full border-primary/30 bg-primary/10 px-3 text-xs font-medium text-primary hover:bg-primary/20 hover:text-primary transition-all"
+            >
+              <Maximize2 className="h-3 w-3" />
+              Focus view
+            </Button>
+          )}
+
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-3 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {activeMode === "pomodoro" && <Timer className="h-3.5 w-3.5" />}
             {activeMode === "stopwatch" && <Play className="h-3.5 w-3.5" />}
@@ -698,6 +808,209 @@ export function StudyTimer() {
         onResetSettings={resetSettings}
         onResetCycle={resetCycle}
       />
+
+      {/* Immersive landscape focus view: automatically hides everything else when running */}
+      {isFocusViewActive && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-between bg-background text-foreground select-none overflow-hidden pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+          {/* Top bar: Back button on left, Status badges in center, Tools on right */}
+          <div className="flex items-center justify-between gap-2 shrink-0 h-10 px-2 sm:px-4">
+            {/* Small return button */}
+            <button
+              type="button"
+              onClick={() => setUserMinimized(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-secondary/80 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95 shadow-xs cursor-pointer"
+              title="Return to standard view"
+              aria-label="Return to standard view"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Back</span>
+            </button>
+
+            {/* Badges / Subject / Phase */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 max-w-[70%] truncate">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/60 px-2.5 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {activeMode === "pomodoro" && <Timer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
+                {activeMode === "stopwatch" && <Play className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
+                {activeMode === "countdown" && <Hourglass className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
+                {activeMode}
+              </span>
+
+              {isPomodoro && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/60 px-2.5 py-0.5 text-[11px] sm:text-xs font-medium text-muted-foreground">
+                  {isBreak ? <Coffee className="h-3 w-3" /> : <Timer className="h-3 w-3" />}
+                  {isBreak
+                    ? pomodoroPhaseLabel(cycle.phase)
+                    : `Pomo ${pomodoroPosition}/${settings.longBreakAfter}`}
+                </span>
+              )}
+
+              {activeSubject && (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] sm:text-xs font-medium truncate max-w-[140px] sm:max-w-[200px]"
+                  style={{
+                    backgroundColor: `${subjectColorHex(activeSubject.color)}20`,
+                    color: subjectColorHex(activeSubject.color),
+                    borderColor: `${subjectColorHex(activeSubject.color)}40`,
+                    borderWidth: 1,
+                  }}
+                >
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: subjectColorHex(activeSubject.color) }}
+                  />
+                  <span className="truncate">{activeSubject.name}</span>
+                </span>
+              )}
+
+              {isOvertime && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-amber-500">
+                  <AlertCircle className="h-3 w-3" />
+                  Overtime
+                </span>
+              )}
+            </div>
+
+            {/* Right controls: Notes & Fullscreen */}
+            <div className="flex items-center gap-1.5">
+              {isRunning && (
+                <button
+                  type="button"
+                  onClick={() => setIsNotesOpen(true)}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer ${
+                    notes.trim()
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border/80 bg-secondary/80 text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="Session notes"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  <span className="hidden md:inline">{notes.trim() ? "Note added" : "Notes"}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={toggleFullscreen}
+                className="inline-flex items-center justify-center rounded-full border border-border/80 bg-secondary/80 p-1.5 text-muted-foreground hover:text-foreground transition-all shadow-xs cursor-pointer"
+                title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                aria-label={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+              >
+                {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Center hero clock */}
+          <div className="flex flex-1 flex-col items-center justify-center min-h-0 py-2 sm:py-4 my-auto">
+            <div className="font-mono text-7xl sm:text-8xl md:text-9xl lg:text-[10rem] landscape:text-7xl landscape:sm:text-8xl landscape:md:text-[9rem] font-bold tracking-tight text-foreground select-none leading-none tabular-nums drop-shadow-sm">
+              {formatClock(displaySeconds)}
+            </div>
+
+            {/* Progress bar for Pomodoro & Countdown */}
+            {(isBreak || activeMode === "pomodoro" || activeMode === "countdown") && (
+              <div className="w-full max-w-sm sm:max-w-md md:max-w-lg landscape:max-w-md mt-4 sm:mt-6 px-4">
+                <div className="h-2 sm:h-2.5 w-full overflow-hidden rounded-full bg-secondary/80">
+                  <div
+                    className={`h-full transition-all duration-500 ease-out ${
+                      isOvertime ? "bg-amber-500" : isBreak ? "bg-emerald-500" : "bg-primary"
+                    }`}
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <div className="mt-1.5 flex justify-between text-[11px] sm:text-xs text-muted-foreground font-mono">
+                  {isBreak ? (
+                    <>
+                      <span>{formatDurationHuman(Math.max(0, breakSeconds - breakRemaining))}</span>
+                      <span>{formatDurationHuman(breakSeconds)}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{formatDurationHuman(elapsedSeconds)}</span>
+                      <span>{formatDurationHuman(activeTargetSeconds ?? 0)}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Phase hint or overtime note */}
+            {isOvertime ? (
+              <p className="mt-2 text-xs font-medium text-amber-500">
+                Target completed! Extra study time is being tracked.
+              </p>
+            ) : isPomodoro ? (
+              <p className="mt-2 text-xs font-medium text-muted-foreground">
+                {phaseHint(cycle.phase, isBreakCounting || isRunning)}
+              </p>
+            ) : null}
+          </div>
+
+          {/* Bottom controls */}
+          <div className="flex items-center justify-center gap-3 shrink-0 pb-1 sm:pb-3">
+            {isRunning ? (
+              <Button
+                size="lg"
+                variant="destructive"
+                className="h-11 sm:h-12 px-8 text-sm sm:text-base font-semibold gap-2 shadow-lg active:scale-98 transition-transform"
+                onClick={() => stopMutation.mutate({ auto: false })}
+                disabled={stopMutation.isPending}
+              >
+                <Square className="h-4 w-4 sm:h-5 sm:w-5 fill-current" />
+                {stopMutation.isPending ? "Saving..." : "Stop & Save"}
+              </Button>
+            ) : isBreak ? (
+              <>
+                {!isBreakCounting && (
+                  <Button
+                    size="lg"
+                    className="h-11 sm:h-12 px-6 sm:px-8 text-sm sm:text-base font-semibold gap-2 shadow-lg"
+                    onClick={startBreak}
+                  >
+                    <Coffee className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Start {pomodoroPhaseLabel(cycle.phase).toLowerCase()}
+                  </Button>
+                )}
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-11 sm:h-12 px-6 sm:px-8 text-sm sm:text-base font-semibold gap-2 shadow-lg"
+                  onClick={skipBreak}
+                >
+                  <SkipForward className="h-4 w-4 sm:h-5 sm:w-5" />
+                  {isBreakCounting ? "Skip break" : "Skip to focus"}
+                </Button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Session Notes Dialog in Focus Mode */}
+      <Dialog open={isNotesOpen} onOpenChange={setIsNotesOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">Session Notes</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Textarea
+              placeholder="What are you working on or what did you accomplish?"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              className="resize-none"
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">
+              Notes will be saved to your session when you stop the timer.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsNotesOpen(false)} size="sm">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
