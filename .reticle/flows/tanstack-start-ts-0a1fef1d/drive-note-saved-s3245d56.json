@@ -1,0 +1,271 @@
+{
+  "version": 2,
+  "name": "drive-note-saved-s3245d56",
+  "projectId": "tanstack-start-ts-0a1fef1d",
+  "createdAt": 1790609344969,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Save"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Note saved"
+          },
+          {
+            "kind": "text",
+            "contains": "📝 verified note 123"
+          },
+          {
+            "kind": "text",
+            "contains": "⏱ 30m est."
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Reschedule reticle-verify-2"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Reschedule Task"
+          },
+          {
+            "kind": "text",
+            "contains": "Pick Specific Date"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "👉 Tomorrow ( 29. )"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Rescheduled to 29.09.2026"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Mark reticle-verify-2 complete"
+            },
+            "absent": true
+          },
+          {
+            "kind": "text",
+            "contains": "0 of 2 tasks completed"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Wednesday, 2026-09-30. 0 of 1 completed."
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Wednesday's Tasks"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "placeholder": "Add a task for Wednesday..."
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "tesyyyy is locked — only today's tasks can be changed"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "tesyyyy cannot be renamed — only today's tasks can be changed"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Tuesday, 2026-09-29. 0 of 1 completed."
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Tuesday's Tasks"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "placeholder": "Add a task for Tuesday..."
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "reticle-verify-2 is locked — only today's tasks can be changed"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "reticle-verify-2 cannot be renamed — only today's tasks can be changed"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Delete reticle-verify-2"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Delete reticle-verify-2"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Mark reticle-verify-2 complete"
+            },
+            "absent": true
+          },
+          {
+            "kind": "text",
+            "contains": "No tasks scheduled for Tuesday."
+          },
+          {
+            "kind": "state",
+            "store": "query",
+            "path": "week/2026-09-28.data.days.1.tasks.length",
+            "equals": 0
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Previous week"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Week of 21.09.2026"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Monday, 2026-09-21. 0 of 0 completed."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Sunday, 2026-09-27. 0 of 2 completed."
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Past days are read-only — select today to change tasks or a future day to add or delete them."
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "etststs is locked — only today's tasks can be changed"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "etststs cannot be deleted — past days are read-only"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "Due"
+          }
+        ]
+      }
+    }
+  ],
+  "startPath": "/"
+}

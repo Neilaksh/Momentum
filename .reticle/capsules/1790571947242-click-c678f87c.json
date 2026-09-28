@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "this tab is throttled and has not rendered; a miss here is not evidence the UI is absent. acquire a scriptable context with reticle_run { tool: \"reticle_lease\", action: \"acquire\", url } (the human can run `reticle drive <url>` if they have a shell)",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "",
+        "source": {
+          "file": "src/routes/index.tsx?tsr-split=component",
+          "line": 654,
+          "column": 17
+        }
+      },
+      "action": "click"
+    }
+  ],
+  "id": "1790571947242-click-c678f87c",
+  "createdAt": 1790571947243,
+  "seen": 1,
+  "lastSeenAt": 1790571947243
+}

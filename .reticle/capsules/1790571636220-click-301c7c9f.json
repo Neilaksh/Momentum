@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "no element matched {\"text\":\"Week of 05.10.2026\"}",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "",
+        "source": {
+          "file": "src/routes/index.tsx?tsr-split=component",
+          "line": 519,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ],
+  "id": "1790571636220-click-301c7c9f",
+  "createdAt": 1790571636220,
+  "seen": 1,
+  "lastSeenAt": 1790571636220
+}

@@ -1,0 +1,63 @@
+{
+  "version": 2,
+  "name": "drive-task-added-s3245d56",
+  "projectId": "tanstack-start-ts-0a1fef1d",
+  "createdAt": 1790609344960,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Add task"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Task added"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Mark reticle-verify complete"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "🔴 High"
+          },
+          {
+            "kind": "text",
+            "contains": "⏱ 30m est."
+          },
+          {
+            "kind": "text",
+            "contains": "~32m planned"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Move reticle-verify up"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "state",
+        "store": "query",
+        "path": "week/2026-09-28.data.days.0.tasks.1.title",
+        "equals": "reticle-verify"
+      }
+    }
+  ],
+  "startPath": "/"
+}

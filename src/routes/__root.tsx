@@ -81,7 +81,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       {
         name: "viewport",
-        content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
+        content:
+          "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
       },
       { title: "Momentum — Weekly Life Tracker" },
       {
@@ -211,6 +212,22 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Reticle (dev-only): connect this page to the Reticle daemon so the reticle_*
+  // tools can verify flows. TanStack Start SSRs this module, so a static SDK
+  // import would crash the server — the dynamic import keeps it client-only.
+  // import.meta.env.DEV is the correct guard (it survives SSR and any host).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const token = typeof __RETICLE_TOKEN__ !== "undefined" ? __RETICLE_TOKEN__ : "";
+    void import("@reticlehq/react").then(({ reticle, install }) => {
+      install();
+      reticle.connect({
+        projectId: "tanstack-start-ts-0a1fef1d",
+        ...(token.length > 0 ? { token } : {}),
+      });
+    });
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

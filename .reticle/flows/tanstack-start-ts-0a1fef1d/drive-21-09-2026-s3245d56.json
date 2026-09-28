@@ -1,0 +1,247 @@
+{
+  "version": 2,
+  "name": "drive-21-09-2026-s3245d56",
+  "projectId": "tanstack-start-ts-0a1fef1d",
+  "createdAt": 1790609344951,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Previous week"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "text",
+        "contains": "21.09.2026"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Next week"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "text",
+        "contains": "Week of 05.10.2026"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Previous week"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "text",
+        "contains": "Week of 21.09.2026"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "This Week"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Week of 28.09.2026"
+          },
+          {
+            "kind": "text",
+            "contains": "Today's Tasks"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Monday, 2026-09-28. 0 of 2 completed. Today."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Tuesday, 2026-09-29. 0 of 0 completed."
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Tuesday's Tasks"
+          },
+          {
+            "kind": "text",
+            "contains": "No tasks scheduled for Tuesday."
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Monday, 2026-09-28. 0 of 2 completed. Today."
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Today's Tasks"
+          },
+          {
+            "kind": "text",
+            "contains": "0 of 2 tasks completed"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Complete All (2)"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Mark etststs complete"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "1 of 2 tasks completed"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Mark etststs incomplete"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "+10 XP"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Complete All ( 1 )"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "2 of 2 tasks completed"
+          },
+          {
+            "kind": "text",
+            "contains": "Perfect Day! All 2 tasks completed"
+          },
+          {
+            "kind": "text",
+            "contains": "+70 XP"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Pending ( 0 )"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "All caught up! No pending tasks remaining."
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Complete All ( 2 )"
+            },
+            "absent": true
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Done ( 2 )"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Mark etststs incomplete"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Mark test incomplete"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "startPath": "/"
+}

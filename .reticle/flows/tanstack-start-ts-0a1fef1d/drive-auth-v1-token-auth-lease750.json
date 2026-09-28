@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "name": "drive-auth-v1-token-auth-lease750",
+  "projectId": "tanstack-start-ts-0a1fef1d",
+  "createdAt": 1790570289666,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Sign in"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "net",
+        "urlContains": "/auth/v1/token"
+      }
+    }
+  ],
+  "startPath": "/auth"
+}

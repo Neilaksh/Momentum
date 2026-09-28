@@ -1,0 +1,1147 @@
+{
+  "intents": {
+    "inline:a-failed-sign-in-leaves-the-user-on-auth-the-app-9263f756": {
+      "binding": {
+        "kind": "route",
+        "pathname": "/auth"
+      },
+      "declaredAt": 1790570372548,
+      "id": "inline:a-failed-sign-in-leaves-the-user-on-auth-the-app-9263f756",
+      "provenBy": {
+        "at": 1790570372596,
+        "grade": "presence",
+        "verdictId": "reticle_assert:1790570372596"
+      },
+      "state": "proved",
+      "statement": "A failed sign-in leaves the user on /auth — the app never enters the tracker without a real session, so a wrong password cannot produce a false \"logged in\" state.",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/auth.tsx"
+        ],
+        "route": "/auth"
+      },
+      "updatedAt": 1790570372632
+    },
+    "inline:a-future-day-on-the-tasks-board-can-be-planned-a-336fe21b": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Tuesday's Tasks",
+            "kind": "text"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "placeholder": "Add a task for Tuesday..."
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "reticle-verify-2 is locked — only today's tasks can be changed",
+              "role": "button"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "reticle-verify-2 cannot be renamed — only today's tasks can be changed",
+              "role": "button"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "Delete reticle-verify-2",
+              "role": "button"
+            }
+          }
+        ]
+      },
+      "declaredAt": 1790572330020,
+      "id": "inline:a-future-day-on-the-tasks-board-can-be-planned-a-336fe21b",
+      "provenBy": {
+        "at": 1790572330682,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572330682"
+      },
+      "state": "proved",
+      "statement": "a future day on the Tasks board can be planned (add and delete) while completing and renaming stay reserved for today — the controls say so in their labels",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572330715
+    },
+    "inline:a-future-day-on-the-tasks-board-is-plan-able-but-3b0c93e9": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Wednesday's Tasks",
+            "kind": "text"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "placeholder": "Add a task for Wednesday..."
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "tesyyyy is locked — only today's tasks can be changed",
+              "role": "button"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "tesyyyy cannot be renamed — only today's tasks can be changed",
+              "role": "button"
+            }
+          }
+        ]
+      },
+      "declaredAt": 1790572309240,
+      "id": "inline:a-future-day-on-the-tasks-board-is-plan-able-but-3b0c93e9",
+      "state": "bound",
+      "statement": "a future day on the Tasks board is plan-able but not falsifiable: tasks can be added and deleted there while completing, renaming and reordering stay reserved for today",
+      "status": "proposed",
+      "subject": "unsorted",
+      "updatedAt": 1790572309272
+    },
+    "inline:a-past-day-on-the-tasks-board-is-history-it-can-48725ea9": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Past days are read-only — select today to change tasks or a future day to add or delete them.",
+            "kind": "text"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "etststs is locked — only today's tasks can be changed",
+              "role": "button"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "etststs cannot be deleted — past days are read-only",
+              "role": "button"
+            }
+          },
+          {
+            "contains": "Due",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790572360960,
+      "id": "inline:a-past-day-on-the-tasks-board-is-history-it-can-48725ea9",
+      "provenBy": {
+        "at": 1790572361621,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572361621"
+      },
+      "state": "proved",
+      "statement": "a past day on the Tasks board is history: it can be read but not changed — completing, renaming, deleting and adding are all refused there",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572361657
+    },
+    "inline:a-rejected-sign-in-is-never-a-silent-failure-the-b29f80bf": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "net",
+            "method": "POST",
+            "status": 400,
+            "urlContains": "/auth/v1/token"
+          },
+          {
+            "contains": "Invalid login credentials",
+            "kind": "text",
+            "visible": true
+          }
+        ]
+      },
+      "declaredAt": 1790570360902,
+      "id": "inline:a-rejected-sign-in-is-never-a-silent-failure-the-b29f80bf",
+      "provenBy": {
+        "at": 1790570362009,
+        "grade": "net",
+        "verdictId": "reticle_act_and_wait:1790570362009"
+      },
+      "state": "proved",
+      "statement": "A rejected sign-in is never a silent failure: the login form must surface the server's error message to the user and leave them on /auth rather than navigating into the app.",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/auth.tsx"
+        ],
+        "route": "/auth"
+      },
+      "updatedAt": 1790570362041
+    },
+    "inline:a-subject-chip-with-no-tasks-for-the-day-empties-33fba632": {
+      "binding": {
+        "contains": "No completed tasks yet.",
+        "kind": "text"
+      },
+      "declaredAt": 1790572381487,
+      "id": "inline:a-subject-chip-with-no-tasks-for-the-day-empties-33fba632",
+      "provenBy": {
+        "at": 1790572382131,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572382131"
+      },
+      "state": "proved",
+      "statement": "a subject chip with no tasks for the day empties the list instead of confusing the reader about why",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572382169
+    },
+    "inline:a-successful-sign-in-moves-the-user-out-of-auth-19161749": {
+      "binding": {
+        "kind": "route",
+        "pathname": "/"
+      },
+      "declaredAt": 1790570431171,
+      "id": "inline:a-successful-sign-in-moves-the-user-out-of-auth-19161749",
+      "state": "bound",
+      "statement": "A successful sign-in moves the user out of /auth and into the tracker at / — the credential exchange establishes a session that the router acts on immediately, with no manual reload.",
+      "status": "proposed",
+      "subject": "unsorted",
+      "updatedAt": 1790570431201
+    },
+    "inline:a-task-on-the-tasks-board-can-carry-a-note-and-t-9cd302a9": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "placeholder": "Add details, links, or notes for this task..."
+            }
+          },
+          {
+            "contains": "minutes (optional)",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790572257639,
+      "id": "inline:a-task-on-the-tasks-board-can-carry-a-note-and-t-9cd302a9",
+      "provenBy": {
+        "at": 1790572258273,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572258273"
+      },
+      "state": "proved",
+      "statement": "a task on the Tasks board can carry a note, and the expanded editor is what writes it",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572258312
+    },
+    "inline:adding-a-task-from-the-tasks-board-s-inline-form-2b959194": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Task added",
+            "kind": "text"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "Mark reticle-verify complete",
+              "role": "button"
+            }
+          },
+          {
+            "contains": "🔴 High",
+            "kind": "text"
+          },
+          {
+            "contains": "⏱ 30m est.",
+            "kind": "text"
+          },
+          {
+            "contains": "~32m planned",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790572168225,
+      "id": "inline:adding-a-task-from-the-tasks-board-s-inline-form-2b959194",
+      "provenBy": {
+        "at": 1790572172427,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572172427"
+      },
+      "state": "proved",
+      "statement": "adding a task from the Tasks board's inline form creates a task on the focused day with its subject, priority and effort estimate attached, and the day's planned-time total absorbs it",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572172488
+    },
+    "inline:clicking-a-day-card-in-the-full-week-schedule-fo-51060373": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Wednesday's Tasks",
+            "kind": "text"
+          },
+          {
+            "contains": "Active:",
+            "kind": "text"
+          },
+          {
+            "contains": "Wednesday, 30.09.2026",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790572406173,
+      "id": "inline:clicking-a-day-card-in-the-full-week-schedule-fo-51060373",
+      "provenBy": {
+        "at": 1790572406849,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572406849"
+      },
+      "state": "proved",
+      "statement": "clicking a day card in the Full Week Schedule focuses that day in the editor, so the overview grid is a working way to navigate the week",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572406884
+    },
+    "inline:complete-all-finishes-every-remaining-task-for-t-88e0fab3": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "2 of 2 tasks completed",
+            "kind": "text"
+          },
+          {
+            "contains": "Perfect Day! All 2 tasks completed",
+            "kind": "text"
+          },
+          {
+            "contains": "+70 XP",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790571986188,
+      "id": "inline:complete-all-finishes-every-remaining-task-for-t-88e0fab3",
+      "provenBy": {
+        "at": 1790571992479,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790571992479"
+      },
+      "state": "proved",
+      "statement": "\"Complete All\" finishes every remaining task for the focused day in one action, and a day with nothing left earns the Perfect Day bonus on top of per-task XP",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790571992517
+    },
+    "inline:deleting-a-task-on-the-tasks-board-removes-it-fr-23252b94": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "absent": true,
+            "kind": "element",
+            "query": {
+              "name": "Mark reticle-verify-2 complete",
+              "role": "button"
+            }
+          },
+          {
+            "contains": "No tasks scheduled for Tuesday.",
+            "kind": "text"
+          },
+          {
+            "equals": 0,
+            "kind": "state",
+            "path": "week/2026-09-28.data.days.1.tasks.length",
+            "store": "query"
+          }
+        ]
+      },
+      "declaredAt": 1790572339547,
+      "id": "inline:deleting-a-task-on-the-tasks-board-removes-it-fr-23252b94",
+      "provenBy": {
+        "at": 1790572342336,
+        "grade": "state",
+        "verdictId": "reticle_act_and_wait:1790572342336"
+      },
+      "state": "proved",
+      "statement": "deleting a task on the Tasks board removes it from that day for good — the day falls back to its empty state",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572342436
+    },
+    "inline:navigating-to-a-previous-week-on-the-tasks-board-5016eb1f": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Week of 21.09.2026",
+            "kind": "text"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "Monday, 2026-09-21. 0 of 0 completed.",
+              "role": "button"
+            }
+          }
+        ]
+      },
+      "declaredAt": 1790572351776,
+      "id": "inline:navigating-to-a-previous-week-on-the-tasks-board-5016eb1f",
+      "provenBy": {
+        "at": 1790572353164,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572353164"
+      },
+      "state": "proved",
+      "statement": "navigating to a previous week on the Tasks board loads that week's own data rather than reusing the current week's",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572353203
+    },
+    "inline:renaming-a-task-on-the-tasks-board-updates-the-t-2c668f55": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Renamed to",
+            "kind": "text"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "Mark reticle-verify-2 complete",
+              "role": "button"
+            }
+          },
+          {
+            "contains": "🟢 Low",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790572243333,
+      "id": "inline:renaming-a-task-on-the-tasks-board-updates-the-t-2c668f55",
+      "provenBy": {
+        "at": 1790572245562,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572245562"
+      },
+      "state": "proved",
+      "statement": "renaming a task on the Tasks board updates the task itself (its title and priority), not just the label on screen — every row for it re-renders with the new name",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/components/ui/dialog.tsx"
+        ]
+      },
+      "updatedAt": 1790572245613
+    },
+    "inline:reordering-a-task-on-the-tasks-board-persists-th-02010529": {
+      "binding": {
+        "equals": "reticle-verify",
+        "kind": "state",
+        "path": "week/2026-09-28.data.days.0.tasks.1.title",
+        "store": "query"
+      },
+      "declaredAt": 1790572219474,
+      "id": "inline:reordering-a-task-on-the-tasks-board-persists-th-02010529",
+      "provenBy": {
+        "at": 1790572221140,
+        "grade": "state",
+        "verdictId": "reticle_act_and_wait:1790572221140"
+      },
+      "state": "proved",
+      "statement": "reordering a task on the Tasks board persists the new day order — the app's own record of the day re-sorts with the moved task above the one it swapped with",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572221192
+    },
+    "inline:rescheduling-a-task-on-the-tasks-board-moves-it-4238f1ad": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Rescheduled to 29.09.2026",
+            "kind": "text"
+          },
+          {
+            "absent": true,
+            "kind": "element",
+            "query": {
+              "name": "Mark reticle-verify-2 complete",
+              "role": "button"
+            }
+          },
+          {
+            "contains": "0 of 2 tasks completed",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790572293320,
+      "id": "inline:rescheduling-a-task-on-the-tasks-board-moves-it-4238f1ad",
+      "state": "bound",
+      "statement": "rescheduling a task on the Tasks board moves it to the chosen day: it leaves the current day's list and lands on the target day",
+      "status": "proposed",
+      "subject": "unsorted",
+      "updatedAt": 1790572293351
+    },
+    "inline:rescheduling-on-the-tasks-board-offers-relative-acf79026": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Reschedule Task",
+            "kind": "text"
+          },
+          {
+            "contains": "Pick Specific Date",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790572280272,
+      "id": "inline:rescheduling-on-the-tasks-board-offers-relative-acf79026",
+      "provenBy": {
+        "at": 1790572280944,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572280944"
+      },
+      "state": "proved",
+      "statement": "rescheduling on the Tasks board offers relative shortcuts (tomorrow, +2 days, next week) plus an exact date, so a task can be pushed without retyping it",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572280993
+    },
+    "inline:saving-a-note-on-the-tasks-board-persists-exactl-ae7038e0": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Note saved",
+            "kind": "text"
+          },
+          {
+            "equals": "test\n---est:2---",
+            "kind": "state",
+            "path": "week/2026-09-28.data.days.0.tasks.1.description",
+            "store": "query"
+          }
+        ]
+      },
+      "declaredAt": 1790604471410,
+      "id": "inline:saving-a-note-on-the-tasks-board-persists-exactl-ae7038e0",
+      "provenBy": {
+        "at": 1790604476341,
+        "grade": "state",
+        "verdictId": "reticle_act_and_wait:1790604476341"
+      },
+      "state": "proved",
+      "statement": "saving a note on the Tasks board persists exactly the note and leaves any previously stored effort estimate untouched, so removing the estimate from this screen cannot silently wipe durations the study timer relies on",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790604476365
+    },
+    "inline:saving-a-task-note-on-the-tasks-board-persists-i-c95a34f9": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Note saved",
+            "kind": "text"
+          },
+          {
+            "contains": "📝 verified note 123",
+            "kind": "text"
+          },
+          {
+            "contains": "⏱ 30m est.",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790572270610,
+      "id": "inline:saving-a-task-note-on-the-tasks-board-persists-i-c95a34f9",
+      "provenBy": {
+        "at": 1790572272474,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572272474"
+      },
+      "state": "proved",
+      "statement": "saving a task note on the Tasks board persists it, and the task row then shows the note and its effort estimate at a glance",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572272528
+    },
+    "inline:selecting-any-day-in-the-tasks-7-day-switcher-re-83da195e": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Tuesday's Tasks",
+            "kind": "text"
+          },
+          {
+            "contains": "No tasks scheduled for Tuesday.",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790571926438,
+      "id": "inline:selecting-any-day-in-the-tasks-7-day-switcher-re-83da195e",
+      "provenBy": {
+        "at": 1790571929811,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790571929811"
+      },
+      "state": "proved",
+      "statement": "selecting any day in the Tasks 7-day switcher re-focuses the whole management panel on that day — heading, pie chart and task list all follow the selected day, and a day with nothing planned says so",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790571929833
+    },
+    "inline:submitting-the-sign-in-form-must-exchange-email-0c63d207": {
+      "binding": {
+        "kind": "net",
+        "urlContains": "/auth/v1/token"
+      },
+      "declaredAt": 1790570288149,
+      "id": "inline:submitting-the-sign-in-form-must-exchange-email-0c63d207",
+      "provenBy": {
+        "at": 1790570288835,
+        "grade": "net",
+        "verdictId": "reticle_act_and_wait:1790570288835"
+      },
+      "state": "proved",
+      "statement": "Submitting the sign-in form must exchange email + password for a Supabase session at the /auth/v1/token password-grant endpoint — this is the login flow's real backend call.",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/auth.tsx"
+        ],
+        "route": "/auth"
+      },
+      "updatedAt": 1790570288858
+    },
+    "inline:the-all-chip-clears-the-subject-filter-on-the-ta-0be8c5cb": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "name": "Mark etststs complete",
+              "role": "button"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "Mark test complete",
+              "role": "button"
+            }
+          }
+        ]
+      },
+      "declaredAt": 1790572388987,
+      "id": "inline:the-all-chip-clears-the-subject-filter-on-the-ta-0be8c5cb",
+      "provenBy": {
+        "at": 1790572389630,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572389630"
+      },
+      "state": "proved",
+      "statement": "the All chip clears the subject filter on the Tasks board and the day's tasks come back",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572389663
+    },
+    "inline:the-day-pie-chart-panel-on-tasks-reports-the-foc-574fe702": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Today's Tasks",
+            "kind": "text"
+          },
+          {
+            "contains": "0 of 2 tasks completed",
+            "kind": "text"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "Complete All (2)",
+              "role": "button"
+            }
+          }
+        ]
+      },
+      "declaredAt": 1790571935252,
+      "id": "inline:the-day-pie-chart-panel-on-tasks-reports-the-foc-574fe702",
+      "state": "bound",
+      "statement": "the day pie chart panel on Tasks reports the focused day's own numbers (completed / total tasks, day XP) rather than the week's",
+      "status": "proposed",
+      "subject": "unsorted",
+      "updatedAt": 1790571935276
+    },
+    "inline:the-done-filter-on-the-tasks-board-shows-only-th-122894ec": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "name": "Mark etststs incomplete",
+              "role": "button"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "Mark test incomplete",
+              "role": "button"
+            }
+          }
+        ]
+      },
+      "declaredAt": 1790572011269,
+      "id": "inline:the-done-filter-on-the-tasks-board-shows-only-th-122894ec",
+      "provenBy": {
+        "at": 1790572015476,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572015476"
+      },
+      "state": "proved",
+      "statement": "the Done filter on the Tasks board shows only the day's completed tasks, so a finished day can be reviewed at a glance",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572015496
+    },
+    "inline:the-expanded-note-editor-contains-only-the-note-e2a618d6": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "absent": true,
+            "contains": "Est.",
+            "kind": "text"
+          },
+          {
+            "absent": true,
+            "contains": "minutes (optional)",
+            "kind": "text"
+          },
+          {
+            "absent": true,
+            "contains": "Estimate",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790610646985,
+      "id": "inline:the-expanded-note-editor-contains-only-the-note-e2a618d6",
+      "provenBy": {
+        "at": 1790610647094,
+        "grade": "presence",
+        "verdictId": "reticle_assert:1790610647094"
+      },
+      "state": "proved",
+      "statement": "the expanded note editor contains only the note textarea and its controls — no estimate minutes field remains",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790610647123
+    },
+    "inline:the-focused-day-s-task-list-can-be-filtered-to-a-4067ddb7": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "All caught up! No pending tasks remaining.",
+            "kind": "text"
+          },
+          {
+            "absent": true,
+            "kind": "element",
+            "query": {
+              "name": "Complete All ( 2 )",
+              "role": "button"
+            }
+          }
+        ]
+      },
+      "declaredAt": 1790571999662,
+      "id": "inline:the-focused-day-s-task-list-can-be-filtered-to-a-4067ddb7",
+      "provenBy": {
+        "at": 1790572003762,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572003762"
+      },
+      "state": "proved",
+      "statement": "the focused day's task list can be filtered to All / Pending / Done, and each filter says plainly when it has nothing to show",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572003790
+    },
+    "inline:the-note-editor-closes-returning-the-task-list-t-b91d3f2a": {
+      "binding": {
+        "absent": true,
+        "contains": "Task Note",
+        "kind": "text",
+        "visible": true
+      },
+      "declaredAt": 1790610670090,
+      "id": "inline:the-note-editor-closes-returning-the-task-list-t-b91d3f2a",
+      "provenBy": {
+        "at": 1790610670692,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790610670692"
+      },
+      "state": "proved",
+      "statement": "the note editor closes, returning the task list to its collapsed state",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790610670726
+    },
+    "inline:the-note-editor-opens-for-an-existing-task-and-i-9ed507d1": {
+      "binding": {
+        "contains": "Task Note",
+        "kind": "text",
+        "visible": true
+      },
+      "declaredAt": 1790610571988,
+      "id": "inline:the-note-editor-opens-for-an-existing-task-and-i-9ed507d1",
+      "provenBy": {
+        "at": 1790610576694,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790610576694"
+      },
+      "state": "proved",
+      "statement": "the note editor opens for an existing task and its heading reads \"Task Note\" with no estimate row",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790610576780
+    },
+    "inline:the-task-note-editor-on-the-tasks-board-holds-on-ab19224a": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "placeholder": "Add details, links, or notes for this task..."
+            }
+          },
+          {
+            "absent": true,
+            "contains": "minutes (optional)",
+            "kind": "text"
+          },
+          {
+            "absent": true,
+            "kind": "element",
+            "query": {
+              "placeholder": "30"
+            }
+          }
+        ]
+      },
+      "declaredAt": 1790604460086,
+      "id": "inline:the-task-note-editor-on-the-tasks-board-holds-on-ab19224a",
+      "provenBy": {
+        "at": 1790604464136,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790604464136"
+      },
+      "state": "proved",
+      "statement": "the task note editor on the Tasks board holds only the note — no effort estimate field, since estimates are not part of the Tasks experience",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790604464185
+    },
+    "inline:the-tasks-board-can-always-be-returned-to-the-li-a4fe16c9": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Week of 28.09.2026",
+            "kind": "text"
+          },
+          {
+            "contains": "Today's Tasks",
+            "kind": "text"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "Monday, 2026-09-28. 0 of 2 completed. Today.",
+              "role": "button"
+            }
+          }
+        ]
+      },
+      "declaredAt": 1790572450075,
+      "id": "inline:the-tasks-board-can-always-be-returned-to-the-li-a4fe16c9",
+      "provenBy": {
+        "at": 1790572517943,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790572517943"
+      },
+      "state": "proved",
+      "statement": "the Tasks board can always be returned to the live week and today in one click, whatever day or week the user had navigated to",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790572517994
+    },
+    "inline:the-tasks-week-switcher-moves-the-whole-board-on-17d23684": {
+      "binding": {
+        "contains": "Week of 05.10.2026",
+        "kind": "text"
+      },
+      "declaredAt": 1790571624629,
+      "id": "inline:the-tasks-week-switcher-moves-the-whole-board-on-17d23684",
+      "state": "bound",
+      "statement": "the Tasks week switcher moves the whole board one week forward — header range and day tabs follow the new week",
+      "status": "proposed",
+      "subject": "unsorted",
+      "updatedAt": 1790571624703
+    },
+    "inline:the-tasks-week-switcher-moves-the-whole-board-on-1ec4ea6a": {
+      "binding": {
+        "contains": "21.09.2026",
+        "kind": "text"
+      },
+      "declaredAt": 1790571603430,
+      "id": "inline:the-tasks-week-switcher-moves-the-whole-board-on-1ec4ea6a",
+      "provenBy": {
+        "at": 1790571608497,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790571608496"
+      },
+      "state": "proved",
+      "statement": "the Tasks week switcher moves the whole board one week back — header range, the 7 day tabs and the focused day all follow the new week",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790571608714
+    },
+    "inline:this-week-on-the-tasks-board-returns-the-board-t-17d42cfc": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "Week of 28.09.2026",
+            "kind": "text"
+          },
+          {
+            "contains": "Today's Tasks",
+            "kind": "text"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "Monday, 2026-09-28. 0 of 2 completed. Today.",
+              "role": "button"
+            }
+          }
+        ]
+      },
+      "declaredAt": 1790571914491,
+      "id": "inline:this-week-on-the-tasks-board-returns-the-board-t-17d42cfc",
+      "provenBy": {
+        "at": 1790571918519,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790571918519"
+      },
+      "state": "proved",
+      "statement": "\"This Week\" on the Tasks board returns the board to the current calendar week and re-focuses today, so planning always starts from the live week",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790571918544
+    },
+    "inline:ticking-a-task-on-the-tasks-board-completes-it-f-4c8892ba": {
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "contains": "1 of 2 tasks completed",
+            "kind": "text"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "name": "Mark etststs incomplete",
+              "role": "button"
+            }
+          },
+          {
+            "contains": "+10 XP",
+            "kind": "text"
+          }
+        ]
+      },
+      "declaredAt": 1790571971816,
+      "id": "inline:ticking-a-task-on-the-tasks-board-completes-it-f-4c8892ba",
+      "provenBy": {
+        "at": 1790571977750,
+        "grade": "presence",
+        "verdictId": "reticle_act_and_wait:1790571977750"
+      },
+      "state": "proved",
+      "statement": "ticking a task on the Tasks board completes it for that day — the row strikes through, the day pie and day XP total move together",
+      "status": "proved",
+      "subject": "unsorted",
+      "surface": {
+        "files": [
+          "src/routes/index.tsx?tsr-split=component"
+        ]
+      },
+      "updatedAt": 1790571977774
+    }
+  },
+  "subject": "unsorted",
+  "version": 1
+}

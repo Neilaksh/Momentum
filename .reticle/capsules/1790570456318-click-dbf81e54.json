@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "current route (no route change in the window) '/auth', expected '/'",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "",
+        "source": {
+          "file": "src/routes/auth.tsx",
+          "line": 92,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ],
+  "id": "1790570456318-click-dbf81e54",
+  "createdAt": 1790570456319,
+  "seen": 1,
+  "lastSeenAt": 1790570456319
+}

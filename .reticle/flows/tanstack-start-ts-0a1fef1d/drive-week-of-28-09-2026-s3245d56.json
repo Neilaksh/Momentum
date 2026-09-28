@@ -1,0 +1,97 @@
+{
+  "version": 2,
+  "name": "drive-week-of-28-09-2026-s3245d56",
+  "projectId": "tanstack-start-ts-0a1fef1d",
+  "createdAt": 1790609344975,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "This Week"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Week of 28.09.2026"
+          },
+          {
+            "kind": "text",
+            "contains": "Today's Tasks"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Monday, 2026-09-28. 0 of 2 completed. Today."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "generic",
+        "name": "Click to expand note"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "placeholder": "Add details, links, or notes for this task..."
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "minutes (optional)",
+            "absent": true
+          },
+          {
+            "kind": "element",
+            "query": {
+              "placeholder": "30"
+            },
+            "absent": true
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Save"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Note saved"
+          },
+          {
+            "kind": "state",
+            "store": "query",
+            "path": "week/2026-09-28.data.days.0.tasks.1.description",
+            "equals": "test\n---est:2---"
+          }
+        ]
+      }
+    }
+  ],
+  "startPath": "/"
+}

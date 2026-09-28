@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "no 'button' named 'tesyyyy is locked — only today's tasks can be changed'; saw: Install app, Sign out, Not now, View review, Previous week, This Week, Next week, Monday, 2026-09-28. 0 of 2 completed. Today., Tuesday, 2026-09-29. 0 of 1 completed., Wednesday, 2026-09-30. 0 of 1 completed., Thursday, 2026-10-01. 0 of 0 completed., Friday, 2026-10-02. 0 of 0 completed., Saturday, 2026-10-03. 0 of 0 completed., Sunday, 2026-10-04. 0 of 0 completed., All ( 1 ), Pending ( 1 ), Done ( 0 ), All, Test, jjgf, tesyyyy is locked because its goal is completed, Add note, tesyyyy cannot be renamed because its goal is completed, Delete tesyyyy, Add task, More navigation options and profile",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "",
+        "source": {
+          "file": "src/routes/index.tsx?tsr-split=component",
+          "line": 654,
+          "column": 17
+        }
+      },
+      "action": "click"
+    }
+  ],
+  "id": "1790572319929-click-6e9a719e",
+  "createdAt": 1790572319930,
+  "seen": 1,
+  "lastSeenAt": 1790572319930
+}

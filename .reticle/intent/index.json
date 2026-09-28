@@ -1,0 +1,209 @@
+{
+  "entries": [
+    {
+      "id": "inline:a-failed-sign-in-leaves-the-user-on-auth-the-app-9263f756",
+      "statement": "A failed sign-in leaves the user on /auth — the app never enters the tr…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:a-future-day-on-the-tasks-board-can-be-planned-a-336fe21b",
+      "statement": "a future day on the Tasks board can be planned (add and delete) while c…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:a-future-day-on-the-tasks-board-is-plan-able-but-3b0c93e9",
+      "statement": "a future day on the Tasks board is plan-able but not falsifiable: tasks…",
+      "status": "proposed",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:a-past-day-on-the-tasks-board-is-history-it-can-48725ea9",
+      "statement": "a past day on the Tasks board is history: it can be read but not change…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:a-rejected-sign-in-is-never-a-silent-failure-the-b29f80bf",
+      "statement": "A rejected sign-in is never a silent failure: the login form must surfa…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:a-subject-chip-with-no-tasks-for-the-day-empties-33fba632",
+      "statement": "a subject chip with no tasks for the day empties the list instead of co…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:a-successful-sign-in-moves-the-user-out-of-auth-19161749",
+      "statement": "A successful sign-in moves the user out of /auth and into the tracker a…",
+      "status": "proposed",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:a-task-on-the-tasks-board-can-carry-a-note-and-t-9cd302a9",
+      "statement": "a task on the Tasks board can carry a note, and the expanded editor is…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:adding-a-task-from-the-tasks-board-s-inline-form-2b959194",
+      "statement": "adding a task from the Tasks board's inline form creates a task on the…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:clicking-a-day-card-in-the-full-week-schedule-fo-51060373",
+      "statement": "clicking a day card in the Full Week Schedule focuses that day in the e…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:complete-all-finishes-every-remaining-task-for-t-88e0fab3",
+      "statement": "\"Complete All\" finishes every remaining task for the focused day in one…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:deleting-a-task-on-the-tasks-board-removes-it-fr-23252b94",
+      "statement": "deleting a task on the Tasks board removes it from that day for good —…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:navigating-to-a-previous-week-on-the-tasks-board-5016eb1f",
+      "statement": "navigating to a previous week on the Tasks board loads that week's own…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:renaming-a-task-on-the-tasks-board-updates-the-t-2c668f55",
+      "statement": "renaming a task on the Tasks board updates the task itself (its title a…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:reordering-a-task-on-the-tasks-board-persists-th-02010529",
+      "statement": "reordering a task on the Tasks board persists the new day order — the a…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:rescheduling-a-task-on-the-tasks-board-moves-it-4238f1ad",
+      "statement": "rescheduling a task on the Tasks board moves it to the chosen day: it l…",
+      "status": "proposed",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:rescheduling-on-the-tasks-board-offers-relative-acf79026",
+      "statement": "rescheduling on the Tasks board offers relative shortcuts (tomorrow, +2…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:saving-a-note-on-the-tasks-board-persists-exactl-ae7038e0",
+      "statement": "saving a note on the Tasks board persists exactly the note and leaves a…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:saving-a-task-note-on-the-tasks-board-persists-i-c95a34f9",
+      "statement": "saving a task note on the Tasks board persists it, and the task row the…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:selecting-any-day-in-the-tasks-7-day-switcher-re-83da195e",
+      "statement": "selecting any day in the Tasks 7-day switcher re-focuses the whole mana…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:submitting-the-sign-in-form-must-exchange-email-0c63d207",
+      "statement": "Submitting the sign-in form must exchange email + password for a Supaba…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-all-chip-clears-the-subject-filter-on-the-ta-0be8c5cb",
+      "statement": "the All chip clears the subject filter on the Tasks board and the day's…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-day-pie-chart-panel-on-tasks-reports-the-foc-574fe702",
+      "statement": "the day pie chart panel on Tasks reports the focused day's own numbers…",
+      "status": "proposed",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-done-filter-on-the-tasks-board-shows-only-th-122894ec",
+      "statement": "the Done filter on the Tasks board shows only the day's completed tasks…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-expanded-note-editor-contains-only-the-note-e2a618d6",
+      "statement": "the expanded note editor contains only the note textarea and its contro…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-focused-day-s-task-list-can-be-filtered-to-a-4067ddb7",
+      "statement": "the focused day's task list can be filtered to All / Pending / Done, an…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-note-editor-closes-returning-the-task-list-t-b91d3f2a",
+      "statement": "the note editor closes, returning the task list to its collapsed state",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-note-editor-opens-for-an-existing-task-and-i-9ed507d1",
+      "statement": "the note editor opens for an existing task and its heading reads \"Task…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-task-note-editor-on-the-tasks-board-holds-on-ab19224a",
+      "statement": "the task note editor on the Tasks board holds only the note — no effort…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-tasks-board-can-always-be-returned-to-the-li-a4fe16c9",
+      "statement": "the Tasks board can always be returned to the live week and today in on…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-tasks-week-switcher-moves-the-whole-board-on-17d23684",
+      "statement": "the Tasks week switcher moves the whole board one week forward — header…",
+      "status": "proposed",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:the-tasks-week-switcher-moves-the-whole-board-on-1ec4ea6a",
+      "statement": "the Tasks week switcher moves the whole board one week back — header ra…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:this-week-on-the-tasks-board-returns-the-board-t-17d42cfc",
+      "statement": "\"This Week\" on the Tasks board returns the board to the current calenda…",
+      "status": "proved",
+      "subject": "unsorted"
+    },
+    {
+      "id": "inline:ticking-a-task-on-the-tasks-board-completes-it-f-4c8892ba",
+      "statement": "ticking a task on the Tasks board completes it for that day — the row s…",
+      "status": "proved",
+      "subject": "unsorted"
+    }
+  ],
+  "version": 1
+}

@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "name": "drive-post-auth-v1-token-auth-s0cf9bee",
+  "projectId": "tanstack-start-ts-0a1fef1d",
+  "createdAt": 1790570464264,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Password"
+      },
+      "args": {
+        "value": "<redacted: supply at replay>"
+      },
+      "action": "fill"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Sign in"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "net",
+            "method": "POST",
+            "urlContains": "/auth/v1/token",
+            "status": 400
+          },
+          {
+            "kind": "text",
+            "contains": "Invalid login credentials",
+            "visible": true
+          }
+        ]
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Sign in"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "route",
+        "pathname": "/"
+      }
+    }
+  ],
+  "startPath": "/auth"
+}
