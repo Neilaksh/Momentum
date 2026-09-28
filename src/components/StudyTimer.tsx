@@ -726,7 +726,7 @@ export function StudyTimer() {
                     {settings.autoStartFocus ? ", and so does the next pomodoro." : "."}
                   </p>
                 </div>
-              ) : (
+              ) : mode === "countdown" ? (
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label htmlFor="study-duration" className="text-sm">
@@ -766,7 +766,7 @@ export function StudyTimer() {
                     </p>
                   )}
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Subject picker - ExamScheduleDialog form-row pattern. */}
@@ -895,7 +895,11 @@ export function StudyTimer() {
                 title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
                 aria-label={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
               >
-                {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                {isFullscreen ? (
+                  <Minimize2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Maximize2 className="h-3.5 w-3.5" />
+                )}
               </button>
             </div>
           </div>
