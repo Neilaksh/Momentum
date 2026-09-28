@@ -33,3 +33,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Tool output / debug files
+lint-out.txt
+fmt-out.txt
+tsc-out.txt
+tmp-*
+
+# Compiled simulation scripts (canonical sources live in scripts/ and src/lib/)
+temp-sim/
+
+# Debug / helper scripts
+*.ps1
+run-reticle-*.cmd
+
+# Bun is the canonical package manager (see bunfig.toml); the npm lockfile is
+# only produced by ad-hoc `npm install` tooling, so it stays untracked.
+package-lock.json
