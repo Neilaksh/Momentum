@@ -131,6 +131,24 @@
     touch-action: manipulation;
   }
 
+  /* Prevent iOS Safari / Android WebKit from auto-zooming the viewport on input focus */
+  @media screen and (max-width: 768px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
+
+  /* Utility for hiding scrollbars while allowing smooth horizontal touch scrolling */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   html,
   body {
     background-color: var(--color-background);

@@ -867,10 +867,10 @@ function UnifiedTasksPage() {
 
         {/* Subject Filter Chips */}
         {subjects.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar sm:flex-wrap">
             <button
               onClick={() => setSubjectFilter(null)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 activeSubjectFilter === null
                   ? "border-primary/60 bg-primary/15 text-primary"
                   : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground"
@@ -884,7 +884,7 @@ function UnifiedTasksPage() {
                 <button
                   key={s.id}
                   onClick={() => setSubjectFilter(selected ? null : s.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                     selected
                       ? "border-primary/60 bg-primary/15 text-foreground"
                       : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground"
@@ -894,7 +894,7 @@ function UnifiedTasksPage() {
                     className="h-2 w-2 rounded-full shrink-0"
                     style={{ background: subjectColorHex(s.color) }}
                   />
-                  <span className="max-w-[120px] truncate">{s.name}</span>
+                  <span className="max-w-[140px] truncate">{s.name}</span>
                 </button>
               );
             })}
@@ -986,8 +986,11 @@ function UnifiedTasksPage() {
                           </span>
                         </button>
 
+                        {/* `min-w-0 break-words`: long titles (and longer titles
+                            caused by a bigger device text size) wrap inside the
+                            card instead of pushing the row past the viewport. */}
                         <span
-                          className={`flex-1 text-sm font-medium transition-all ${
+                          className={`min-w-0 flex-1 break-words text-sm font-medium transition-all ${
                             t.completed_at
                               ? "text-muted-foreground line-through"
                               : "text-foreground"
@@ -1267,15 +1270,20 @@ function UnifiedTasksPage() {
 
                     {/* Expandable note editor */}
                     {expandedNotes.has(t.id) && (
-                      <div className="ml-9 mt-1 rounded-lg border border-border/80 bg-background/90 p-2.5 shadow-sm">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[11px] font-semibold text-muted-foreground">
+                      <div className="mt-2 sm:ml-9 rounded-lg border border-border/80 bg-background/90 p-2.5 sm:p-3 shadow-sm">
+                        {/* `flex-wrap` + `gap-x-2`: on a narrow phone (or with a
+                            larger system/browser text size) the label and Close
+                            drop onto separate lines instead of being squeezed
+                            past the panel edge, where `overflow-x: clip` would
+                            silently cut them off. */}
+                        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+                          <span className="min-w-0 text-[11px] font-semibold text-muted-foreground">
                             Task Note & Estimate
                           </span>
                           <button
                             type="button"
                             onClick={() => toggleNote(t)}
-                            className="text-[11px] text-muted-foreground hover:text-foreground"
+                            className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground"
                           >
                             Close
                           </button>
@@ -1284,13 +1292,13 @@ function UnifiedTasksPage() {
                           value={noteDrafts[t.id] ?? ""}
                           onChange={(e) => setNoteDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
                           placeholder="Add details, links, or notes for this task..."
-                          className="min-h-[60px] text-xs resize-none bg-secondary/30"
+                          className="min-h-[60px] text-sm sm:text-xs resize-none bg-secondary/30"
                           disabled={goalLocked || isActiveDayLocked}
                         />
-                        {/* Effort estimate row */}
-                        <div className="mt-2 flex items-center gap-2">
-                          <label className="text-[11px] text-muted-foreground shrink-0">
-                            ⏱ Est. mins:
+                        {/* Effort estimate row: fits neatly on mobile without squeezing "minutes (optional)" */}
+                        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                          <label className="shrink-0 text-[11px] text-muted-foreground flex items-center gap-1">
+                            <span>⏱ Est:</span>
                           </label>
                           <input
                             type="number"
@@ -1302,11 +1310,11 @@ function UnifiedTasksPage() {
                             onChange={(e) =>
                               setEstDrafts((d) => ({ ...d, [t.id]: e.target.value }))
                             }
-                            placeholder="e.g. 30"
+                            placeholder="30"
                             disabled={goalLocked || isActiveDayLocked}
-                            className="h-8 sm:h-7 w-24 rounded-md border border-border bg-secondary/40 px-2 text-sm sm:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                            className="h-7 w-16 sm:w-20 shrink-0 rounded-md border border-border bg-secondary/40 px-2 text-sm sm:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                           />
-                          <span className="text-[11px] text-muted-foreground">
+                          <span className="text-[11px] leading-snug text-muted-foreground">
                             minutes (optional)
                           </span>
                         </div>
