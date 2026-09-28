@@ -77,8 +77,6 @@ import {
   addDays,
   buildRolloverChains,
   formatDayDate,
-  formatMinutes,
-  formatTaskDescription,
   parseISODate,
   parseGoalTitle,
   parseRoutineTitle,
@@ -131,12 +129,10 @@ function UnifiedTasksPage() {
   const [draft, setDraft] = useState("");
   const [draftSubjectId, setDraftSubjectId] = useState<string | null>(initialSubjectFilter);
   const [draftPriority, setDraftPriority] = useState<GoalPriority | null>(null);
-  const [draftEstMinutes, setDraftEstMinutes] = useState<string>("");
   const [filter, setFilter] = useState<TaskFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string | null>(initialSubjectFilter);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
-  const [estDrafts, setEstDrafts] = useState<Record<string, string>>({});
   const focusPanelRef = useRef<HTMLElement>(null);
   // (date, title) pairs of add-task requests currently in flight, so a
   // double-click / double-Enter can never create duplicate rows.
@@ -205,7 +201,6 @@ function UnifiedTasksPage() {
       title: string;
       subjectId?: string | null;
       priority?: GoalPriority | null;
-      estMinutes?: number | null;
     }) => addFn({ data: v }),
     onSuccess: () => {
       invalidate();
@@ -265,8 +260,7 @@ function UnifiedTasksPage() {
   });
 
   const updateDescription = useMutation({
-    mutationFn: (v: { id: string; description: string | null; estMinutes?: number | null }) =>
-      updateDescFn({ data: v }),
+    mutationFn: (v: { id: string; description: string | null }) => updateDescFn({ data: v }),
     onSuccess: () => {
       invalidate();
       toast.success("Note saved");
@@ -316,8 +310,6 @@ function UnifiedTasksPage() {
       } else {
         next.add(t.id);
         setNoteDrafts((d) => ({ ...d, [t.id]: parseTaskDescription(t.description).note }));
-        const existingEst = parseTaskDescription(t.description).estMinutes;
-        setEstDrafts((d) => ({ ...d, [t.id]: existingEst != null ? String(existingEst) : "" }));
       }
       return next;
     });
@@ -442,11 +434,6 @@ function UnifiedTasksPage() {
   const activeTasks = activeDay.tasks;
   const doneActive = activeTasks.filter((t) => t.completed_at).length;
   const remainingActive = activeTasks.length - doneActive;
-  // Sum estimated minutes across all active-day tasks that have an estimate
-  const totalEstMinutes = activeTasks.reduce((sum, t) => {
-    const { estMinutes } = parseTaskDescription(t.description);
-    return sum + (estMinutes ?? 0);
-  }, 0);
   const routineActiveCount =
     days.find((d) => d.date === selectedDate)?.tasks.filter((t) => t.source === "routine").length ??
     0;
@@ -806,11 +793,6 @@ function UnifiedTasksPage() {
             <p className="num text-xs text-muted-foreground mt-0.5">
               {formatDayDate(activeDay.date)} · {doneActive} of {activeTasks.length} completed (
               {activeTasks.length ? Math.round((doneActive / activeTasks.length) * 100) : 0}%)
-              {totalEstMinutes > 0 && (
-                <span className="ml-2 inline-flex items-center gap-1 text-primary/80">
-                  · ⏱ ~{formatMinutes(totalEstMinutes)} planned
-                </span>
-              )}
             </p>
           </div>
 
@@ -1258,16 +1240,6 @@ function UnifiedTasksPage() {
                           📝 {parseTaskDescription(t.description).note}
                         </div>
                       )}
-                    {/* Effort estimate badge when note is not expanded */}
-                    {parseTaskDescription(t.description).estMinutes != null &&
-                      !expandedNotes.has(t.id) && (
-                        <div className="ml-9 mt-0.5">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                            ⏱ {formatMinutes(parseTaskDescription(t.description).estMinutes!)} est.
-                          </span>
-                        </div>
-                      )}
-
                     {/* Expandable note editor */}
                     {expandedNotes.has(t.id) && (
                       <div className="mt-2 sm:ml-9 rounded-lg border border-border/80 bg-background/90 p-2.5 sm:p-3 shadow-sm">
@@ -1278,7 +1250,7 @@ function UnifiedTasksPage() {
                             silently cut them off. */}
                         <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
                           <span className="min-w-0 text-[11px] font-semibold text-muted-foreground">
-                            Task Note & Estimate
+                            Task Note
                           </span>
                           <button
                             type="button"
@@ -1295,29 +1267,6 @@ function UnifiedTasksPage() {
                           className="min-h-[60px] text-sm sm:text-xs resize-none bg-secondary/30"
                           disabled={goalLocked || isActiveDayLocked}
                         />
-                        {/* Effort estimate row: fits neatly on mobile without squeezing "minutes (optional)" */}
-                        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                          <label className="shrink-0 text-[11px] text-muted-foreground flex items-center gap-1">
-                            <span>⏱ Est:</span>
-                          </label>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            enterKeyHint="done"
-                            min={1}
-                            max={1440}
-                            value={estDrafts[t.id] ?? ""}
-                            onChange={(e) =>
-                              setEstDrafts((d) => ({ ...d, [t.id]: e.target.value }))
-                            }
-                            placeholder="30"
-                            disabled={goalLocked || isActiveDayLocked}
-                            className="h-7 w-16 sm:w-20 shrink-0 rounded-md border border-border bg-secondary/40 px-2 text-sm sm:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                          <span className="text-[11px] leading-snug text-muted-foreground">
-                            minutes (optional)
-                          </span>
-                        </div>
                         <div className="mt-2 flex justify-end gap-2">
                           <Button
                             type="button"
@@ -1336,13 +1285,9 @@ function UnifiedTasksPage() {
                               goalLocked || isActiveDayLocked || updateDescription.isPending
                             }
                             onClick={() => {
-                              const rawEst = estDrafts[t.id]?.trim();
-                              const parsedEst = rawEst ? parseInt(rawEst, 10) : null;
-                              const estMinutes = parsedEst && parsedEst > 0 ? parsedEst : null;
                               updateDescription.mutate({
                                 id: t.id,
                                 description: (noteDrafts[t.id] ?? "").trim() || null,
-                                estMinutes,
                               });
                               setExpandedNotes((prev) => {
                                 const next = new Set(prev);
@@ -1376,20 +1321,15 @@ function UnifiedTasksPage() {
             const inflightKey = addTaskKey(activeDay.date, title);
             if (addInflightKeys.current.has(inflightKey)) return;
             addInflightKeys.current.add(inflightKey);
-            const estRaw = draftEstMinutes.trim();
-            const estParsed = estRaw ? parseInt(estRaw, 10) : null;
-            const estMinutes = estParsed && estParsed > 0 ? estParsed : null;
             addTask.mutate({
               date: activeDay.date,
               title: draft.trim(),
               subjectId: draftSubjectId,
               priority: draftPriority,
-              estMinutes,
             });
             setDraft("");
             setDraftSubjectId(null);
             setDraftPriority(null);
-            setDraftEstMinutes("");
           }}
         >
           <Input
@@ -1399,7 +1339,7 @@ function UnifiedTasksPage() {
             className="h-10 min-w-0 flex-1 text-base md:text-sm"
             disabled={isActiveDayPast}
           />
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <select
               value={draftSubjectId ?? ""}
               onChange={(e) => setDraftSubjectId(e.target.value || null)}
@@ -1426,19 +1366,6 @@ function UnifiedTasksPage() {
               <option value="Med">🟡 Med</option>
               <option value="Low">🟢 Low</option>
             </select>
-            <input
-              type="number"
-              inputMode="numeric"
-              enterKeyHint="done"
-              min={1}
-              max={1440}
-              value={draftEstMinutes}
-              onChange={(e) => setDraftEstMinutes(e.target.value)}
-              placeholder="⏱ min"
-              aria-label="Estimated minutes (optional)"
-              disabled={isActiveDayPast}
-              className="h-10 w-full min-w-0 rounded-lg border border-border bg-secondary/50 px-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary sm:w-20"
-            />
           </div>
           <Button
             type="submit"
